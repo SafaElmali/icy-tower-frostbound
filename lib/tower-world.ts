@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ClimberMotion } from './climber-motion';
+import { ComboStarTrail } from './combo-star-trail';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 
 type Ledge = { group: THREE.Group; gem?: THREE.Mesh; id: number };
@@ -33,6 +34,7 @@ export class TowerWorld {
   private arms: THREE.Object3D[] = [];
   private tumble = new THREE.Group();
   private motion = new ClimberMotion();
+  private starTrail = new ComboStarTrail();
   private backdrop?: THREE.Texture;
   private flecks: Fleck[] = [];
   private columns = new THREE.Group();
@@ -74,7 +76,7 @@ export class TowerWorld {
     this.scene.add(this.key, this.key.target);
     const rim = new THREE.DirectionalLight(0x58cfff, 3.5); rim.position.set(6, 8, -6); this.scene.add(rim);
     this.glow = new THREE.PointLight(0xffc692, 5, 8, 1.3); this.scene.add(this.glow);
-    this.scene.add(this.root); this.root.add(this.tumble, this.columns); this.tumble.add(this.character);
+    this.scene.add(this.root); this.root.add(this.tumble, this.columns, this.starTrail.mesh); this.tumble.add(this.character);
     this.camera.position.set(0, 5.2, 26); this.camera.lookAt(0, 5.2, 0);
     const stoneNoise = this.makeNoiseTexture();
     this.stone = new THREE.MeshStandardMaterial({ color: 0x405a65, roughness: .89, metalness: .08, bumpMap: stoneNoise, bumpScale: .12, roughnessMap: stoneNoise });
@@ -245,17 +247,15 @@ export class TowerWorld {
       if (ledge.gem) { ledge.gem.visible = !p.collected; ledge.gem.rotation.y = t * 1.8; ledge.gem.position.y = 1.05 + Math.sin(t * 2.4 + p.id) * .14; }
     }
     for (const [id, ledge] of this.ledges) if (!keep.has(id)) { this.root.remove(ledge.group); ledge.group.traverse(o => { if (o instanceof THREE.Mesh) o.geometry.dispose(); }); this.ledges.delete(id); }
-    const running = e.grounded && Math.abs(e.vx) > .3;
-    const stride = Math.sin(t * (10 + Math.abs(e.vx) * 1.8));
     const pose = this.motion.pose(e);
     this.tumble.position.set(e.x, e.y + .8 + (menu ? Math.sin(t * 2) * .014 : 0), .05);
     this.tumble.rotation.z = pose.roll;
     this.character.position.set(0, -.8, 0);
-    this.rotation = damp(this.rotation, Math.abs(e.vx) > .25 ? e.facing * .9 : .12, 9, dt); this.character.rotation.y = this.rotation;
-    this.character.rotation.z = damp(this.character.rotation.z, e.vx * -.018, 8, dt);
+    this.rotation = damp(this.rotation, Math.abs(e.vx) > .25 ? e.facing * .9 : .12, 9, dt); this.character.rotation.y = this.rotation * (1 - pose.spread * .9);
+    this.character.rotation.z = damp(this.character.rotation.z, e.vx * -.018 * (1 - pose.spread), 8, dt);
     this.character.scale.set(1 + this.squish * .45, 1 - this.squish, 1 + this.squish * .3);
-    this.legs.forEach((leg, i) => { leg.rotation.x = pose.tuck > 0 ? -.95 * pose.tuck : running ? stride * (i === 0 ? 1 : -1) * .65 : e.grounded ? 0 : (i === 0 ? -.55 : .36); });
-    this.arms.forEach((arm, i) => { arm.rotation.x = pose.tuck > 0 ? -.9 * pose.tuck : running ? stride * (i === 0 ? -1 : 1) * .55 : e.grounded ? Math.sin(t * 1.6) * .025 : -.5; arm.rotation.z = pose.tuck > 0 ? (i === 0 ? .12 : -.12) : e.grounded ? (i === 0 ? .08 : -.08) : (i === 0 ? .65 : -.65); });
+    this.motion.applyLimbs(e, pose.spread, this.arms, this.legs);
+    this.starTrail.update(e);
     this.glow.position.set(e.x + this.root.position.x, e.y + 1.5, 2.8);
     this.key.position.y = this.cameraY + 9; this.key.target.position.set(0, this.cameraY, 0); this.key.target.updateMatrixWorld();
     const below = e.platforms.filter(p => p.y <= e.y + .02 && Math.abs(e.x - p.x) < p.width / 2).sort((a, b) => b.y - a.y)[0];
@@ -277,6 +277,7 @@ export class TowerWorld {
   }
   dispose() {
     if (this.disposed) return; this.disposed = true; this.observer.disconnect();
+    this.root.remove(this.starTrail.mesh); this.starTrail.dispose();
     const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>(), textures = new Set<THREE.Texture>();
     this.scene.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Points) { geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m); } });
     for (const m of materials) { for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value); m.dispose(); }

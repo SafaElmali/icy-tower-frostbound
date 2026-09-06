@@ -10,7 +10,7 @@ A playable 2.5D arcade tower climber. Three.js renders the scene; a fixed-step s
 - Enter: begin/retry
 - Touch controls appear on narrow screens
 
-Run to jump higher. At high speed, Harold tucks into a forward 360° somersault and straightens before landing. Land on new floors within 3.8 seconds to extend a combo. Arcade scrolling starts when you reach floor 5, making ledges descend even when you stand still. The pace increases every 30 seconds, up to five increases. The camera tracks downward falls to reveal recovery ledges, while the frost keeps advancing independently. Practice disables automatic scrolling; falling into the frost still ends the run. Personal records are saved on this browser.
+Run to jump higher. At high speed, Harold spreads his arms and legs into a star-shaped 360° spin and straightens before landing. Active combos leave a rotating, multicolored five-point star trail behind him. Land on new floors within 3.8 seconds to extend a combo. Arcade scrolling starts when you reach floor 5, making ledges descend even when you stand still. The pace increases every 30 seconds, up to five increases. The camera tracks downward falls to reveal recovery ledges, while the frost keeps advancing independently. Practice disables automatic scrolling; falling into the frost still ends the run. Personal records are saved on this browser.
 
 ## Development
 
@@ -23,7 +23,7 @@ Run to jump higher. At high speed, Harold tucks into a forward 360° somersault 
 ## Art and sound
 
 - `public/assets/cathedral.png`: original AI-generated cathedral environment art.
-- `public/assets/harold.glb`: custom 3D recreation of the original Harold look: oversized blue beanie, green crown sweater, olive trousers, brown shoes, and a broad grin. Separate limb pivots support running, jumping, and tucked somersaults.
+- `public/assets/harold.glb`: custom 3D recreation of the original Harold look: oversized blue beanie, green crown sweater, olive trousers, brown shoes, and a broad grin. Separate limb pivots support running, jumping, and star-shaped spins.
 - `scripts/climber.blend`: editable Blender source.
 - `scripts/build-climber.py`: rebuilds the character asset with Blender 5.2.
 - Ledges and architectural geometry use physically based materials with procedural surface detail. Static meshes are batched by material.
@@ -33,4 +33,4 @@ This is an independent Icy Tower-inspired browser prototype, with no original ga
 
 ## Validation notes
 
-The gameplay simulation is covered by automated tests. The GLB is checked for a valid upright model and named animation pivots, and its Blender render is inspected. Motion checks cover full loops in both directions, takeoff speed, landing recovery, and paused animation. Browser visual and interactive QA have not been performed. Optional WebMCP actions are feature-detected; no supported WebMCP runtime was available to verify registration here.
+The gameplay simulation is covered by automated tests. The GLB is checked for a valid upright model and named animation pivots, and its Blender render is inspected. Motion checks cover full loops in both directions, extended limbs on the real model, takeoff speed, landing recovery, and paused animation. Trail checks cover emission, positioning behind the player, lifetime, pause, and reset. Browser visual and interactive QA have not been performed. Optional WebMCP actions are feature-detected; no supported WebMCP runtime was available to verify registration here.
