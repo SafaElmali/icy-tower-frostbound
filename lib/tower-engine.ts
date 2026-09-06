@@ -88,7 +88,7 @@ export class TowerEngine {
     if (this.jumpBuffer > 0 && this.coyote > 0) {
       this.vy = 12.6 + Math.abs(this.vx) * .47;
       this.grounded = false; this.coyote = 0; this.jumpBuffer = 0; this.standingId = -1;
-      this.emit('jump');
+      this.emit('jump', this.vx);
     }
     const oldY = this.y;
     this.x += this.vx * dt;

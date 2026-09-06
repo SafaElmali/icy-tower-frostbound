@@ -7,6 +7,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { ClimberMotion } from './climber-motion';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 
 type Ledge = { group: THREE.Group; gem?: THREE.Mesh; id: number };
@@ -30,7 +31,8 @@ export class TowerWorld {
   private rotation = .12;
   private legs: THREE.Object3D[] = [];
   private arms: THREE.Object3D[] = [];
-  private scarf?: THREE.Object3D;
+  private tumble = new THREE.Group();
+  private motion = new ClimberMotion();
   private backdrop?: THREE.Texture;
   private flecks: Fleck[] = [];
   private columns = new THREE.Group();
@@ -72,7 +74,7 @@ export class TowerWorld {
     this.scene.add(this.key, this.key.target);
     const rim = new THREE.DirectionalLight(0x58cfff, 3.5); rim.position.set(6, 8, -6); this.scene.add(rim);
     this.glow = new THREE.PointLight(0xffc692, 5, 8, 1.3); this.scene.add(this.glow);
-    this.scene.add(this.root); this.root.add(this.character, this.columns);
+    this.scene.add(this.root); this.root.add(this.tumble, this.columns); this.tumble.add(this.character);
     this.camera.position.set(0, 5.2, 26); this.camera.lookAt(0, 5.2, 0);
     const stoneNoise = this.makeNoiseTexture();
     this.stone = new THREE.MeshStandardMaterial({ color: 0x405a65, roughness: .89, metalness: .08, bumpMap: stoneNoise, bumpScale: .12, roughnessMap: stoneNoise });
@@ -101,7 +103,7 @@ export class TowerWorld {
     this.resize();
     // The custom GLB is optional while the playable model remains available.
     try {
-      const gltf = await new GLTFLoader().loadAsync('/assets/climber.glb');
+      const gltf = await new GLTFLoader().loadAsync('/assets/harold.glb');
       if (this.disposed) { gltf.scene.traverse(o => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose(); } }); return; }
       this.character.traverse(o => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose(); } });
       this.character.clear();
@@ -110,8 +112,7 @@ export class TowerWorld {
       this.character.add(model);
       this.legs = ['Leg_L', 'Leg_R'].map(n => model.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
       this.arms = ['Arm_L', 'Arm_R'].map(n => model.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
-      this.scarf = model.getObjectByName('ScarfTail');
-    } catch { /* The built-in expedition model keeps the game playable offline. */ }
+    } catch { /* The built-in Harold model keeps the game playable offline. */ }
   }
   private makeNoiseTexture() {
     const size = 128, data = new Uint8Array(size * size * 4);
@@ -131,22 +132,27 @@ export class TowerWorld {
     const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; parent.add(m); return m;
   }
   private fallbackCharacter() {
-    const orange = new THREE.MeshStandardMaterial({ color: 0xc95a25, roughness: .82 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x172b36, roughness: .65 });
-    const cream = new THREE.MeshStandardMaterial({ color: 0xe4d7b7, roughness: 1 });
-    this.mesh(new THREE.CapsuleGeometry(.28, .32, 6, 16), orange, this.character, 0, .88);
-    this.mesh(new THREE.SphereGeometry(.3, 24, 16), orange, this.character, 0, 1.4);
-    const face = this.mesh(new THREE.SphereGeometry(.235, 24, 16), cream, this.character, 0, 1.41, .17); face.scale.z = .4;
-    this.mesh(new RoundedBoxGeometry(.4, .14, .1, 3, .045), dark, this.character, 0, 1.46, .265);
+    const green = new THREE.MeshStandardMaterial({ color: 0x16bb2c, roughness: .85 });
+    const blue = new THREE.MeshStandardMaterial({ color: 0x285fac, roughness: .86 });
+    const olive = new THREE.MeshStandardMaterial({ color: 0x727537, roughness: .9 });
+    const brown = new THREE.MeshStandardMaterial({ color: 0x69422d, roughness: .78 });
+    const skin = new THREE.MeshStandardMaterial({ color: 0xf6ab75, roughness: .8 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xe8c753, roughness: .65 });
+    this.mesh(new THREE.CapsuleGeometry(.26, .12, 6, 16), green, this.character, 0, .7);
+    const head = this.mesh(new THREE.SphereGeometry(.29, 24, 16), skin, this.character, 0, 1.09); head.scale.y = .72;
+    const beanie = this.mesh(new THREE.SphereGeometry(.32, 24, 16), blue, this.character, -.035, 1.35); beanie.scale.set(1, 1.04, .82);
+    this.mesh(new RoundedBoxGeometry(.64, .10, .51, 4, .045), blue, this.character, 0, 1.18);
+    this.mesh(new THREE.SphereGeometry(.079, 16, 12), skin, this.character, 0, 1.10, .255);
+    this.mesh(new THREE.BoxGeometry(.14, .09, .015), gold, this.character, 0, .73, .269);
     for (const side of [-1, 1]) {
-      const leg = new THREE.Group(); leg.position.set(side * .15, .52, 0); this.character.add(leg); this.legs.push(leg);
-      this.mesh(new THREE.CapsuleGeometry(.105, .2, 4, 12), dark, leg, 0, -.15);
-      this.mesh(new RoundedBoxGeometry(.23, .15, .35, 2, .055), dark, leg, 0, -.45, .07);
-      const arm = new THREE.Group(); arm.position.set(side * .3, 1.03, 0); this.character.add(arm); this.arms.push(arm);
-      this.mesh(new THREE.CapsuleGeometry(.11, .27, 4, 12), orange, arm, side * .04, -.19);
-      this.mesh(new THREE.SphereGeometry(.11, 12, 8), dark, arm, side * .04, -.4);
+      this.mesh(new THREE.SphereGeometry(.075, 12, 8), skin, this.character, side * .3, 1.1);
+      const leg = new THREE.Group(); leg.position.set(side * .145, .48, 0); this.character.add(leg); this.legs.push(leg);
+      this.mesh(new THREE.CapsuleGeometry(.115, .12, 4, 12), olive, leg, 0, -.17);
+      this.mesh(new RoundedBoxGeometry(.27, .16, .35, 3, .06), brown, leg, 0, -.40, .065);
+      const arm = new THREE.Group(); arm.position.set(side * .28, .82, 0); this.character.add(arm); this.arms.push(arm);
+      this.mesh(new THREE.CapsuleGeometry(.1, .17, 4, 12), green, arm, side * .04, -.16);
+      this.mesh(new THREE.SphereGeometry(.075, 12, 8), skin, arm, side * .04, -.34);
     }
-    this.mesh(new RoundedBoxGeometry(.4, .48, .2, 3, .055), dark, this.character, 0, .98, -.3);
   }
   private buildColumns() {
     for (const x of [-7.15, 7.15]) {
@@ -207,7 +213,8 @@ export class TowerWorld {
       this.backdrop.offset.set((1 - this.backdrop.repeat.x) / 2, (1 - this.backdrop.repeat.y) / 2);
     }
   }
-  effect(e: GameEvent) {
+  effect(e: GameEvent, time: number) {
+    if (e.type === 'jump') this.motion.jump(e.value ?? 0, time);
     if (e.type === 'land') this.squish = .22;
     if (e.type === 'over') this.shake = .24;
     if (e.type === 'wall') this.shake = .055;
@@ -240,13 +247,15 @@ export class TowerWorld {
     for (const [id, ledge] of this.ledges) if (!keep.has(id)) { this.root.remove(ledge.group); ledge.group.traverse(o => { if (o instanceof THREE.Mesh) o.geometry.dispose(); }); this.ledges.delete(id); }
     const running = e.grounded && Math.abs(e.vx) > .3;
     const stride = Math.sin(t * (10 + Math.abs(e.vx) * 1.8));
-    this.character.position.set(e.x, e.y + (menu ? Math.sin(t * 2) * .014 : 0), .05);
+    const pose = this.motion.pose(e);
+    this.tumble.position.set(e.x, e.y + .8 + (menu ? Math.sin(t * 2) * .014 : 0), .05);
+    this.tumble.rotation.z = pose.roll;
+    this.character.position.set(0, -.8, 0);
     this.rotation = damp(this.rotation, Math.abs(e.vx) > .25 ? e.facing * .9 : .12, 9, dt); this.character.rotation.y = this.rotation;
     this.character.rotation.z = damp(this.character.rotation.z, e.vx * -.018, 8, dt);
     this.character.scale.set(1 + this.squish * .45, 1 - this.squish, 1 + this.squish * .3);
-    this.legs.forEach((leg, i) => { leg.rotation.x = running ? stride * (i === 0 ? 1 : -1) * .65 : e.grounded ? 0 : (i === 0 ? -.55 : .36); });
-    this.arms.forEach((arm, i) => { arm.rotation.x = running ? stride * (i === 0 ? -1 : 1) * .55 : e.grounded ? Math.sin(t * 1.6) * .025 : -.5; arm.rotation.z = e.grounded ? (i === 0 ? .08 : -.08) : (i === 0 ? .65 : -.65); });
-    if (this.scarf) { this.scarf.rotation.x = Math.sin(t * 8) * .16 + Math.abs(e.vx) * .05; }
+    this.legs.forEach((leg, i) => { leg.rotation.x = pose.tuck > 0 ? -.95 * pose.tuck : running ? stride * (i === 0 ? 1 : -1) * .65 : e.grounded ? 0 : (i === 0 ? -.55 : .36); });
+    this.arms.forEach((arm, i) => { arm.rotation.x = pose.tuck > 0 ? -.9 * pose.tuck : running ? stride * (i === 0 ? -1 : 1) * .55 : e.grounded ? Math.sin(t * 1.6) * .025 : -.5; arm.rotation.z = pose.tuck > 0 ? (i === 0 ? .12 : -.12) : e.grounded ? (i === 0 ? .08 : -.08) : (i === 0 ? .65 : -.65); });
     this.glow.position.set(e.x + this.root.position.x, e.y + 1.5, 2.8);
     this.key.position.y = this.cameraY + 9; this.key.target.position.set(0, this.cameraY, 0); this.key.target.updateMatrixWorld();
     const below = e.platforms.filter(p => p.y <= e.y + .02 && Math.abs(e.x - p.x) < p.width / 2).sort((a, b) => b.y - a.y)[0];
