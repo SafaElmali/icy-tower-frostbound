@@ -230,7 +230,7 @@ export class TowerWorld {
   render(e: TowerEngine, dt: number, t: number) {
     const menu = e.status === 'ready';
     const aspect = this.renderer.domElement.clientWidth / this.renderer.domElement.clientHeight;
-    this.cameraY = damp(this.cameraY, e.cameraY, 6, dt);
+    this.cameraY = damp(this.cameraY, e.cameraY, e.cameraY < this.cameraY ? 10 : 6, dt);
     this.shake *= Math.exp(-12 * dt); this.squish *= Math.exp(-12 * dt);
     this.camera.position.set(Math.sin(t * 63) * this.shake, this.cameraY + 3.8 + Math.cos(t * 58) * this.shake, 26);
     this.camera.lookAt(0, this.cameraY, 0);

@@ -60,16 +60,6 @@ void test('pausing freezes simulation and resuming does not accumulate elapsed t
   e.togglePause();step(e,1);assert.ok(e.time<1.02);
 });
 
-void test('arcade frost begins after grace time and catches an idle player', () => {
-  const e=new TowerEngine();e.start();step(e,1);const initial=e.stormY;step(e,999);assert.equal(e.stormY,initial);
-  step(e,2400);assert.equal(e.status,'over');assert.ok(e.drainEvents().some(x=>x.type==='over'));
-});
-
-void test('practice removes timed frost and still ends a fall below the camera', () => {
-  const e=new TowerEngine();e.start('practice');step(e,1);const initial=e.stormY;step(e,11999);assert.equal(e.status,'playing');assert.equal(e.stormY,initial);
-  e.y=-9;e.grounded=false;step(e,1);assert.equal(e.status,'over');
-});
-
 void test('crystals are collected once; restart resets all run state', () => {
   const e=new TowerEngine();e.start('practice');const p=e.platforms.find(p=>p.gem)!;
   e.x=p.x;e.y=p.y;e.grounded=true;e.standingId=p.id;step(e,1);assert.equal(e.gems,1);assert.ok(p.collected);

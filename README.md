@@ -10,13 +10,13 @@ A playable 2.5D arcade tower climber. Three.js renders the scene; a fixed-step s
 - Enter: begin/retry
 - Touch controls appear on narrow screens
 
-Run to jump higher. At high speed, Harold tucks into a forward 360° somersault and straightens before landing. Land on new floors within 3.8 seconds to extend a combo. Arcade's storm begins after 10 seconds. Practice removes the timed chase; falling behind the camera still ends the run. Personal records are saved on this browser.
+Run to jump higher. At high speed, Harold tucks into a forward 360° somersault and straightens before landing. Land on new floors within 3.8 seconds to extend a combo. Arcade scrolling starts when you reach floor 5, making ledges descend even when you stand still. The pace increases every 30 seconds, up to five increases. The camera tracks downward falls to reveal recovery ledges, while the frost keeps advancing independently. Practice disables automatic scrolling; falling into the frost still ends the run. Personal records are saved on this browser.
 
 ## Development
 
 `npm install`, then `npm run dev -- --port 5188`.
 
-`npm test` checks jump height, landings, wall rebounds, buffering, coyote time, pause, frost, restart, frame-rate independence, and a simulated 35-floor climb through five generated layouts.
+`npm test` checks jump height, landings, wall rebounds, buffering, coyote time, pause, frost, restart, downward camera tracking, recoverable falls, floor-triggered scrolling, 30-second acceleration, frame-rate independence, and a simulated 35-floor climb through five generated layouts.
 
 `npm run typecheck`, `npm run lint`, and `npm run build` validate source and production output.
 

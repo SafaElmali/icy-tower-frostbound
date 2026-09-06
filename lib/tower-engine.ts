@@ -26,6 +26,7 @@ export class TowerEngine {
   private jumpWasDown = false;
   private accumulator = 0;
   private lastFloor = 0;
+  private scrollStartedAt: number | null = null;
   constructor(seed = 73091) { this.seed = seed; this.resetWorld(); }
   private random() { this.state = (Math.imul(1664525, this.state) + 1013904223) >>> 0; return this.state / 4294967296; }
   private resetWorld() {
@@ -49,7 +50,7 @@ export class TowerEngine {
     this.seed = seed; this.mode = mode; this.status = 'playing';
     this.x = this.y = this.vx = this.vy = this.time = this.maxY = this.floor = this.score = this.gems = this.combo = this.bestCombo = this.comboTime = this.lastFloor = 0;
     this.cameraY = 5.2; this.stormY = -8; this.facing = 1; this.grounded = true; this.standingId = 0;
-    this.accumulator = this.jumpBuffer = 0; this.coyote = .12; this.jumpWasDown = false; this.events = [];
+    this.accumulator = this.jumpBuffer = 0; this.coyote = .12; this.jumpWasDown = false; this.events = []; this.scrollStartedAt = null;
     this.resetWorld();
   }
   togglePause() {
@@ -131,9 +132,15 @@ export class TowerEngine {
       }
     }
     this.maxY = Math.max(this.maxY, this.y);
-    this.cameraY = Math.max(5.2, this.maxY + 2.2);
-    if (this.mode === 'arcade' && this.time > 10) this.stormY += Math.min(2.55, .48 + this.time * .013) * dt;
-    this.stormY = Math.max(this.stormY, this.cameraY - 12.5);
+    if (this.mode === 'arcade' && this.scrollStartedAt === null && this.maxY >= 5 * FLOOR_HEIGHT) this.scrollStartedAt = this.time;
+    const scrollStep = this.scrollStartedAt === null ? 0 : (.65 + Math.min(5, Math.floor((this.time - this.scrollStartedAt) / 30)) * .4) * dt;
+    const followY = Math.max(5.2, this.y + 2.2);
+    // Let a fall reveal lower ledges, while standing still lets the tower scroll
+    // past the player. The frost keeps advancing independently of camera recovery.
+    this.cameraY = !this.grounded && this.vy < 0
+      ? Math.min(this.cameraY + scrollStep, followY)
+      : Math.max(this.cameraY + scrollStep, followY);
+    this.stormY = Math.max(this.stormY + scrollStep, this.cameraY - 12.5);
     this.generate(this.cameraY + 23);
     this.platforms = this.platforms.filter(p => p.y > this.cameraY - 22 || p.id === this.standingId);
     if (this.y < this.stormY + .05) { this.status = 'over'; this.emit('over'); }
