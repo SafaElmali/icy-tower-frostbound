@@ -12,7 +12,8 @@ import { ComboStarTrail } from './combo-star-trail';
 import { TowerInterior } from './tower-interior';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 
-type Ledge = { group: THREE.Group; gem?: THREE.Mesh; id: number };
+type FloorPlaque = THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+type Ledge = { group: THREE.Group; gem?: THREE.Mesh; plaque?: FloorPlaque; id: number };
 type Fleck = { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; duration: number };
 const damp = (a: number, b: number, rate: number, dt: number) => THREE.MathUtils.lerp(a, b, 1 - Math.exp(-rate * dt));
 
@@ -181,6 +182,29 @@ export class TowerWorld {
       this.mesh(merged, material, group);
     }
   }
+  private makeFloorPlaque(id: number, group: THREE.Group): FloorPlaque {
+    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 320;
+    const ctx = canvas.getContext('2d')!;
+    const wood = ctx.createLinearGradient(0, 0, 0, 320);
+    wood.addColorStop(0, '#93663b'); wood.addColorStop(.5, '#694525'); wood.addColorStop(1, '#4b2e1a');
+    ctx.fillStyle = wood; ctx.fillRect(0, 0, 512, 320);
+    // Horizontal seams give the sign a wooden-plank face, like the original milestones.
+    for (const y of [80, 160, 240]) {
+      ctx.fillStyle = '#3b271a'; ctx.fillRect(0, y, 512, 5);
+      ctx.fillStyle = '#a47a47'; ctx.fillRect(0, y + 5, 512, 2);
+    }
+    ctx.strokeStyle = '#c3985c'; ctx.lineWidth = 9; ctx.strokeRect(13, 13, 486, 294);
+    ctx.font = `900 ${Math.min(190, 640 / String(id).length)}px Georgia, serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#28190f'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 6;
+    ctx.fillStyle = '#fff0c3'; ctx.fillText(String(id), 256, 168, 434);
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+    const width = 1.22, height = .76;
+    this.mesh(new RoundedBoxGeometry(width + .1, height + .1, .18, 2, .055), this.gold, group, 0, -.4, .68);
+    const plaque = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
+    plaque.name = `Floor ${id}`; plaque.position.set(0, -.4, .78); group.add(plaque);
+    return plaque;
+  }
   private makeLedge(p: Platform): Ledge {
     const group = new THREE.Group(); group.position.set(p.x, p.y, 0); this.root.add(group);
     this.mesh(new RoundedBoxGeometry(p.width, .35, 1.7, 2, .07), this.stone, group, 0, -.23, -.35);
@@ -199,7 +223,8 @@ export class TowerWorld {
     let gem: THREE.Mesh | undefined;
     if (p.gem) { gem = this.mesh(new THREE.OctahedronGeometry(.21, 0), this.gemMat, group, 0, 1.05, 0); gem.scale.y = 1.55; }
     this.batchMeshes(group, gem);
-    return { group, gem, id: p.id };
+    const plaque = p.id > 0 && p.id % 10 === 0 ? this.makeFloorPlaque(p.id, group) : undefined;
+    return { group, gem, plaque, id: p.id };
   }
   setQuality(high: boolean) { this.high = high; this.renderer.shadowMap.enabled = high; this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 1.65 : 1)); this.resize(); }
   private resize() {
@@ -243,7 +268,12 @@ export class TowerWorld {
       ledge.group.position.set(p.x, p.y, 0);
       if (ledge.gem) { ledge.gem.visible = !p.collected; ledge.gem.rotation.y = t * 1.8; ledge.gem.position.y = 1.05 + Math.sin(t * 2.4 + p.id) * .14; }
     }
-    for (const [id, ledge] of this.ledges) if (!keep.has(id)) { this.root.remove(ledge.group); ledge.group.traverse(o => { if (o instanceof THREE.Mesh) o.geometry.dispose(); }); this.ledges.delete(id); }
+    for (const [id, ledge] of this.ledges) if (!keep.has(id)) {
+      this.root.remove(ledge.group);
+      ledge.group.traverse(o => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
+      ledge.plaque?.material.map?.dispose(); ledge.plaque?.material.dispose();
+      this.ledges.delete(id);
+    }
     const pose = this.motion.pose(e);
     this.tumble.position.set(e.x, e.y + .8 + (menu ? Math.sin(t * 2) * .014 : 0), .05);
     this.tumble.rotation.z = pose.roll;

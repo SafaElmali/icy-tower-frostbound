@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TowerEngine, freshControls, FLOOR_HEIGHT, WALL } from '../lib/tower-engine.ts';
+import { TowerEngine, freshControls, FLOOR_HEIGHT, WALL, STAGE_WIDTH } from '../lib/tower-engine.ts';
 const step = (e: TowerEngine, count: number, input = freshControls()) => { for (let i = 0; i < count; i++) e.tick(1 / 120, input); };
 
 void test('a standing jump clears a floor and lands on real platform geometry', () => {
@@ -77,7 +77,7 @@ void test('procedurally generated routes can be climbed using ordinary inputs', 
   for (const seed of [3,17,42,99,723]) {
     const e=new TowerEngine(seed);e.start('practice');
     let target=e.platforms[1], wasJump=false;
-    for(let i=0;i<18000 && e.floor<35 && e.status==='playing';i++) {
+    for(let i=0;i<24000 && e.floor<105 && e.status==='playing';i++) {
       if(e.grounded) target=e.platforms.find(p=>p.id===e.standingId+1)!;
       const dx=target.x-e.x;
       const steering=dx*3.8-e.vx*1.1;
@@ -85,8 +85,32 @@ void test('procedurally generated routes can be climbed using ordinary inputs', 
       e.tick(1/120,{left:steering<-.35,right:steering>.35,jump});wasJump=jump;
       e.drainEvents();
     }
-    assert.ok(e.floor>=35, `seed ${seed}: reached ${e.floor}, status ${e.status}, x ${e.x}, y ${e.y}`);
+    assert.ok(e.floor>=105, `seed ${seed}: reached ${e.floor}, status ${e.status}, x ${e.x}, y ${e.y}`);
     assert.ok(e.bestCombo>=10); assert.ok(e.score>=3500);
     assert.ok(e.platforms.length<28,'world keeps a bounded set of nearby platforms');
+  }
+});
+
+void test('every 50th floor spans the tower and stays stationary, including moving-floor multiples', () => {
+  for (const id of [50, 100, 150, 350]) {
+    const e = new TowerEngine(17); e.start('practice');
+    e.y = id * FLOOR_HEIGHT + .6; e.cameraY = e.y + 2.2; e.grounded = false; e.standingId = -1;
+    step(e, 1);
+    const stage = e.platforms.find(p => p.id === id)!;
+    assert.equal(stage.width, STAGE_WIDTH); assert.equal(stage.x, 0); assert.equal(stage.moving, false);
+    assert.ok(e.platforms.find(p => p.id === id + 1)!.width < 5);
+    step(e, 120); assert.equal(stage.x, 0);
+  }
+});
+
+void test('stage collision catches falls at both walls and allows jumping through from below', () => {
+  for (const x of [-WALL + .3, 0, WALL - .3]) {
+    const e = new TowerEngine(17); e.start('practice');
+    e.x = x; e.y = 50 * FLOOR_HEIGHT + .6; e.cameraY = e.y + 2.2; e.vy = -2; e.grounded = false; e.standingId = -1;
+    step(e, 60);
+    assert.equal(e.standingId, 50); assert.equal(e.y, 50 * FLOOR_HEIGHT);
+    e.y -= .3; e.vy = 8; e.grounded = false; e.standingId = -1;
+    step(e, 12); assert.ok(e.y > 50 * FLOOR_HEIGHT); assert.equal(e.grounded, false);
+    step(e, 120); assert.equal(e.standingId, 50);
   }
 });

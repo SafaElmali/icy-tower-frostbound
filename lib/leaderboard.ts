@@ -19,7 +19,7 @@ export function verifySubmission(input: unknown): LeaderboardEntry {
   const { name: rawName, replay } = input as { name?: unknown; replay?: RunReplay };
   const name = typeof rawName === 'string' ? rawName.normalize('NFKC').trim().replace(/\s+/g, ' ') : '';
   if (!/^[\p{L}\p{N} ._'’-]{2,20}$/u.test(name)) throw new LeaderboardError('Use 2–20 letters, numbers, spaces, or simple punctuation for your name.');
-  if (!replay || replay.version !== 1 || !Number.isInteger(replay.seed) || replay.seed < 0 || replay.seed > 0xffffffff || !Array.isArray(replay.moves) || !replay.moves.length || replay.moves.length > MAX_REPLAY_SEGMENTS) throw new LeaderboardError('This run cannot be verified. Start a new arcade run.');
+  if (!replay || (replay.version !== 1 && replay.version !== 2) || !Number.isInteger(replay.seed) || replay.seed < 0 || replay.seed > 0xffffffff || !Array.isArray(replay.moves) || !replay.moves.length || replay.moves.length > MAX_REPLAY_SEGMENTS) throw new LeaderboardError('This run cannot be verified. Start a new arcade run.');
   let totalFrames = 0;
   for (const move of replay.moves) {
     if (!Array.isArray(move) || move.length !== 2) throw new LeaderboardError('Invalid run recording.');
@@ -28,7 +28,7 @@ export function verifySubmission(input: unknown): LeaderboardEntry {
     totalFrames += frames;
     if (totalFrames > MAX_REPLAY_FRAMES) throw new LeaderboardError('Ranked runs must be under 30 minutes.');
   }
-  const engine = new TowerEngine(replay.seed, false); engine.start('arcade');
+  const engine = new TowerEngine(replay.seed, false, replay.version); engine.start('arcade');
   for (const [frames, mask] of replay.moves) {
     if (engine.status !== 'playing') throw new LeaderboardError('The run contains moves after it ended.');
     if (mask === 8) { engine.togglePause(); engine.togglePause(); continue; }
@@ -39,7 +39,7 @@ export function verifySubmission(input: unknown): LeaderboardEntry {
     }
   }
   if (engine.status !== 'over' || engine.floor < 1) throw new LeaderboardError('Finish an arcade run and reach at least floor 1 to submit.');
-  const id = createHash('sha256').update(JSON.stringify({ version: 1, seed: replay.seed, moves: replay.moves })).digest('hex');
+  const id = createHash('sha256').update(JSON.stringify({ version: replay.version, seed: replay.seed, moves: replay.moves })).digest('hex');
   return { id, name, score: engine.score, floor: engine.floor, combo: engine.bestCombo, duration: Math.round(engine.time * 1000), createdAt: new Date().toISOString() };
 }
 

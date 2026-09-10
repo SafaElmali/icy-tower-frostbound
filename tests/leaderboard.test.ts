@@ -5,16 +5,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore, setEnvironmentContext } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { TowerEngine, freshControls } from '../lib/tower-engine.ts';
+import { TowerEngine, freshControls, type RunReplay } from '../lib/tower-engine.ts';
 import { Leaderboard, verifySubmission, type LeaderboardEntry, type LeaderboardStore } from '../lib/leaderboard.ts';
 import handler from '../netlify/functions/leaderboard.ts';
 
-function completedRun(seed = 17, paused = false) {
-  const engine = new TowerEngine(seed); engine.start('arcade');
+function completedRun(seed = 17, paused = false, goal = 12, version: RunReplay['version'] = 2) {
+  const engine = new TowerEngine(seed, true, version); engine.start('arcade');
   let target = engine.platforms[1], wasJump = false;
   for (let i = 0; i < 18000 && engine.status === 'playing'; i++) {
     if (paused && i === 100) { engine.togglePause(); engine.tick(1, freshControls()); engine.togglePause(); }
-    if (engine.floor >= 12) { engine.tick(1 / 120, freshControls()); engine.drainEvents(); continue; }
+    if (engine.floor >= goal) { engine.tick(1 / 120, freshControls()); engine.drainEvents(); continue; }
     if (engine.grounded) target = engine.platforms.find(platform => platform.id === engine.standingId + 1)!;
     const steering = (target.x - engine.x) * 3.8 - engine.vx * 1.1;
     const jump: boolean = engine.grounded && !wasJump;
@@ -31,6 +31,16 @@ void test('server verification reproduces real runs, including pauses and mixed 
     assert.equal(entry.name, 'Harold'); assert.equal(entry.score, engine.score); assert.equal(entry.floor, engine.floor); assert.equal(entry.combo, engine.bestCombo);
     assert.equal(entry.duration, Math.round(engine.time * 1000));
     assert.equal(verifySubmission({ name: 'Another name', replay: engine.getReplay() }).id, entry.id);
+  }
+});
+
+void test('leaderboard verifies both legacy and new stage layouts beyond floor 50', () => {
+  for (const version of [1, 2] as const) {
+    const engine = completedRun(17, false, 53, version);
+    assert.ok(engine.floor >= 53); assert.equal(engine.getReplay()!.version, version);
+    const entry = verifySubmission({ name: 'Harold', replay: engine.getReplay() });
+    assert.equal(entry.score, engine.score); assert.equal(entry.floor, engine.floor);
+    assert.equal(entry.combo, engine.bestCombo); assert.equal(entry.duration, Math.round(engine.time * 1000));
   }
 });
 

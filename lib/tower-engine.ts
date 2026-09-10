@@ -5,9 +5,11 @@ export type Platform = { id: number; x: number; y: number; width: number; gem: b
 export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over'; x: number; y: number; value?: number };
 export const FLOOR_HEIGHT = 2.35;
 export const WALL = 6.4;
+export const STAGE_WIDTH = 13.6;
+export const isStageFloor = (id: number) => id > 0 && id % 50 === 0;
 export const MAX_REPLAY_FRAMES = 216000;
 export const MAX_REPLAY_SEGMENTS = 12000;
-export type RunReplay = { version: 1; seed: number; moves: [number, number][] };
+export type RunReplay = { version: 1 | 2; seed: number; moves: [number, number][] };
 export const freshControls = (): Controls => ({ left: false, right: false, jump: false });
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -33,11 +35,12 @@ export class TowerEngine {
   private replay: [number, number][] | null = [];
   private replayFrames = 0;
   private recordReplay: boolean;
-  constructor(seed = 73091, recordReplay = true) { this.seed = seed; this.recordReplay = recordReplay; this.resetWorld(); }
+  private rulesVersion: RunReplay['version'];
+  constructor(seed = 73091, recordReplay = true, rulesVersion: RunReplay['version'] = 2) { this.seed = seed; this.recordReplay = recordReplay; this.rulesVersion = rulesVersion; this.resetWorld(); }
   private random() { this.state = (Math.imul(1664525, this.state) + 1013904223) >>> 0; return this.state / 4294967296; }
   private resetWorld() {
     this.state = this.seed; this.nextId = 0; this.platforms = [];
-    this.platforms.push({ id: 0, x: 0, y: 0, width: 13.6, gem: false, collected: false, moving: false, origin: 0, phase: 0 });
+    this.platforms.push({ id: 0, x: 0, y: 0, width: STAGE_WIDTH, gem: false, collected: false, moving: false, origin: 0, phase: 0 });
     this.nextId = 1;
     this.generate(42);
   }
@@ -45,11 +48,14 @@ export class TowerEngine {
     while (this.nextId * FLOOR_HEIGHT <= top) {
       const id = this.nextId++;
       const previous = this.platforms[this.platforms.length - 1];
-      const width = id < 8 ? 3.7 : Math.max(2.45, 3.7 - id * .007) + this.random() * .5;
+      const normalWidth = id < 8 ? 3.7 : Math.max(2.45, 3.7 - id * .007) + this.random() * .5;
+      // Version 1 retains the original layout for already-recorded leaderboard runs.
+      const stage = this.rulesVersion >= 2 && isStageFloor(id);
+      const width = stage ? STAGE_WIDTH : normalWidth;
       // Neighboring ledges always overlap the base jump's reachable horizontal range.
       const offset = (this.random() > .5 ? 1 : -1) * (1.5 + this.random() * 2.3);
-      const x = clamp(previous.x + offset, -5.9 + width / 2, 5.9 - width / 2);
-      this.platforms.push({ id, x, y: id * FLOOR_HEIGHT, width, gem: id % 3 === 0, collected: false, moving: id > 24 && id % 7 === 0, origin: x, phase: this.random() * Math.PI * 2 });
+      const x = stage ? 0 : clamp(previous.x + offset, -5.9 + width / 2, 5.9 - width / 2);
+      this.platforms.push({ id, x, y: id * FLOOR_HEIGHT, width, gem: id % 3 === 0, collected: false, moving: !stage && id > 24 && id % 7 === 0, origin: x, phase: this.random() * Math.PI * 2 });
     }
   }
   start(mode: GameMode = 'arcade', seed = this.seed) {
@@ -166,7 +172,7 @@ export class TowerEngine {
   drainEvents() { const e = this.events; this.events = []; return e; }
   getReplay(): RunReplay | null {
     if (this.status !== 'over' || this.mode !== 'arcade' || !this.replay || this.floor < 1) return null;
-    return { version: 1, seed: this.seed, moves: this.replay.map(([frames, mask]) => [frames, mask]) };
+    return { version: this.rulesVersion, seed: this.seed, moves: this.replay.map(([frames, mask]) => [frames, mask]) };
   }
   snapshot() {
     return { status: this.status, mode: this.mode, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY };
