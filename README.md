@@ -16,6 +16,10 @@ Run to jump higher. At high speed, Harold spreads his arms and legs into a star-
 
 Every 10th floor has a wooden number plaque on its front edge. Every 50th floor is a full-width landing stage, providing room to land and build momentum before the next climb. Stages still scroll toward the frost like other floors.
 
+## Quick challenges
+
+Each climb starts three fresh challenges: reach floor 30 with an unbroken combo, collect 10 crystals, and perform 5 wall jumps. Track progress during play and see results when you pause or finish. The combo challenge starts with your first higher-floor landing; letting the 3.8-second timer expire before reaching floor 30 fails it for that run. Passing floor 30 in the air is not enough — land on floor 30 or higher. Wall jumps count fast airborne wall rebounds, not ground-level wall impacts. Completed challenges stay complete until you start again. Challenges work in both Arcade and Practice and do not change scoring.
+
 ## Leaderboard
 
 Open the trophy button to see the all-time top 50 arcade runs. After a completed arcade run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, and combos are replayed and calculated on the server. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.
