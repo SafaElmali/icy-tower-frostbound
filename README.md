@@ -16,6 +16,12 @@ Run to jump higher. At high speed, Harold spreads his arms and legs into a star-
 
 Every 10th floor has a wooden number plaque on its front edge. Every 50th floor is a full-width landing stage, providing room to land and build momentum before the next climb. Stages still scroll toward the frost like other floors.
 
+## Race your ghost
+
+Finish an arcade climb to create a translucent blue replay of Harold. On subsequent arcade runs, the ghost repeats that climb alongside you on the same generated tower, including jumps and spins. The HUD shows your height lead in metres and celebrates passing its best floor. Pauses freeze the race, and the ghost never affects collisions, crystals, or scoring.
+
+Your highest completed arcade climb becomes the next ghost; score, then shorter duration, break floor ties. One ghost is saved locally in this browser (or kept for the session if storage is unavailable). Practice and abandoned runs do not replace it. Old personal records have no recording, so complete a new run to create your first ghost. Recordings share the leaderboard limits of 30 minutes and 12,000 input changes; longer runs remain playable but cannot create a ghost.
+
 ## Leaderboard
 
 Open the trophy button to see the all-time top 50 arcade runs. After a completed arcade run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, and combos are replayed and calculated on the server. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.

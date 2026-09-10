@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUp, AudioLines, ChevronRight, Diamond, Flag, Maximize2, Pause, Play, RotateCcw, Snowflake, Trophy, Volume2, VolumeX } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, AudioLines, ChevronRight, Diamond, Flag, Ghost, Maximize2, Pause, Play, RotateCcw, Snowflake, Trophy, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LeaderboardDialog } from '@/components/leaderboard';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { TowerAudio } from '@/lib/tower-audio';
 import { registerGameTools } from '@/lib/game-tools';
 import { TowerEngine, freshControls, type Controls, type GameMode, type Snapshot, type RunReplay } from '@/lib/tower-engine';
+import { bestGhost, GHOST_STORAGE_KEY, readGhost, TowerGhost, type GhostRecord } from '@/lib/tower-ghost';
 import type { TowerWorld } from '@/lib/tower-world';
 
 const initial = new TowerEngine().snapshot();
@@ -32,6 +33,20 @@ export default function Home() {
   const bestRef = useRef(best);
   const soundRef = useRef(true);
   const audio = useRef<TowerAudio | null>(null);
+  const ghostBest = useRef<GhostRecord | null>(null);
+  const ghost = useRef<TowerGhost | null>(null);
+  const [ghostFloor, setGhostFloor] = useState<number | null>(null);
+  const [race, setRace] = useState<ReturnType<TowerGhost['snapshot']> | null>(null);
+  const [newGhost, setNewGhost] = useState(false);
+  const [ghostUnavailable, setGhostUnavailable] = useState(false);
+
+  function startRun(e: TowerEngine, selectedMode: GameMode) {
+    ghost.current = selectedMode === 'arcade' && ghostBest.current ? new TowerGhost(ghostBest.current) : null;
+    input.current = freshControls();
+    e.start(selectedMode, ghost.current?.record.replay.seed ?? Math.floor(Math.random() * 2 ** 30));
+    setRace(ghost.current?.snapshot(e) ?? null); setNewGhost(false); setGhostUnavailable(false);
+    audio.current?.setPaused(false);
+  }
 
   function tone(type: string) {
     if (!soundRef.current) return;
@@ -39,7 +54,7 @@ export default function Home() {
   }
   function begin(selectedMode = mode) {
     if (!engine.current || !ready) return;
-    input.current = freshControls(); engine.current.start(selectedMode, Math.floor(Math.random() * 2 ** 30));
+    startRun(engine.current, selectedMode);
     audio.current?.setPaused(false); setGame(engine.current.snapshot()); setHelp(false); tone('jump'); canvas.current?.focus({ preventScroll: true });
   }
   function pause() {
@@ -51,7 +66,7 @@ export default function Home() {
     if (engine.current?.status === 'playing') pause();
     setSubmissionRun(engine.current?.getReplay() ?? null); setLeaderboardOpen(true);
   }
-  function menu() { engine.current?.menu(); input.current = freshControls(); if (engine.current) setGame(engine.current.snapshot()); }
+  function menu() { ghost.current = null; setRace(null); engine.current?.menu(); input.current = freshControls(); if (engine.current) setGame(engine.current.snapshot()); }
 
   useEffect(() => {
     let disposed = false, frame = 0, last = 0, sync = 0;
@@ -60,27 +75,37 @@ export default function Home() {
     try { const stored = JSON.parse(localStorage.getItem('frostbound-best') || '{}');
       if (Number.isFinite(stored.floor) && Number.isFinite(stored.score)) { bestRef.current = stored; }
     } catch { /* A run works without browser storage. */ }
+    try { ghostBest.current = readGhost(localStorage.getItem(GHOST_STORAGE_KEY)); }
+    catch { /* Ghost racing still works for this session without storage. */ }
+    setGhostFloor(ghostBest.current?.floor ?? null);
     import('@/lib/tower-world').then(async ({ TowerWorld }) => {
       if (disposed || !canvas.current) return;
       try {
         const w = new TowerWorld(canvas.current); world.current = w;
         await w.load(); if (disposed) { w.dispose(); return; }
         setReady(true); setBest(bestRef.current);
-        unregisterTools = registerGameTools(e, { start: selected => { input.current = freshControls(); e.start(selected, Math.floor(Math.random()*2**30)); setMode(selected); setHelp(false); setGame(e.snapshot()); canvas.current?.focus(); }, pause: () => { input.current = freshControls(); e.togglePause(); setGame(e.snapshot()); } });
+        unregisterTools = registerGameTools(e, { start: selected => { startRun(e, selected); setMode(selected); setHelp(false); setGame(e.snapshot()); canvas.current?.focus(); }, pause: () => { input.current = freshControls(); e.togglePause(); setGame(e.snapshot()); } });
         const animate = (now: number) => {
           const dt = Math.min((now - (last || now)) / 1000, .1); last = now;
           e.tick(dt, input.current);
+          ghost.current?.advanceTo(e.time);
           const events = e.drainEvents();
           for (const event of events) {
             w.effect(event, e.time); tone(event.type);
             if (event.type === 'over') {
+              setGhostUnavailable(e.mode === 'arcade' && e.floor > 0 && !e.getReplay());
+              const nextGhost = bestGhost(ghostBest.current, e);
+              if (nextGhost && nextGhost !== ghostBest.current) {
+                ghostBest.current = nextGhost; setGhostFloor(nextGhost.floor); setNewGhost(true);
+                try { localStorage.setItem(GHOST_STORAGE_KEY, JSON.stringify(nextGhost)); } catch { /* Keep the ghost in memory if storage is full or blocked. */ }
+              }
               const record = { floor: Math.max(bestRef.current.floor, e.floor), score: Math.max(bestRef.current.score, e.score) };
               bestRef.current = record; setBest(record);
               try { localStorage.setItem('frostbound-best', JSON.stringify(record)); } catch { /* Optional local record. */ }
             }
           }
-          w.render(e, dt, now / 1000);
-          if (now - sync > 65 || events.length) { setGame(e.snapshot()); sync = now; }
+          w.render(e, dt, now / 1000, ghost.current);
+          if (now - sync > 65 || events.length) { setGame(e.snapshot()); setRace(ghost.current?.snapshot(e) ?? null); sync = now; }
           frame = requestAnimationFrame(animate);
         };
         frame = requestAnimationFrame(animate);
@@ -102,7 +127,7 @@ export default function Home() {
       }
       if (event.code === 'Enter' && !button && world.current) {
         if (e.status === 'paused') e.togglePause();
-        else if (e.status !== 'playing') { e.start(e.mode, Math.floor(Math.random() * 2 ** 30)); input.current = freshControls(); tone('jump'); }
+        else if (e.status !== 'playing') { startRun(e, e.mode); tone('jump'); }
         setGame(e.snapshot());
       }
     };
@@ -128,12 +153,12 @@ export default function Home() {
     <div className="screen-vignette" />
     <header className="topbar"><div className="brand"><Snowflake size={23} strokeWidth={1.4} /><span>ICY TOWER<small>F R O S T B O U N D</small></span></div><div className="topbar-right"><span className="edition"><i /> {active ? zone : 'AN ENDLESS ASCENT'}</span>{active && <Button variant="ghost" size="icon" className="utility" onClick={pause} aria-label={game.status === 'paused' ? 'Resume game' : 'Pause game'}>{game.status === 'paused' ? <Play /> : <Pause />}</Button>}<Button variant="ghost" size="icon" className="utility" onClick={openLeaderboard} aria-label="Open leaderboard"><Trophy /></Button><Button variant="ghost" size="icon" className="utility" onClick={() => { soundRef.current = !sound; setSound(!sound); audio.current?.setEnabled(!sound); if (!sound) tone('gem'); }} aria-label={sound ? 'Mute audio' : 'Enable audio'} aria-pressed={sound}>{sound ? <Volume2 /> : <VolumeX />}</Button><Button variant="ghost" size="icon" className="utility fullscreen" aria-label="Toggle fullscreen" onClick={() => { const request = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); void request?.catch(() => { setToast('Fullscreen is unavailable in this view.'); setTimeout(() => setToast(''), 3500); }); }}><Maximize2 /></Button></div></header>
     {game.status === 'ready' && <>
-      <section className="title-screen"><div className="eyebrow"><span /> REACH FOR THE IMPOSSIBLE</div><h1>ICY<br /><span>TOWER</span></h1><div className="subtitle"><i /> F R O S T B O U N D <i /></div><p>One more jump.<br />A little closer to the sky.</p><Button className="start-button" onClick={() => begin()} disabled={!ready || !!error}><Play size={17} fill="currentColor" />{ready ? 'BEGIN THE ASCENT' : 'ENTERING THE TOWER…'}<ArrowRight size={19} /></Button><span className="enter-hint">or press <kbd>ENTER</kbd></span><div className="menu-actions"><Button variant="ghost" onClick={() => setHelp(true)}>How to play <ChevronRight size={13} /></Button><span /><Button variant="ghost" onClick={() => { const next = mode === 'arcade' ? 'practice' : 'arcade'; setMode(next); if (engine.current) engine.current.mode = next; }}>{mode === 'arcade' ? 'Arcade mode' : 'Practice mode'} <ChevronRight size={13} /></Button></div><Button variant="ghost" className="leaderboard-menu-button" onClick={openLeaderboard}><Trophy size={16} /> Leaderboard <ChevronRight size={14} /></Button><div className="personal-best"><Flag size={13} /><span>PERSONAL BEST</span><strong>{best.floor.toString().padStart(3, '0')} <small>FLOORS</small></strong></div></section>
+      <section className="title-screen"><div className="eyebrow"><span /> REACH FOR THE IMPOSSIBLE</div><h1>ICY<br /><span>TOWER</span></h1><div className="subtitle"><i /> F R O S T B O U N D <i /></div><p>One more jump.<br />A little closer to the sky.</p><Button className="start-button" onClick={() => begin()} disabled={!ready || !!error}><Play size={17} fill="currentColor" />{ready ? 'BEGIN THE ASCENT' : 'ENTERING THE TOWER…'}<ArrowRight size={19} /></Button><span className="enter-hint">or press <kbd>ENTER</kbd></span><div className="menu-actions"><Button variant="ghost" onClick={() => setHelp(true)}>How to play <ChevronRight size={13} /></Button><span /><Button variant="ghost" onClick={() => { const next = mode === 'arcade' ? 'practice' : 'arcade'; setMode(next); if (engine.current) engine.current.mode = next; }}>{mode === 'arcade' ? 'Arcade mode' : 'Practice mode'} <ChevronRight size={13} /></Button></div><Button variant="ghost" className="leaderboard-menu-button" onClick={openLeaderboard}><Trophy size={16} /> Leaderboard <ChevronRight size={14} /></Button><div className="personal-best"><Flag size={13} /><span>PERSONAL BEST</span><strong>{best.floor.toString().padStart(3, '0')} <small>FLOORS</small></strong></div><div className="ghost-menu-note"><Ghost size={16} /><span>{mode === 'practice' ? 'Switch to Arcade to race your ghost.' : ghostFloor !== null ? `Race your best · Floor ${ghostFloor}` : 'Finish an arcade climb to create your ghost.'}</span></div></section>
       <aside className="location-caption"><span>01 — THE FORGOTTEN HALL</span><h2>The only way<br />is up.</h2><div><i /> {mode === 'arcade' ? 'OUTRUN THE RISING FROST' : 'CLIMB AT YOUR OWN PACE'}</div></aside>
     </>}
-    {active && <><section className="score-hud"><span className="eyebrow">FLOOR</span><strong>{game.floor.toString().padStart(3, '0')}</strong><div className="score-number">{game.score.toLocaleString()} <small>PTS</small></div><div className="height-readout"><ArrowUp size={13} /> {game.height} m <span>·</span> {formatTime(game.time)}</div><div className="gem-count"><Diamond size={13} /> {game.gems}</div></section><div className={`combo-hud ${game.combo >= 3 ? 'visible' : ''}`}><span>{game.combo >= 15 ? 'UNSTOPPABLE' : game.combo >= 8 ? 'ON FIRE' : 'KEEP IT GOING'}</span><strong>{game.combo}<small>COMBO</small></strong><div className="combo-track"><i style={{ transform: `scaleX(${game.comboTime / 3.8})` }} /></div></div><div className="speed-meter"><span>MOMENTUM</span><div>{Array.from({ length: 12 }, (_, i) => <i key={i} className={game.speed / 8.4 * 12 > i ? 'filled' : ''} />)}</div><small>{game.speed > 6 ? 'SUPER JUMP READY' : 'BUILD SPEED TO JUMP HIGHER'}</small></div>{game.stormDistance < 4 && game.status === 'playing' && <div className="storm-warning"><ArrowUp size={15} /> THE FROST IS CATCHING UP</div>}<div className="touch-controls"><div><Button aria-label="Move left" {...touch('left')}><ArrowLeft /></Button><Button aria-label="Move right" {...touch('right')}><ArrowRight /></Button></div><Button className="touch-jump" aria-label="Jump" {...touch('jump')}><ArrowUp /> JUMP</Button></div></>}
-    {(game.status === 'paused' || game.status === 'over') && <div className="overlay"><section className="result-card"><Snowflake className="result-mark" size={35} strokeWidth={1} /><span className="eyebrow">{game.status === 'paused' ? 'A MOMENT IN THE QUIET' : 'THE TOWER WILL WAIT'}</span><h2>{game.status === 'paused' ? 'Catch your breath.' : 'One more climb?'}</h2><p>{game.status === 'paused' ? 'Your ascent is right where you left it.' : 'Every fall is the start of a better run.'}</p><div className="result-stats"><div><small>FLOOR</small><strong>{game.floor.toString().padStart(3, '0')}</strong></div><div><small>SCORE</small><strong>{game.score.toLocaleString()}</strong></div><div><small>BEST COMBO</small><strong>{game.bestCombo}<em>×</em></strong></div></div><Button className="start-button" onClick={() => game.status === 'paused' ? pause() : begin()}>{game.status === 'paused' ? <Play size={16} /> : <RotateCcw size={16} />}{game.status === 'paused' ? 'CONTINUE ASCENT' : 'CLIMB AGAIN'}<ArrowRight size={18} /></Button>{game.status === 'over' && <Button className="leaderboard-result-button" variant="outline" onClick={openLeaderboard}><Trophy size={16} />{game.mode === 'arcade' && game.floor > 0 ? 'Submit score & leaderboard' : 'View leaderboard'}</Button>}<Button className="back-menu" variant="ghost" onClick={menu}>Return to the tower</Button></section></div>}
-    <Dialog open={help} onOpenChange={setHelp}><DialogContent className="result-card help-card"><span className="eyebrow">THE ART OF THE ASCENT</span><DialogTitle>Find your rhythm.</DialogTitle><DialogDescription className="sr-only">Controls and rules for climbing the tower.</DialogDescription><div className="instruction"><span><kbd>A</kbd><kbd>D</kbd></span><div><strong>Move with momentum</strong><p>Use A / D or the arrow keys. Ice is slippery — steer early.</p></div></div><div className="instruction"><kbd>SPACE</kbd><div><strong>Jump. Land. Repeat.</strong><p>Press Space, W or ↑ to jump. Build speed for a higher jump and a star-shaped spin.</p></div></div><div className="instruction"><Diamond size={25} /><div><strong>Keep your chain alive</strong><p>Land on higher floors within 3.8 seconds. Keep a combo going to leave a colorful star trail. Collect crystals and skip floors to raise your score.</p></div></div><div className="instruction"><ArrowUp size={25} /><div><strong>Stay above the frost</strong><p>The steps start scrolling down at floor 5 and speed up every 30 seconds. The camera follows your falls so you can recover, but stay above the frost. Practice mode removes automatic scrolling.</p></div></div><Button className="start-button" onClick={() => begin()}>LET’S CLIMB <ArrowRight size={18} /></Button></DialogContent></Dialog>
+    {active && <><section className="score-hud"><span className="eyebrow">FLOOR</span><strong>{game.floor.toString().padStart(3, '0')}</strong><div className="score-number">{game.score.toLocaleString()} <small>PTS</small></div><div className="height-readout"><ArrowUp size={13} /> {game.height} m <span>·</span> {formatTime(game.time)}</div><div className="gem-count"><Diamond size={13} /> {game.gems}</div>{race && <div className={`ghost-race ${race.beaten ? 'ghost-beaten' : ''}`}><span><Ghost size={16} /> YOUR BEST · {race.floor}</span><strong>{race.beaten ? 'Best floor beaten!' : race.finished ? 'Ghost finished' : race.lead === 0 ? 'Neck and neck' : `${Math.abs(race.lead)} m ${race.lead > 0 ? 'ahead' : 'behind'}`}</strong><small>{race.finished || race.beaten ? 'Keep climbing for a new record' : 'Racing your previous climb'}</small></div>}</section><div className={`combo-hud ${game.combo >= 3 ? 'visible' : ''}`}><span>{game.combo >= 15 ? 'UNSTOPPABLE' : game.combo >= 8 ? 'ON FIRE' : 'KEEP IT GOING'}</span><strong>{game.combo}<small>COMBO</small></strong><div className="combo-track"><i style={{ transform: `scaleX(${game.comboTime / 3.8})` }} /></div></div><div className="speed-meter"><span>MOMENTUM</span><div>{Array.from({ length: 12 }, (_, i) => <i key={i} className={game.speed / 8.4 * 12 > i ? 'filled' : ''} />)}</div><small>{game.speed > 6 ? 'SUPER JUMP READY' : 'BUILD SPEED TO JUMP HIGHER'}</small></div>{game.stormDistance < 4 && game.status === 'playing' && <div className="storm-warning"><ArrowUp size={15} /> THE FROST IS CATCHING UP</div>}<div className="touch-controls"><div><Button aria-label="Move left" {...touch('left')}><ArrowLeft /></Button><Button aria-label="Move right" {...touch('right')}><ArrowRight /></Button></div><Button className="touch-jump" aria-label="Jump" {...touch('jump')}><ArrowUp /> JUMP</Button></div></>}
+    {(game.status === 'paused' || game.status === 'over') && <div className="overlay"><section className="result-card"><Snowflake className="result-mark" size={35} strokeWidth={1} /><span className="eyebrow">{game.status === 'paused' ? 'A MOMENT IN THE QUIET' : 'THE TOWER WILL WAIT'}</span><h2>{game.status === 'paused' ? 'Catch your breath.' : 'One more climb?'}</h2><p>{game.status === 'paused' ? 'Your ascent is right where you left it.' : 'Every fall is the start of a better run.'}</p><div className="result-stats"><div><small>FLOOR</small><strong>{game.floor.toString().padStart(3, '0')}</strong></div><div><small>SCORE</small><strong>{game.score.toLocaleString()}</strong></div><div><small>BEST COMBO</small><strong>{game.bestCombo}<em>×</em></strong></div></div>{game.status === 'over' && game.mode === 'arcade' && <p className="ghost-result"><Ghost size={18} />{ghostUnavailable ? 'This climb exceeded the ghost recording limit.' : newGhost ? 'New ghost ready. Race this climb next run.' : race ? `Ghost to beat: floor ${race.floor}. Try again.` : 'Reach a floor and finish to record your ghost.'}</p>}<Button className="start-button" onClick={() => game.status === 'paused' ? pause() : begin()}>{game.status === 'paused' ? <Play size={16} /> : <RotateCcw size={16} />}{game.status === 'paused' ? 'CONTINUE ASCENT' : 'CLIMB AGAIN'}<ArrowRight size={18} /></Button>{game.status === 'over' && <Button className="leaderboard-result-button" variant="outline" onClick={openLeaderboard}><Trophy size={16} />{game.mode === 'arcade' && game.floor > 0 ? 'Submit score & leaderboard' : 'View leaderboard'}</Button>}<Button className="back-menu" variant="ghost" onClick={menu}>Return to the tower</Button></section></div>}
+    <Dialog open={help} onOpenChange={setHelp}><DialogContent className="result-card help-card"><span className="eyebrow">THE ART OF THE ASCENT</span><DialogTitle>Find your rhythm.</DialogTitle><DialogDescription className="sr-only">Controls and rules for climbing the tower.</DialogDescription><div className="instruction"><span><kbd>A</kbd><kbd>D</kbd></span><div><strong>Move with momentum</strong><p>Use A / D or the arrow keys. Ice is slippery — steer early.</p></div></div><div className="instruction"><kbd>SPACE</kbd><div><strong>Jump. Land. Repeat.</strong><p>Press Space, W or ↑ to jump. Build speed for a higher jump and a star-shaped spin.</p></div></div><div className="instruction"><Diamond size={25} /><div><strong>Keep your chain alive</strong><p>Land on higher floors within 3.8 seconds. Keep a combo going to leave a colorful star trail. Collect crystals and skip floors to raise your score.</p></div></div><div className="instruction"><ArrowUp size={25} /><div><strong>Stay above the frost</strong><p>The steps start scrolling down at floor 5 and speed up every 30 seconds. The camera follows your falls so you can recover, but stay above the frost. Practice mode removes automatic scrolling.</p></div></div><div className="instruction"><Ghost size={25} /><div><strong>Race your ghost</strong><p>Your highest completed arcade climb returns as a translucent rival on the same tower. Score, then time, break floor ties. Ghosts are saved in this browser; practice runs do not replace them.</p></div></div><Button className="start-button" onClick={() => begin()}>LET’S CLIMB <ArrowRight size={18} /></Button></DialogContent></Dialog>
     {leaderboardOpen && <LeaderboardDialog open={leaderboardOpen} onOpenChange={setLeaderboardOpen} run={submissionRun} />}
     {error && <div className="error-message" role="alert">{error}<Button onClick={() => location.reload()}>Reload game</Button></div>}
     {toast && <output className="toast">{toast}</output>}

@@ -11,6 +11,7 @@ import { ClimberMotion } from './climber-motion';
 import { ComboStarTrail } from './combo-star-trail';
 import { TowerInterior } from './tower-interior';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
+import type { TowerGhost } from './tower-ghost';
 
 type FloorPlaque = THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
 type Ledge = { group: THREE.Group; gem?: THREE.Mesh; plaque?: FloorPlaque; id: number };
@@ -36,6 +37,10 @@ export class TowerWorld {
   private arms: THREE.Object3D[] = [];
   private tumble = new THREE.Group();
   private motion = new ClimberMotion();
+  private ghostTumble = new THREE.Group();
+  private ghostCharacter = new THREE.Group();
+  private ghostArms: THREE.Object3D[] = [];
+  private ghostLegs: THREE.Object3D[] = [];
   private starTrail = new ComboStarTrail();
   private interior: TowerInterior;
   private cameraX = 0;
@@ -115,6 +120,15 @@ export class TowerWorld {
       this.legs = ['Leg_L', 'Leg_R'].map(n => model.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
       this.arms = ['Arm_L', 'Arm_R'].map(n => model.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
     } catch { /* The built-in Harold model keeps the game playable offline. */ }
+    if (this.disposed) return;
+    this.ghostCharacter = this.character.clone(true);
+    const ghostMaterial = new THREE.MeshBasicMaterial({ color: 0x91dfff, transparent: true, opacity: .32, depthWrite: false });
+    this.ghostCharacter.traverse(o => {
+      if (o instanceof THREE.Mesh) { o.material = ghostMaterial; o.castShadow = false; o.receiveShadow = false; }
+    });
+    this.ghostArms = ['Arm_L', 'Arm_R'].map(n => this.ghostCharacter.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
+    this.ghostLegs = ['Leg_L', 'Leg_R'].map(n => this.ghostCharacter.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
+    this.ghostTumble.add(this.ghostCharacter); this.ghostTumble.visible = false; this.root.add(this.ghostTumble);
   }
   private makeNoiseTexture() {
     const size = 128, data = new Uint8Array(size * size * 4);
@@ -148,10 +162,10 @@ export class TowerWorld {
     this.mesh(new THREE.BoxGeometry(.14, .09, .015), gold, this.character, 0, .73, .269);
     for (const side of [-1, 1]) {
       this.mesh(new THREE.SphereGeometry(.075, 12, 8), skin, this.character, side * .3, 1.1);
-      const leg = new THREE.Group(); leg.position.set(side * .145, .48, 0); this.character.add(leg); this.legs.push(leg);
+      const leg = new THREE.Group(); leg.name = side < 0 ? 'Leg_L' : 'Leg_R'; leg.position.set(side * .145, .48, 0); this.character.add(leg); this.legs.push(leg);
       this.mesh(new THREE.CapsuleGeometry(.115, .12, 4, 12), olive, leg, 0, -.17);
       this.mesh(new RoundedBoxGeometry(.27, .16, .35, 3, .06), brown, leg, 0, -.40, .065);
-      const arm = new THREE.Group(); arm.position.set(side * .28, .82, 0); this.character.add(arm); this.arms.push(arm);
+      const arm = new THREE.Group(); arm.name = side < 0 ? 'Arm_L' : 'Arm_R'; arm.position.set(side * .28, .82, 0); this.character.add(arm); this.arms.push(arm);
       this.mesh(new THREE.CapsuleGeometry(.1, .17, 4, 12), green, arm, side * .04, -.16);
       this.mesh(new THREE.SphereGeometry(.075, 12, 8), skin, arm, side * .04, -.34);
     }
@@ -249,7 +263,7 @@ export class TowerWorld {
       }
     }
   }
-  render(e: TowerEngine, dt: number, t: number) {
+  render(e: TowerEngine, dt: number, t: number, ghost: TowerGhost | null = null) {
     const menu = e.status === 'ready';
     const aspect = this.renderer.domElement.clientWidth / this.renderer.domElement.clientHeight;
     this.cameraY = damp(this.cameraY, e.cameraY, e.cameraY < this.cameraY ? 10 : 6, dt);
@@ -282,6 +296,15 @@ export class TowerWorld {
     this.character.rotation.z = damp(this.character.rotation.z, e.vx * -.018 * (1 - pose.spread), 8, dt);
     this.character.scale.set(1 + this.squish * .45, 1 - this.squish, 1 + this.squish * .3);
     this.motion.applyLimbs(e, pose.spread, this.arms, this.legs);
+    this.ghostTumble.visible = !!ghost && !menu && !ghost.finished;
+    if (ghost && this.ghostTumble.visible) {
+      const g = ghost.engine, ghostPose = ghost.motion.pose(g);
+      this.ghostTumble.position.set(g.x, g.y + .8, -.35);
+      this.ghostTumble.rotation.z = ghostPose.roll;
+      this.ghostCharacter.position.set(0, -.8, 0);
+      this.ghostCharacter.rotation.set(0, (Math.abs(g.vx) > .25 ? g.facing * .9 : .12) * (1 - ghostPose.spread * .9), g.vx * -.018 * (1 - ghostPose.spread));
+      ghost.motion.applyLimbs(g, ghostPose.spread, this.ghostArms, this.ghostLegs);
+    }
     this.starTrail.update(e);
     this.glow.position.set(e.x + this.root.position.x, e.y + 1.5, 2.8);
     this.key.position.y = this.cameraY + 9; this.key.target.position.set(0, this.cameraY, 0); this.key.target.updateMatrixWorld();
