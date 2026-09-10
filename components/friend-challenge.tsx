@@ -1,5 +1,6 @@
 'use client';
 
+import { MODE_LABELS } from '@/lib/tower-engine';
 import { useState } from 'react';
 import { Copy, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,7 @@ export function FriendChallengeDialog({ challenge, url, onClose }: { challenge: 
     <DialogContent className="friend-share-card">
       <Share2 size={28} />
       <DialogTitle>Beat my floor {challenge.floor}.</DialogTitle>
-      <DialogDescription>{challenge.score.toLocaleString()} points · {challenge.mode === 'arcade' ? 'Arcade' : 'Practice'}. Your friend gets the same tower. How high can they climb?</DialogDescription>
+      <DialogDescription>{challenge.score.toLocaleString()} points · {MODE_LABELS[challenge.mode]}. Your friend gets the same tower. How high can they climb?</DialogDescription>
       <div className="friend-share-actions">
         <Button onClick={() => void share()} disabled={sharing}><Share2 size={16} /> Share challenge</Button>
         <Button variant="outline" onClick={() => void copy()}><Copy size={16} /> Copy link</Button>

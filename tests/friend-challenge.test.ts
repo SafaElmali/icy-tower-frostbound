@@ -4,14 +4,17 @@ import { TowerEngine, freshControls } from '../lib/tower-engine.ts';
 import { challengeFromRun, challengeText, challengeUrl, decodeChallenge, startChallengeRun } from '../lib/friend-challenge.ts';
 
 void test('completed runs round-trip layout, mode, floor, and score in a compact link', () => {
-  for (const mode of ['arcade', 'practice'] as const) {
+  for (const mode of ['arcade', 'party', 'practice'] as const) {
     const host = new TowerEngine(0xffffffff);
     host.start(mode); host.floor = 87; host.score = 123450; host.status = 'over';
     const challenge = challengeFromRun(host)!;
     const url = new URL(challengeUrl('https://example.com/play?challenge=old&tracking=1#old', challenge));
     assert.equal(url.pathname, '/play'); assert.equal(url.hash, '');
     assert.equal(url.searchParams.size, 1);
-    assert.deepEqual(decodeChallenge(url.searchParams.get('challenge')), challenge);
+    const decoded = decodeChallenge(url.searchParams.get('challenge'))!;
+    assert.deepEqual(decoded, challenge);
+    const recipient = new TowerEngine(); startChallengeRun(recipient, decoded, 'arcade');
+    assert.equal(recipient.mode, mode); assert.deepEqual(recipient.platforms, host.platforms);
     assert.match(challengeText(challenge), /^Beat my floor 87\. 123,450 points/);
     assert.ok(url.href.length < 100);
   }
@@ -44,7 +47,7 @@ void test('shared seeds and retries reproduce platforms, moving ledges, gems, an
 });
 
 void test('invalid and unsupported challenge links are rejected without throwing', () => {
-  for (const value of [null, '', '1.42.a.87.100', '3.42.a.87.100', '2.42.x.87.100', '2.42.a.0.100', '2.-1.a.87.100', '2.4294967296.a.87.100', '2.42.a.87.-1', '2.42.a.87.NaN', '2.42.a.87.Infinity', '2.42.a.87.1e3', '2.42.a.87.1.5', '2.42.a.9007199254740992.100', '2.42.a.87.9007199254740992', '2.42.a.87.100.extra', '2. 42.a.87.100', '2.042.a.87.100', 'x'.repeat(10000)]) {
+  for (const value of [null, '', '1.42.a.87.100', '4.42.a.87.100', '2.42.t.87.100', '2.42.x.87.100', '2.42.a.0.100', '2.-1.a.87.100', '2.4294967296.a.87.100', '2.42.a.87.-1', '2.42.a.87.NaN', '2.42.a.87.Infinity', '2.42.a.87.1e3', '2.42.a.87.1.5', '2.42.a.9007199254740992.100', '2.42.a.87.9007199254740992', '2.42.a.87.100.extra', '2. 42.a.87.100', '2.042.a.87.100', 'x'.repeat(10000)]) {
     assert.equal(decodeChallenge(value), null, String(value).slice(0, 100));
   }
   assert.deepEqual(decodeChallenge('2.0.a.1.0'), { version: 2, seed: 0, mode: 'arcade', floor: 1, score: 0 });

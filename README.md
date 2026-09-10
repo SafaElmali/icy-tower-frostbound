@@ -10,15 +10,23 @@ A playable 2.5D arcade tower climber. Three.js renders the scene; a fixed-step s
 - Space, W, or up arrow: jump (press again for the next jump)
 - Escape/P: pause
 - Enter: begin/retry
-- Touch controls appear on narrow screens
+- On phones and touch tablets: hold left/right with one thumb and tap JUMP with the other. Slide across the direction pad to turn; release JUMP before the next jump.
 
 Run to jump higher. At high speed, Harold spreads his arms and legs into a star-shaped 360° spin and straightens before landing. Active combos leave a rotating, multicolored five-point star trail behind him. Land on new floors within 3.8 seconds to extend a combo. Arcade scrolling starts when you reach floor 5, making ledges descend even when you stand still. The pace increases every 30 seconds, up to five increases. The camera tracks downward falls to reveal recovery ledges, while the frost keeps advancing independently. Practice disables automatic scrolling; falling into the frost still ends the run. Personal records are saved on this browser.
 
 Every 10th floor has a wooden number plaque on its front edge. Every 50th floor is a full-width landing stage, providing room to land and build momentum before the next climb. Stages still scroll toward the frost like other floors.
 
+The layout supports portrait and landscape, device safe areas, and scrolling menus on short screens. Rotating the device or leaving the game pauses the run and clears held controls. Touch devices start in Performance quality; change quality from the main menu. Leaderboard dialogs adjust to the visible screen when the on-screen keyboard opens.
+
+## Party mode
+
+Choose **Party** from the mode selector before starting. Lower gravity gives jumps more airtime. Every fifth floor is a pink spring platform that automatically launches you higher when you land; the full-width 50-floor stages remain normal landing spots. Pink crystals grant **8 seconds of double jumps**: release and press jump again in midair for one extra jump per landing. Collect another crystal to refresh the timer. The HUD shows the time remaining and whether a jump is ready; pausing freezes the timer. The same controls work on keyboard and touch.
+
+Party keeps the rising frost and combo scoring, with its own online rankings and browser personal best. Classic retains the original physics and rankings. Practice remains unranked and now saves its personal best separately, too. Existing browser records remain under Classic.
+
 ## Leaderboard
 
-Open the trophy button to see the all-time top 50 arcade runs. After a completed arcade run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, and combos are replayed and calculated on the server. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.
+Open the trophy button to see the all-time top 50 runs on the **Classic** or **Party** tab. After a completed Classic or Party run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, combos, and mode-specific physics are replayed and calculated on the server. The verified recording selects the board; Party scores cannot be submitted to Classic rankings. Legacy arcade recordings remain valid. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.
 
 The leaderboard uses a Netlify Function and site-wide Netlify Blobs storage, so scores persist across deployments and are shared across devices. Conditional writes protect concurrent submissions, and identical recordings cannot be added twice while on the board. Replay validation prevents fabricated score totals; it is not a guarantee against automated play. No login is required, and display names are not reserved identities. The name field is remembered only on the player's device.
 
@@ -28,13 +36,13 @@ The online API runs on Netlify; the plain Vite preview serves only the game fron
 
 After a completed run that reaches at least floor 1, choose **Challenge a friend** to share or copy a “Beat my floor 87” link. The link contains that run's tower seed, layout/rules version, mode, floor, and score. Friends open it, choose **Accept challenge**, and climb the same tower; **Retry challenge** and Enter keep that layout and mode. The HUD and results show the targets, with floor and score wins tracked separately. Matching the floor is a tie; climb one higher to beat it.
 
-Both Arcade and Practice runs can be shared, and a challenge keeps its original mode. Choose **Leave challenge** on the title screen to return to random towers. Invalid or unsupported links show a message and allow a normal climb. If native sharing or clipboard access is unavailable, the share dialog has a selectable link for manual copying. Challenge targets are informal, editable link data; leaderboard submissions still require server replay verification.
+Classic, Party, and Practice runs can be shared, and a challenge keeps its original mode. Choose **Leave challenge** on the title screen to return to random towers. Invalid or unsupported links show a message and allow a normal climb. If native sharing or clipboard access is unavailable, the share dialog has a selectable link for manual copying. Challenge targets are informal, editable link data; leaderboard submissions still require server replay verification.
 
 ## Development
 
 `npm install`, then `npm run dev -- --port 5188`.
 
-`npm test` checks jump height, landings, wall rebounds, buffering, coyote time, pause, frost, restart, downward camera tracking, recoverable falls, floor-triggered scrolling, 30-second acceleration, frame-rate independence, stage collisions, legacy and current leaderboard recordings, and a simulated 105-floor climb through five generated layouts.
+`npm test` checks jump height, landings, wall rebounds, buffering, coyote time, pause, frost, restart, downward camera tracking, recoverable falls, floor-triggered scrolling, 30-second acceleration, frame-rate independence, simultaneous touch and keyboard input, stage collisions, legacy and current leaderboard recordings, Party springs and gravity, timed double jumps, separate ranked storage, and a simulated 105-floor climb through five generated layouts.
 
 `npm run typecheck`, `npm run lint`, and `npm run build` validate source and production output.
 
