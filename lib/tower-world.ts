@@ -14,7 +14,7 @@ import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 import type { TowerGhost } from './tower-ghost';
 
 type FloorPlaque = THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-type Ledge = { group: THREE.Group; gem?: THREE.Mesh; plaque?: FloorPlaque; id: number };
+type Ledge = { group: THREE.Group; gem?: THREE.Mesh; plaque?: FloorPlaque; platform: Platform; id: number };
 type Fleck = { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; duration: number };
 const damp = (a: number, b: number, rate: number, dt: number) => THREE.MathUtils.lerp(a, b, 1 - Math.exp(-rate * dt));
 
@@ -58,6 +58,8 @@ export class TowerWorld {
   private snowMat = new THREE.MeshStandardMaterial({ color: 0xc2dfdf, roughness: .79, metalness: .03 });
   private iceMat: THREE.MeshPhysicalMaterial;
   private gold = new THREE.MeshStandardMaterial({ color: 0x9a7350, metalness: .8, roughness: .38 });
+  private springMat = new THREE.MeshStandardMaterial({ color: 0xff70bf, emissive: 0xb02677, emissiveIntensity: .55, metalness: .4, roughness: .3 });
+  private partyGemMat = new THREE.MeshPhysicalMaterial({ color: 0xffbcf0, emissive: 0xed64c3, emissiveIntensity: 1.5, metalness: .35, roughness: .05, clearcoat: 1 });
   private gemMat = new THREE.MeshPhysicalMaterial({ color: 0x69e6ed, emissive: 0x58b9cd, emissiveIntensity: 1.5, metalness: .35, roughness: .05, clearcoat: 1 });
   private fleckGeometry = new THREE.IcosahedronGeometry(.04, 0);
   private fleckMat = new THREE.MeshBasicMaterial({ color: 0xadeaff, transparent: true });
@@ -219,10 +221,10 @@ export class TowerWorld {
     plaque.name = `Floor ${id}`; plaque.position.set(0, -.4, .78); group.add(plaque);
     return plaque;
   }
-  private makeLedge(p: Platform): Ledge {
+  private makeLedge(p: Platform, party: boolean): Ledge {
     const group = new THREE.Group(); group.position.set(p.x, p.y, 0); this.root.add(group);
     this.mesh(new RoundedBoxGeometry(p.width, .35, 1.7, 2, .07), this.stone, group, 0, -.23, -.35);
-    this.mesh(new RoundedBoxGeometry(p.width + .06, .13, 1.76, 3, .055), this.snowMat, group, 0, -.065, -.35);
+    this.mesh(new RoundedBoxGeometry(p.width + .06, .13, 1.76, 3, .055), p.spring ? this.springMat : this.snowMat, group, 0, -.065, -.35);
     this.mesh(new THREE.BoxGeometry(p.width - .12, .05, .05), this.iceMat, group, 0, -.12, .53);
     this.mesh(new THREE.BoxGeometry(p.width - .15, .055, 1.6), this.gold, group, 0, -.4, -.35);
     for (let i = 0; i < Math.ceil(p.width * 2.8); i++) {
@@ -234,11 +236,23 @@ export class TowerWorld {
       const bracket = this.mesh(new THREE.BoxGeometry(.13, .56, .32), this.stone, group, side * (p.width / 2 - .32), -.65, -.72); bracket.rotation.x = -.4;
       this.mesh(new THREE.IcosahedronGeometry(.075, 1), this.gold, group, side * (p.width / 2 - .15), -.24, .52);
     }
+    if (p.spring) {
+      for (const side of [-1, 1]) for (let i = 0; i < 4; i++) {
+        const coil = this.mesh(new THREE.TorusGeometry(.16, .035, 6, 16), this.springMat, group, side * p.width * .28, -.46 - i * .12, .3);
+        coil.rotation.x = Math.PI / 2;
+      }
+    }
     let gem: THREE.Mesh | undefined;
-    if (p.gem) { gem = this.mesh(new THREE.OctahedronGeometry(.21, 0), this.gemMat, group, 0, 1.05, 0); gem.scale.y = 1.55; }
+    if (p.gem) { gem = this.mesh(new THREE.OctahedronGeometry(.21, 0), party ? this.partyGemMat : this.gemMat, group, 0, 1.05, 0); gem.scale.y = 1.55; }
     this.batchMeshes(group, gem);
     const plaque = p.id > 0 && p.id % 10 === 0 ? this.makeFloorPlaque(p.id, group) : undefined;
-    return { group, gem, plaque, id: p.id };
+    return { group, gem, plaque, platform: p, id: p.id };
+  }
+  private removeLedge(ledge: Ledge) {
+    this.root.remove(ledge.group);
+    ledge.group.traverse(o => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
+    ledge.plaque?.material.map?.dispose(); ledge.plaque?.material.dispose();
+    this.ledges.delete(ledge.id);
   }
   setQuality(high: boolean) { this.high = high; this.renderer.shadowMap.enabled = high; this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 1.65 : 1)); this.resize(); }
   private resize() {
@@ -278,15 +292,13 @@ export class TowerWorld {
     for (const p of e.platforms) {
       if (p.y < this.cameraY - 15 || p.y > this.cameraY + 18) continue;
       keep.add(p.id); let ledge = this.ledges.get(p.id);
-      if (!ledge) { ledge = this.makeLedge(p); this.ledges.set(p.id, ledge); }
+      if (ledge && ledge.platform !== p) { this.removeLedge(ledge); ledge = undefined; }
+      if (!ledge) { ledge = this.makeLedge(p, e.mode === 'party'); this.ledges.set(p.id, ledge); }
       ledge.group.position.set(p.x, p.y, 0);
       if (ledge.gem) { ledge.gem.visible = !p.collected; ledge.gem.rotation.y = t * 1.8; ledge.gem.position.y = 1.05 + Math.sin(t * 2.4 + p.id) * .14; }
     }
     for (const [id, ledge] of this.ledges) if (!keep.has(id)) {
-      this.root.remove(ledge.group);
-      ledge.group.traverse(o => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
-      ledge.plaque?.material.map?.dispose(); ledge.plaque?.material.dispose();
-      this.ledges.delete(id);
+      this.removeLedge(ledge);
     }
     const pose = this.motion.pose(e);
     this.tumble.position.set(e.x, e.y + .8 + (menu ? Math.sin(t * 2) * .014 : 0), .05);
@@ -328,7 +340,7 @@ export class TowerWorld {
   dispose() {
     if (this.disposed) return; this.disposed = true; this.observer.disconnect();
     this.root.remove(this.starTrail.mesh); this.starTrail.dispose();
-    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>(), textures = new Set<THREE.Texture>();
+    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>([this.springMat, this.partyGemMat, this.gemMat]), textures = new Set<THREE.Texture>();
     this.scene.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Points) { geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m); } });
     for (const m of materials) { for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value); m.dispose(); }
     geometries.forEach(g => g.dispose()); textures.forEach(t => t.dispose()); this.env.dispose(); this.fleckGeometry.dispose(); this.fleckMat.dispose(); this.composer.dispose(); this.bloom.dispose(); this.renderer.dispose();

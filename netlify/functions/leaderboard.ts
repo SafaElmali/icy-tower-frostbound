@@ -9,7 +9,11 @@ export default async function handler(request: Request) {
   try {
     if (request.method !== 'GET' && request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'GET, POST' } });
     const board = new Leaderboard(getStore({ name: 'frostbound-leaderboard', consistency: 'strong' }));
-    if (request.method === 'GET') return json({ entries: await board.list() });
+    if (request.method === 'GET') {
+      const mode = new URL(request.url).searchParams.get('mode') ?? 'arcade';
+      if (mode !== 'arcade' && mode !== 'party') return json({ error: 'Choose classic or party rankings.' }, 400);
+      return json({ entries: await board.list(mode) });
+    }
     const origin = request.headers.get('origin');
     if (origin && origin !== new URL(request.url).origin) return json({ error: 'Submit your score from the game page.' }, 403);
     if (!request.headers.get('content-type')?.includes('application/json')) return json({ error: 'Expected a score submission.' }, 415);

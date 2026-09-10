@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { TowerEngine, freshControls } from '../lib/tower-engine.ts';
 import { bestGhost, readGhost, TowerGhost, type GhostRecord } from '../lib/tower-ghost.ts';
 
-function recordClimb() {
-  const engine = new TowerEngine(17); engine.start('arcade');
+function recordClimb(version: 2 | 3 = 3) {
+  const engine = new TowerEngine(17, true, version); engine.start('arcade');
   const checkpoints: { time: number; x: number; y: number; score: number; floor: number }[] = [];
   let target = engine.platforms[1], wasJump = false;
   for (let i = 0; i < 18000 && engine.status === 'playing'; i++) {
@@ -22,7 +22,9 @@ function recordClimb() {
 }
 
 void test('ghost reproduces every position and score across mixed frame rates and recorded pauses', () => {
-  const { record, checkpoints } = recordClimb();
+  for (const version of [2, 3] as const) {
+  const { record, checkpoints } = recordClimb(version);
+  assert.deepEqual(readGhost(JSON.stringify(record)), record);
   const ghost = new TowerGhost(record);
   for (const point of checkpoints) {
     ghost.advanceTo(point.time);
@@ -32,6 +34,7 @@ void test('ghost reproduces every position and score across mixed frame rates an
   assert.equal(ghost.finished, true);
   const end = ghost.engine.snapshot(); ghost.advanceTo(record.time + 120);
   assert.deepEqual(ghost.engine.snapshot(), end);
+  }
 });
 
 void test('live pause freezes ghost; retry starts from zero on the same layout without changing the player', () => {
@@ -56,6 +59,7 @@ void test('only better completed arcade recordings replace the ghost; floor, sco
   for (const worse of [{ ...record, floor: record.floor - 1 }, { ...record, score: record.score - 1 }, { ...record, time: record.time + 1 }]) {
     assert.notEqual(bestGhost(worse, engine), worse);
   }
+  engine.mode = 'party'; assert.equal(bestGhost(record, engine), record);
   engine.start('practice'); assert.equal(bestGhost(record, engine), record);
   engine.start('arcade'); assert.equal(bestGhost(record, engine), record);
   engine.menu(); assert.equal(bestGhost(record, engine), record);
@@ -68,6 +72,7 @@ void test('saved ghosts round-trip and reject malformed, oversized, or incompati
   const invalid: unknown[] = [null, {}, { ...record, floor: -1 }, { ...record, score: '1' },
     { ...record, replay: { ...record.replay, version: 1 } },
     { ...record, replay: { ...record.replay, seed: -1 } },
+    { ...record, replay: { ...record.replay, version: 3, mode: 'party' } },
     withMoves([]), withMoves([[1, 9]]), withMoves([[0, 0]]), withMoves([[1, 8]]),
     withMoves([[216001, 0]]), withMoves([[1, 0]]), withMoves(Array(12001).fill([0, 8]))];
   for (const value of invalid) assert.equal(readGhost(JSON.stringify(value)), null);
