@@ -10,11 +10,13 @@ A playable 2.5D arcade tower climber. Three.js renders the scene; a fixed-step s
 - Space, W, or up arrow: jump (press again for the next jump)
 - Escape/P: pause
 - Enter: begin/retry
-- Touch controls appear on narrow screens
+- On phones and touch tablets: hold left/right with one thumb and tap JUMP with the other. Slide across the direction pad to turn; release JUMP before the next jump.
 
 Run to jump higher. At high speed, Harold spreads his arms and legs into a star-shaped 360° spin and straightens before landing. Active combos leave a rotating, multicolored five-point star trail behind him. Land on new floors within 3.8 seconds to extend a combo. Arcade scrolling starts when you reach floor 5, making ledges descend even when you stand still. The pace increases every 30 seconds, up to five increases. The camera tracks downward falls to reveal recovery ledges, while the frost keeps advancing independently. Practice disables automatic scrolling; falling into the frost still ends the run. Personal records are saved on this browser.
 
 Every 10th floor has a wooden number plaque on its front edge. Every 50th floor is a full-width landing stage, providing room to land and build momentum before the next climb. Stages still scroll toward the frost like other floors.
+
+The layout supports portrait and landscape, device safe areas, and scrolling menus on short screens. Rotating the device or leaving the game pauses the run and clears held controls. Touch devices start in Performance quality; change quality from the main menu. Leaderboard dialogs adjust to the visible screen when the on-screen keyboard opens.
 
 ## Unlockable outfits
 
@@ -45,7 +47,7 @@ The online API runs on Netlify; the plain Vite preview serves only the game fron
 
 `npm install`, then `npm run dev -- --port 5188`.
 
-`npm test` checks jump height, landings, wall rebounds, buffering, coyote time, pause, frost, restart, downward camera tracking, recoverable falls, floor-triggered scrolling, 30-second acceleration, frame-rate independence, stage collisions, legacy and current leaderboard recordings, and a simulated 105-floor climb through five generated layouts.
+`npm test` checks jump height, landings, wall rebounds, buffering, coyote time, pause, frost, restart, downward camera tracking, recoverable falls, floor-triggered scrolling, 30-second acceleration, frame-rate independence, simultaneous touch and keyboard input, stage collisions, legacy and current leaderboard recordings, and a simulated 105-floor climb through five generated layouts.
 
 `npm run typecheck`, `npm run lint`, and `npm run build` validate source and production output.
 
