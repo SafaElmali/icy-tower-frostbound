@@ -187,5 +187,18 @@
 @media(max-width:760px),(any-pointer:coarse){.mode-picker select{min-height:44px}.title-screen .menu-actions{width:100%}}
 @media(max-height:500px) and (orientation:landscape){.party-hud{margin-top:6px;padding:6px;gap:3px}.party-hud small{display:none}}
 
-@media(min-width:761px) and (min-height:721px){.mode-party .challenges-hud{left:auto;right:6%;top:auto;bottom:100px}}
-@media(max-width:760px) and (min-height:701px){.mode-party .challenges-hud{top:calc(365px + var(--safe-top));left:auto;right:calc(18px + var(--safe-right))}}
+@media(min-width:761px) and (min-height:721px){.mode-party .challenges-hud,.friend-run .challenges-hud{left:auto;right:6%;top:auto;bottom:100px}}
+@media(max-width:760px) and (min-height:701px){.mode-party .challenges-hud,.friend-run .challenges-hud{top:calc(365px + var(--safe-top));width:190px;left:auto;right:calc(18px + var(--safe-right))}}
+/* Friend challenges use the tower's existing frost palette. */
+.title-screen.has-challenge{top:100px;bottom:80px;transform:none;overflow-y:auto;scrollbar-width:thin;padding-right:12px}.has-challenge h1{font-size:78px;margin:18px 0}.has-challenge .subtitle{margin-bottom:18px}.friend-invite{width:285px;max-width:100%;border-left:2px solid #b8e5da;padding:0 0 0 15px;margin:18px 0}.friend-invite>span{display:block;font-size:12px;letter-spacing:1.7px;color:#99bac4}.friend-invite>strong{display:block;font-family:Georgia,serif;font-size:28px;font-weight:400;margin-top:7px;color:#e0eee7}.friend-invite p{font-size:14px;line-height:1.6;color:#adc7ce;margin:7px 0}.friend-invite button{font-size:14px;color:#c1dedc;padding:0;height:30px}.friend-target{margin-top:18px;max-width:175px;border-left:2px solid #a3d9ca;padding-left:10px;color:#c7e9df;font-size:14px;line-height:1.5}.friend-target small{display:block;color:#a2bec7;font-size:12px}.result-card>.friend-result{font-size:14px;color:#c4e7dd;padding:10px;border:1px solid #9acabc33;border-radius:4px}.title-screen>.friend-link-error{font-size:14px;line-height:1.6;max-width:300px;color:#e7c3ab}.friend-share-card[data-slot=dialog-content]{width:calc(100vw - 32px);max-width:480px;max-height:calc(100svh - 32px);overflow:auto;background:linear-gradient(145deg,#152e3b,#091b26);border:1px solid #7ca9b840;border-radius:6px;padding:28px;color:#e5f0ed}.friend-share-card>svg{color:#b5dcd3}.friend-share-card [data-slot=dialog-title]{font-family:Georgia,serif;font-size:30px;font-weight:400;padding-right:15px}.friend-share-card [data-slot=dialog-description]{font-size:16px;line-height:1.6;color:#aac4cc}.friend-share-actions{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0}.friend-share-actions button{flex:1;min-height:44px;font-size:14px}.friend-share-card label{font-size:14px;color:#c3dcd9}.friend-share-card input{font-size:16px;min-width:0;background:#091b26;border-color:#8ab4c24d}.friend-share-status{font-size:14px;color:#aed5c9;line-height:1.5;margin:0;min-height:42px}@media(max-width:760px){.title-screen.has-challenge{top:94px;bottom:65px}.has-challenge h1{font-size:68px}.friend-invite{width:265px}.friend-target{max-width:145px;margin-top:12px}.friend-share-card[data-slot=dialog-content]{padding:24px 20px}}@media(max-height:650px){.has-challenge h1{font-size:54px}.has-challenge .personal-best{display:none}}
+
+@media(max-width:760px),(any-pointer:coarse){
+  .title-screen.has-challenge{top:calc(82px + var(--safe-top));bottom:calc(64px + var(--safe-bottom))}
+  .friend-invite{width:100%;max-width:360px}.friend-invite button{min-height:44px}
+}
+@media(max-height:500px) and (orientation:landscape){
+  .title-screen.has-challenge{top:calc(66px + var(--safe-top));bottom:calc(12px + var(--safe-bottom))}
+  .friend-invite{margin:4px 0}.friend-target{margin-top:6px;font-size:12px}
+}
+.title-screen.has-challenge>.friend-link-error{display:block}
+.friend-share-card[data-slot=dialog-content]{top:calc(var(--visible-top,0px) + var(--visible-height,100dvh)/2);max-height:calc(var(--visible-height,100dvh) - 32px - var(--safe-top) - var(--safe-bottom));max-width:min(480px,calc(100vw - 32px - var(--safe-left) - var(--safe-right)))}
