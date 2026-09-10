@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TowerEngine, freshControls } from '../lib/tower-engine.ts';
-import { bestGhost, readGhost, TowerGhost, type GhostRecord } from '../lib/tower-ghost.ts';
+import { bestGhost, readGhost, startGhostRun, TowerGhost, type GhostRecord } from '../lib/tower-ghost.ts';
 
 function recordClimb(version: 2 | 3 = 3) {
   const engine = new TowerEngine(17, true, version); engine.start('arcade');
@@ -87,4 +87,18 @@ void test('a finished ghost stays finished and the race reports passing its best
   player.floor = record.floor + 1; assert.equal(ghost.snapshot(player).beaten, true);
   const malformed = { ...record, replay: { ...record.replay, moves: [[1, 0]] } } as GhostRecord;
   const short = new TowerGhost(malformed); short.advanceTo(10); assert.equal(short.finished, true);
+});
+
+void test('starting a rematch reuses the ghost tower and other modes start without it', () => {
+  const { record } = recordClimb();
+  const player = new TowerEngine(99);
+  const ghost = startGhostRun(player, record, 'arcade');
+  assert.ok(ghost); assert.equal(player.seed, record.replay.seed);
+  assert.deepEqual(player.platforms, ghost.engine.platforms);
+  for (const mode of ['party', 'practice'] as const) {
+    assert.equal(startGhostRun(player, record, mode), null);
+    assert.equal(player.mode, mode); assert.equal(player.time, 0);
+  }
+  assert.equal(startGhostRun(player, null, 'arcade'), null);
+  assert.equal(player.mode, 'arcade');
 });

@@ -1,5 +1,5 @@
 import { ClimberMotion } from './climber-motion.ts';
-import { MAX_REPLAY_FRAMES, MAX_REPLAY_SEGMENTS, TowerEngine, type RunReplay } from './tower-engine.ts';
+import { MAX_REPLAY_FRAMES, MAX_REPLAY_SEGMENTS, TowerEngine, type RunReplay, type GameMode } from './tower-engine.ts';
 
 export const GHOST_STORAGE_KEY = 'frostbound-ghost-v1';
 export type GhostRecord = { floor: number; score: number; time: number; replay: RunReplay };
@@ -78,4 +78,11 @@ export class TowerGhost {
   snapshot(player: TowerEngine) {
     return { floor: this.record.floor, finished: this.finished, lead: Math.round((player.y - this.engine.y) * 3), beaten: player.floor > this.record.floor };
   }
+}
+
+/** Choose the rematch layout once when a run starts. */
+export function startGhostRun(engine: TowerEngine, best: GhostRecord | null, mode: GameMode) {
+  const ghost = mode === 'arcade' && best ? new TowerGhost(best) : null;
+  engine.start(mode, ghost?.record.replay.seed ?? Math.floor(Math.random() * 2 ** 30));
+  return ghost;
 }

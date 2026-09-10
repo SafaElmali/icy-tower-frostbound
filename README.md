@@ -18,6 +18,23 @@ Every 10th floor has a wooden number plaque on its front edge. Every 50th floor 
 
 The layout supports portrait and landscape, device safe areas, and scrolling menus on short screens. Rotating the device or leaving the game pauses the run and clears held controls. Touch devices start in Performance quality; change quality from the main menu. Leaderboard dialogs adjust to the visible screen when the on-screen keyboard opens.
 
+## Unlockable outfits
+
+Open **Outfits** from the title screen, shirt button, or pause/results menu. Equip a hat, sweater, and star-trail palette independently; colors update on the climber immediately. The original blue beanie, green knit, and rainbow stars are always available.
+
+| Achievement | Reward |
+| --- | --- |
+| Reach floor 10 | Frost beanie |
+| Reach floor 50 | Summit beanie |
+| Score 1,000 in one run | Berry knit |
+| Score 5,000 in one run | Aurora knit |
+| Land a 5× combo | Glacier stars |
+| Land a 15× combo | Sunset stars |
+
+Classic, Party, and Practice all earn rewards as soon as milestones are reached. Personal bests count across sessions, and existing saved floor/score records earn their corresponding rewards. Progress and equipped items are stored on this browser; clearing browser storage resets them. If storage is unavailable, the wardrobe works for the current session. Trails still require an airborne combo of at least 2×.
+
+New leaderboard entries save the outfit equipped when submitted and show its three badges beside the name. Older entries use the original outfit. Cosmetic IDs are checked against the catalog, but unlock ownership is device-local and client-reported; cosmetics do not affect server-verified scores or ranking.
+
 ## Party mode
 
 Choose **Party** from the mode selector before starting. Lower gravity gives jumps more airtime. Every fifth floor is a pink spring platform that automatically launches you higher when you land; the full-width 50-floor stages remain normal landing spots. Pink crystals grant **8 seconds of double jumps**: release and press jump again in midair for one extra jump per landing. Collect another crystal to refresh the timer. The HUD shows the time remaining and whether a jump is ready; pausing freezes the timer. The same controls work on keyboard and touch.
