@@ -48,6 +48,10 @@
 @media(max-width:520px){.wardrobe-card[data-slot=dialog-content]{padding:23px 16px}.wardrobe-options{gap:7px}.wardrobe-item{padding:12px 9px;min-height:210px}.wardrobe-equipped{align-items:flex-start;flex-direction:column;gap:9px}.wardrobe-swatch{align-items:flex-start;flex-direction:column;gap:8px}.wardrobe-heading [data-slot=dialog-title]{font-size:30px}.wardrobe-item>strong{line-height:1.4}.wardrobe-heading [data-slot=dialog-description]{font-size:14px}.outfit-badges{gap:3px;margin-left:5px}.outfit-badges>span{padding:2px}.climber-name{min-width:120px}.collection-menu{gap:18px}.topbar{padding-inline:16px}.topbar-right{gap:6px}}
 @media(max-width:360px){.wardrobe-options{grid-template-columns:1fr}.wardrobe-item{min-height:0}.wardrobe-swatch{flex-direction:row}.brand{gap:6px}.utility{width:30px;height:30px}}
 
+/* Party controls and power-up status extend the frozen tower palette. */
+.mode-picker{display:flex;align-items:center;gap:8px;color:#b0c7cf;font-size:14px}.mode-picker select{color:#e7f0ed;background:#132c39;border:1px solid #92b3be55;border-radius:4px;padding:5px 26px 5px 8px;font-size:14px;cursor:pointer}.party-hud{display:flex;flex-direction:column;gap:6px;margin-top:18px;padding:12px;border-left:2px solid #ff8fce;background:#172332cc;max-width:255px}.party-hud strong{font-size:13px;color:#ffb3df;letter-spacing:.8px}.party-hud span{font-size:12px;color:#f9e3f1}.party-hud small{font-size:12px;color:#b5c7d4}.ranking-tabs{min-height:0;gap:16px}.ranking-tabs>[data-slot=tabs-list]{height:40px;width:100%}.ranking-tabs [data-slot=tabs-trigger]{font-size:14px}.ranking-tabs [data-slot=tabs-content]{display:flex;flex-direction:column;min-height:0}.ranking-tabs [data-slot=tabs-trigger][data-active]{color:#f5c4e2}.title-screen .menu-actions{width:310px}.title-screen .menu-actions button{font-size:14px}.title-screen .enter-hint{line-height:1.6}
+@media(max-width:760px){.party-hud{max-width:190px;padding:9px;margin-top:12px}.party-hud strong,.party-hud span,.party-hud small{font-size:12px}.mode-picker{font-size:14px}.title-screen .menu-actions{max-width:100%}.title-screen .menu-actions button{font-size:14px}}
+
 /* Touch layouts keep the playfield clear and controls inside device safe areas. */
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
@@ -187,3 +191,6 @@
 }
 
 @media (max-width: 400px) { .state-playing .outfit-utility, .state-paused .outfit-utility { display: none; } }
+
+@media(max-width:760px),(any-pointer:coarse){.mode-picker select{min-height:44px}.title-screen .menu-actions{width:100%}}
+@media(max-height:500px) and (orientation:landscape){.party-hud{margin-top:6px;padding:6px;gap:3px}.party-hud small{display:none}}

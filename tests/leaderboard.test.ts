@@ -5,19 +5,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore, setEnvironmentContext } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { TowerEngine, freshControls, type RunReplay } from '../lib/tower-engine.ts';
+import { TowerEngine, freshControls, type RankedMode, type RunReplay } from '../lib/tower-engine.ts';
 import { Leaderboard, verifySubmission, type LeaderboardEntry, type LeaderboardStore } from '../lib/leaderboard.ts';
 import handler from '../netlify/functions/leaderboard.ts';
 
-function completedRun(seed = 17, paused = false, goal = 12, version: RunReplay['version'] = 2) {
-  const engine = new TowerEngine(seed, true, version); engine.start('arcade');
+function completedRun(seed = 17, paused = false, goal = 12, version: RunReplay['version'] = 2, mode: RankedMode = 'arcade') {
+  const engine = new TowerEngine(seed, true, version); engine.start(mode);
   let target = engine.platforms[1], wasJump = false;
   for (let i = 0; i < 18000 && engine.status === 'playing'; i++) {
     if (paused && i === 100) { engine.togglePause(); engine.tick(1, freshControls()); engine.togglePause(); }
     if (engine.floor >= goal) { engine.tick(1 / 120, freshControls()); engine.drainEvents(); continue; }
-    if (engine.grounded) target = engine.platforms.find(platform => platform.id === engine.standingId + 1)!;
+    if (engine.grounded || (mode === 'party' && engine.floor >= target.id)) target = engine.platforms.find(platform => platform.id === engine.floor + 1)!;
     const steering = (target.x - engine.x) * 3.8 - engine.vx * 1.1;
-    const jump: boolean = engine.grounded && !wasJump;
+    const jump: boolean = !wasJump && (engine.grounded || (mode === 'party' && engine.snapshot().doubleJumpReady && engine.vy < 0));
     engine.tick(i % 3 === 0 ? 1 / 60 : 1 / 120, { left: steering < -.35, right: steering > .35, jump });
     engine.drainEvents(); wasJump = jump;
   }
@@ -35,7 +35,7 @@ void test('server verification reproduces real runs, including pauses and mixed 
 });
 
 void test('leaderboard verifies both legacy and new stage layouts beyond floor 50', () => {
-  for (const version of [1, 2] as const) {
+  for (const version of [1, 2, 3] as const) {
     const engine = completedRun(17, false, 53, version);
     assert.ok(engine.floor >= 53); assert.equal(engine.getReplay()!.version, version);
     const entry = verifySubmission({ name: 'Harold', replay: engine.getReplay() });
@@ -67,6 +67,14 @@ void test('real blob storage persists a run across service instances and the HTT
     assert.equal(response.status, 200); assert.equal((await response.json() as { entries: LeaderboardEntry[] }).entries.length, 1);
     const request = (body: unknown) => new Request('http://localhost/.netlify/functions/leaderboard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     assert.equal((await handler(request({ name: 'Harold', replay: completedRun().getReplay() }))).status, 200);
+    const party = completedRun(17, true, 12, 3, 'party');
+    const partyResponse = await handler(new Request('http://localhost/.netlify/functions/leaderboard?mode=arcade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Party climber', mode: 'arcade', replay: party.getReplay() }) }));
+    assert.equal(partyResponse.status, 200);
+    const partyEntries = (await (await handler(new Request('http://localhost/.netlify/functions/leaderboard?mode=party'))).json() as { entries: LeaderboardEntry[] }).entries;
+    assert.equal(partyEntries.length, 1); assert.equal(partyEntries[0].name, 'Party climber'); assert.equal(partyEntries[0].score, party.score);
+    assert.equal((await fresh.list())[0].name, 'Harold'); assert.equal((await fresh.list()).length, 1);
+    assert.equal((await fresh.list('party'))[0].id, partyEntries[0].id);
+    assert.equal((await handler(new Request('http://localhost/.netlify/functions/leaderboard?mode=practice'))).status, 400);
     assert.equal((await handler(request({ name: 'Fake', score: 999999 }))).status, 400);
     assert.equal((await handler(new Request('http://localhost/.netlify/functions/leaderboard', { method: 'DELETE' }))).status, 405);
     assert.equal((await handler(new Request('http://localhost/.netlify/functions/leaderboard', { method: 'POST', headers: { Origin: 'https://other.example' } }))).status, 403);
@@ -102,4 +110,20 @@ void test('leaderboard keeps catalog cosmetics without trusting client score fie
   assert.deepEqual(legacy.outfit, { hat: 'blue-beanie', sweater: 'green-knit', trail: 'rainbow' });
   assert.deepEqual(verifySubmission({ name: 'Harold', replay: engine.getReplay(), outfit: { hat: '<img>', trail: 'berry-knit' } }).outfit, legacy.outfit);
   assert.equal(entry.id, legacy.id, 'Changing outfits cannot duplicate a ranked run');
+});
+
+void test('party recordings reproduce power-ups and pauses, and reject missing or legacy mode tags', () => {
+  for (const paused of [false, true]) {
+    const engine = completedRun(17, paused, 12, 3, 'party');
+    const replay = engine.getReplay()!;
+    assert.ok(engine.gems > 0);
+    assert.equal(replay.mode, 'party');
+    const entry = verifySubmission({ name: 'Party climber', replay });
+    assert.equal(entry.mode, 'party'); assert.equal(entry.score, engine.score); assert.equal(entry.floor, engine.floor);
+    assert.equal(entry.combo, engine.bestCombo); assert.equal(entry.duration, Math.round(engine.time * 1000));
+    for (const invalid of [{ ...replay, mode: undefined }, { ...replay, mode: 'practice' }, { ...replay, mode: 'unknown' }, { ...replay, version: 2 }, { ...replay, version: 1 }]) {
+      assert.throws(() => verifySubmission({ name: 'Party climber', replay: invalid }));
+    }
+    assert.throws(() => verifySubmission({ name: 'Party climber', replay: { ...replay, mode: 'arcade' } }));
+  }
 });

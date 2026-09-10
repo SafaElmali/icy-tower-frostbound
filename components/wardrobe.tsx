@@ -22,7 +22,7 @@ export function WardrobeDialog({ open, onOpenChange, profile, onEquip, storageAv
 }) {
   const earned = COSMETICS.filter(item => item.target > 0 && isUnlocked(item, profile.progress)).length;
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="wardrobe-card">
-    <div className="wardrobe-heading"><span className="eyebrow">EARNED ON THE ASCENT</span><DialogTitle>Your climbing kit.</DialogTitle><DialogDescription>Reach milestones in arcade or practice to unlock new colors.</DialogDescription></div>
+    <div className="wardrobe-heading"><span className="eyebrow">EARNED ON THE ASCENT</span><DialogTitle>Your climbing kit.</DialogTitle><DialogDescription>Reach milestones in Classic, Party, or Practice to unlock new colors.</DialogDescription></div>
     <div className="wardrobe-equipped"><div><span>Equipped</span><OutfitBadges outfit={profile.equipped} /></div><strong>{earned} / 6 rewards unlocked</strong></div>
     <div className="wardrobe-collection">{OUTFIT_SLOTS.map(slot => <section key={slot} aria-labelledby={`wardrobe-${slot}`}><h3 id={`wardrobe-${slot}`}>{labels[slot]}</h3><div className="wardrobe-options">{COSMETICS.filter(item => item.slot === slot).map(item => {
       const unlocked = isUnlocked(item, profile.progress), equipped = profile.equipped[slot] === item.id, Icon = icons[slot];

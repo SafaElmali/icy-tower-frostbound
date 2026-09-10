@@ -31,13 +31,19 @@ Open **Outfits** from the title screen, shirt button, or pause/results menu. Equ
 | Land a 5× combo | Glacier stars |
 | Land a 15× combo | Sunset stars |
 
-Arcade and practice both earn rewards as soon as milestones are reached. Personal bests count across sessions, and existing saved floor/score records earn their corresponding rewards. Progress and equipped items are stored on this browser; clearing browser storage resets them. If storage is unavailable, the wardrobe works for the current session. Trails still require an airborne combo of at least 2×.
+Classic, Party, and Practice all earn rewards as soon as milestones are reached. Personal bests count across sessions, and existing saved floor/score records earn their corresponding rewards. Progress and equipped items are stored on this browser; clearing browser storage resets them. If storage is unavailable, the wardrobe works for the current session. Trails still require an airborne combo of at least 2×.
 
 New leaderboard entries save the outfit equipped when submitted and show its three badges beside the name. Older entries use the original outfit. Cosmetic IDs are checked against the catalog, but unlock ownership is device-local and client-reported; cosmetics do not affect server-verified scores or ranking.
 
+## Party mode
+
+Choose **Party** from the mode selector before starting. Lower gravity gives jumps more airtime. Every fifth floor is a pink spring platform that automatically launches you higher when you land; the full-width 50-floor stages remain normal landing spots. Pink crystals grant **8 seconds of double jumps**: release and press jump again in midair for one extra jump per landing. Collect another crystal to refresh the timer. The HUD shows the time remaining and whether a jump is ready; pausing freezes the timer. The same controls work on keyboard and touch.
+
+Party keeps the rising frost and combo scoring, with its own online rankings and browser personal best. Classic retains the original physics and rankings. Practice remains unranked and now saves its personal best separately, too. Existing browser records remain under Classic.
+
 ## Leaderboard
 
-Open the trophy button to see the all-time top 50 arcade runs. After a completed arcade run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, and combos are replayed and calculated on the server. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.
+Open the trophy button to see the all-time top 50 runs on the **Classic** or **Party** tab. After a completed Classic or Party run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, combos, and mode-specific physics are replayed and calculated on the server. The verified recording selects the board; Party scores cannot be submitted to Classic rankings. Legacy arcade recordings remain valid. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.
 
 The leaderboard uses a Netlify Function and site-wide Netlify Blobs storage, so scores persist across deployments and are shared across devices. Conditional writes protect concurrent submissions, and identical recordings cannot be added twice while on the board. Replay validation prevents fabricated score totals; it is not a guarantee against automated play. No login is required, and display names are not reserved identities. The name field is remembered only on the player's device.
 
@@ -47,7 +53,7 @@ The online API runs on Netlify; the plain Vite preview serves only the game fron
 
 `npm install`, then `npm run dev -- --port 5188`.
 
-`npm test` checks jump height, landings, wall rebounds, buffering, coyote time, pause, frost, restart, downward camera tracking, recoverable falls, floor-triggered scrolling, 30-second acceleration, frame-rate independence, simultaneous touch and keyboard input, stage collisions, legacy and current leaderboard recordings, and a simulated 105-floor climb through five generated layouts.
+`npm test` checks jump height, landings, wall rebounds, buffering, coyote time, pause, frost, restart, downward camera tracking, recoverable falls, floor-triggered scrolling, 30-second acceleration, frame-rate independence, simultaneous touch and keyboard input, stage collisions, legacy and current leaderboard recordings, Party springs and gravity, timed double jumps, separate ranked storage, and a simulated 105-floor climb through five generated layouts.
 
 `npm run typecheck`, `npm run lint`, and `npm run build` validate source and production output.
 
