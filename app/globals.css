@@ -28,6 +28,33 @@
 @media(max-width:760px){.challenges-preview{display:none}.title-screen{left:8%}.challenges-hud{top:275px;left:24px;width:220px;padding:12px}.challenges-compact .challenge-label strong{font-size:12px}.challenges-compact .challenges-heading>span{font-size:12px}.challenges-compact ul{gap:10px}.challenges-hud .challenge-label{flex-wrap:wrap;column-gap:6px;row-gap:0}.extra-menu-actions button{font-size:13px}.extra-menu-actions{gap:16px}}
 @media(max-height:720px) and (min-width:761px){.challenges-hud{top:105px;left:auto;right:5%;width:250px}.combo-hud{top:300px}.challenges-preview{padding:20px;transform:translateY(-45%)}.challenges-preview ul{gap:14px}.challenges-preview .challenges-footnote{display:none}}
 @media(max-height:700px) and (max-width:760px){.challenges-hud{top:96px;left:auto;right:18px;width:190px;padding:10px}.challenges-hud .challenges-heading{gap:5px}.challenges-hud .challenges-heading svg,.challenges-hud li>svg{display:none}.combo-hud{top:278px;right:24px}.title-screen>p{display:none}.title-screen h1{font-size:76px;margin:18px 0}.title-screen .personal-best{margin-top:12px;padding-top:12px}.title-screen .subtitle{margin-bottom:20px}.title-screen .enter-hint{margin-bottom:12px}.title-screen{top:48%}}
+
+/* Achievement wardrobe */
+.collection-menu{display:flex;align-items:center;gap:22px}
+.outfit-badges{display:inline-flex;align-items:center;gap:5px;vertical-align:middle;margin-left:9px}
+.outfit-badges>span{display:inline-flex;padding:4px;border:1px solid #a9c9d02a;border-radius:4px;background:#07192388}
+.climber-name{max-width:240px;white-space:normal;overflow-wrap:anywhere}
+.wardrobe-card[data-slot=dialog-content]{display:flex;flex-direction:column;gap:0;width:calc(100vw - 32px);max-width:710px;max-height:calc(100svh - 32px);padding:30px;border:1px solid #7ca9b840;border-radius:8px;background:linear-gradient(145deg,#152e3b,#091b26);color:#e5f0ed;box-shadow:0 24px 100px #0009}
+.wardrobe-heading{padding-right:18px}.wardrobe-heading .eyebrow{font-size:12px;letter-spacing:1.6px}
+.wardrobe-heading [data-slot=dialog-title]{font:400 34px/1.2 Georgia,serif;letter-spacing:-.7px;margin:12px 0}
+.wardrobe-heading [data-slot=dialog-description]{font-size:16px;line-height:1.5;color:#a9c3cb}
+.wardrobe-equipped{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 0;margin:10px 0 0;border-bottom:1px solid #8caeba33;font-size:14px}
+.wardrobe-equipped>div{display:flex;align-items:center;gap:6px}.wardrobe-equipped strong{font-size:13px;font-weight:500;color:#b4d8c5}
+.wardrobe-collection{overflow-y:auto;min-height:0;padding:0 5px 8px;margin:0 -5px}
+.wardrobe-collection h3{font-size:16px;font-weight:500;margin:20px 0 10px}
+.wardrobe-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.wardrobe-item{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:8px;white-space:normal;text-align:left;height:auto;min-height:188px;padding:16px 13px;border:1px solid #83afbc33;border-radius:6px;background:#0b202c;color:#d4e6e5}
+.wardrobe-item:hover{background:#1b3a47}.wardrobe-item.is-equipped{border-color:#b4e5ce99;background:#244d4b55}
+.wardrobe-item:disabled{opacity:1;cursor:default;background:#0b1c26;color:#a7bbc3}
+.wardrobe-swatch{display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:3px}.wardrobe-swatch>span{display:flex;gap:3px}.wardrobe-swatch i{display:block;width:7px;height:7px;border-radius:50%}
+.wardrobe-item>strong{font-size:14px;font-weight:600}.wardrobe-achievement{font-size:13px;line-height:1.5;font-weight:400;color:#a4bdc7}
+.wardrobe-item-status{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:500;margin-top:auto;padding-top:6px;color:#b8d8d7}
+.is-equipped .wardrobe-item-status{color:#c1ebcd}.wardrobe-note{font-size:13px;line-height:1.6;color:#9ab5c0;margin:18px 0 0}
+.unlock-toast{display:flex;align-items:center;gap:12px;max-width:calc(100vw - 36px);width:max-content;font-size:14px;border-color:#a1d8b377;pointer-events:none;box-shadow:0 10px 35px #0005}
+.unlock-toast svg{flex-shrink:0;color:#c4e7be}
+@media(max-width:520px){.wardrobe-card[data-slot=dialog-content]{padding:23px 16px}.wardrobe-options{gap:7px}.wardrobe-item{padding:12px 9px;min-height:210px}.wardrobe-equipped{align-items:flex-start;flex-direction:column;gap:9px}.wardrobe-swatch{align-items:flex-start;flex-direction:column;gap:8px}.wardrobe-heading [data-slot=dialog-title]{font-size:30px}.wardrobe-item>strong{line-height:1.4}.wardrobe-heading [data-slot=dialog-description]{font-size:14px}.outfit-badges{gap:3px;margin-left:5px}.outfit-badges>span{padding:2px}.climber-name{min-width:120px}.collection-menu{gap:18px}.topbar{padding-inline:16px}.topbar-right{gap:6px}}
+@media(max-width:360px){.wardrobe-options{grid-template-columns:1fr}.wardrobe-item{min-height:0}.wardrobe-swatch{flex-direction:row}.brand{gap:6px}.utility{width:30px;height:30px}}
+
 /* Party controls and power-up status extend the frozen tower palette. */
 .mode-picker{display:flex;align-items:center;gap:8px;color:#b0c7cf;font-size:14px}.mode-picker select{color:#e7f0ed;background:#132c39;border:1px solid #92b3be55;border-radius:4px;padding:5px 26px 5px 8px;font-size:14px;cursor:pointer}.party-hud{display:flex;flex-direction:column;gap:6px;margin-top:18px;padding:12px;border-left:2px solid #ff8fce;background:#172332cc;max-width:255px}.party-hud strong{font-size:13px;color:#ffb3df;letter-spacing:.8px}.party-hud span{font-size:12px;color:#f9e3f1}.party-hud small{font-size:12px;color:#b5c7d4}.ranking-tabs{min-height:0;gap:16px}.ranking-tabs>[data-slot=tabs-list]{height:40px;width:100%}.ranking-tabs [data-slot=tabs-trigger]{font-size:14px}.ranking-tabs [data-slot=tabs-content]{display:flex;flex-direction:column;min-height:0}.ranking-tabs [data-slot=tabs-trigger][data-active]{color:#f5c4e2}.title-screen .menu-actions{width:310px}.title-screen .menu-actions button{font-size:14px}.title-screen .enter-hint{line-height:1.6}
 @media(max-width:760px){.party-hud{max-width:190px;padding:9px;margin-top:12px}.party-hud strong,.party-hud span,.party-hud small{font-size:12px}.mode-picker{font-size:14px}.title-screen .menu-actions{max-width:100%}.title-screen .menu-actions button{font-size:14px}}
@@ -43,7 +70,7 @@
 .touch-controls, .touch-move { border: 0; margin: 0; min-width: 0; padding: 0; }
 .overlay { padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left)); }
 .overlay .result-card { max-height: calc(100dvh - 32px - var(--safe-top) - var(--safe-bottom)); overscroll-behavior: contain; }
-.help-card[data-slot=dialog-content], .leaderboard-card[data-slot=dialog-content] {
+.help-card[data-slot=dialog-content], .leaderboard-card[data-slot=dialog-content], .wardrobe-card[data-slot=dialog-content] {
   position: fixed;
   top: calc(var(--visible-top, 0px) + var(--visible-height, 100dvh) / 2);
   max-height: calc(var(--visible-height, 100dvh) - 32px - var(--safe-top) - var(--safe-bottom));
@@ -184,6 +211,9 @@
   .challenges-hud{top:calc(70px + var(--safe-top));left:auto;right:calc(130px + var(--safe-right));width:220px}
   .combo-hud{top:calc(68px + var(--safe-top))}
 }
+
+@media (max-width: 400px) { .state-playing .outfit-utility, .state-paused .outfit-utility { display: none; } }
+
 @media(max-width:760px),(any-pointer:coarse){.mode-picker select{min-height:44px}.title-screen .menu-actions{width:100%}}
 @media(max-height:500px) and (orientation:landscape){.party-hud{margin-top:6px;padding:6px;gap:3px}.party-hud small{display:none}}
 

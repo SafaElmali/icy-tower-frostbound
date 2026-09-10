@@ -9,6 +9,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ClimberMotion } from './climber-motion';
 import { ComboStarTrail } from './combo-star-trail';
+import { DEFAULT_OUTFIT, cosmeticFor, normalizeOutfit, type Outfit } from './outfits';
 import { TowerInterior } from './tower-interior';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 
@@ -118,6 +119,25 @@ export class TowerWorld {
       this.arms = ['Arm_L', 'Arm_R'].map(n => model.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
     } catch { /* The built-in Harold model keeps the game playable offline. */ }
   }
+  setOutfit(value: Outfit) {
+    const outfit = normalizeOutfit(value);
+    this.character.traverse(object => {
+      if (!(object instanceof THREE.Mesh)) return;
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+        if (!(material instanceof THREE.MeshStandardMaterial)) continue;
+        const slot = /beanie|knit ribs/i.test(material.name) && !/badge/i.test(material.name) ? 'hat' : /sweatshirt/i.test(material.name) ? 'sweater' : null;
+        if (!slot) continue;
+        material.userData.originalColor ??= material.color.clone();
+        if (outfit[slot] === DEFAULT_OUTFIT[slot]) material.color.copy(material.userData.originalColor);
+        else {
+          material.color.setHex(cosmeticFor(slot, outfit[slot]).colors[0]);
+          if (/seams|trim/i.test(material.name)) material.color.multiplyScalar(.5);
+          else if (/ribs/i.test(material.name)) material.color.multiplyScalar(1.15);
+        }
+      }
+    });
+    this.starTrail.setPalette(cosmeticFor('trail', outfit.trail).colors);
+  }
   private makeNoiseTexture() {
     const size = 128, data = new Uint8Array(size * size * 4);
     for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
@@ -136,8 +156,8 @@ export class TowerWorld {
     const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; parent.add(m); return m;
   }
   private fallbackCharacter() {
-    const green = new THREE.MeshStandardMaterial({ color: 0x16bb2c, roughness: .85 });
-    const blue = new THREE.MeshStandardMaterial({ color: 0x285fac, roughness: .86 });
+    const green = new THREE.MeshStandardMaterial({ name: 'Classic bright green sweatshirt', color: 0x16bb2c, roughness: .85 });
+    const blue = new THREE.MeshStandardMaterial({ name: 'Harold blue knit beanie', color: 0x285fac, roughness: .86 });
     const olive = new THREE.MeshStandardMaterial({ color: 0x727537, roughness: .9 });
     const brown = new THREE.MeshStandardMaterial({ color: 0x69422d, roughness: .78 });
     const skin = new THREE.MeshStandardMaterial({ color: 0xf6ab75, roughness: .8 });

@@ -78,3 +78,19 @@ void test('the trail stays bounded and follows the same path at 30, 60, and 120 
   }
   trails.forEach(trail => trail.dispose());
 });
+
+void test('equipped palettes color emitted stars and changing palettes clears old colors', () => {
+  const trail = new ComboStarTrail(random()), player = state();
+  trail.setPalette([0x68daff]); trail.update(player); fly(trail, player, .5);
+  assert.ok(trail.mesh.count > 0);
+  const expected = new Color(0x68daff).multiplyScalar(1.45);
+  for (let i = 0; i < trail.mesh.count; i++) {
+    const color = new Color(); trail.mesh.getColorAt(i, color);
+    assert.ok(Math.abs(color.r - expected.r) < 1e-6 && Math.abs(color.g - expected.g) < 1e-6 && Math.abs(color.b - expected.b) < 1e-6);
+  }
+  trail.setPalette([]); assert.equal(trail.mesh.count, 0);
+  fly(trail, player, .5);
+  const colors = new Set<string>();
+  for (let i = 0; i < trail.mesh.count; i++) { const color = new Color(); trail.mesh.getColorAt(i, color); colors.add(color.getHexString()); }
+  assert.ok(colors.size >= 3); trail.dispose();
+});

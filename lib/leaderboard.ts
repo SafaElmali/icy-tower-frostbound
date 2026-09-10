@@ -1,7 +1,8 @@
+import { normalizeOutfit, type Outfit } from './outfits.ts';
 import { createHash } from 'node:crypto';
 import { MAX_REPLAY_FRAMES, MAX_REPLAY_SEGMENTS, TowerEngine, replayMode, type RankedMode, type RunReplay } from './tower-engine.ts';
 
-export type LeaderboardEntry = { id: string; name: string; score: number; floor: number; combo: number; duration: number; createdAt: string; mode?: RankedMode };
+export type LeaderboardEntry = { id: string; name: string; score: number; floor: number; combo: number; duration: number; createdAt: string; mode?: RankedMode; outfit?: Outfit };
 export class LeaderboardError extends Error {
   status: number;
   constructor(message: string, status = 400) { super(message); this.status = status; }
@@ -16,7 +17,7 @@ export const compareScores = (a: LeaderboardEntry, b: LeaderboardEntry) => b.sco
 /** Replays inputs on the server; score, floor, and combo are never accepted from the client. */
 export function verifySubmission(input: unknown): LeaderboardEntry & { mode: RankedMode } {
   if (!input || typeof input !== 'object') throw new LeaderboardError('The score submission is incomplete.');
-  const { name: rawName, replay } = input as { name?: unknown; replay?: RunReplay };
+  const { name: rawName, replay, outfit } = input as { name?: unknown; replay?: RunReplay; outfit?: unknown };
   const name = typeof rawName === 'string' ? rawName.normalize('NFKC').trim().replace(/\s+/g, ' ') : '';
   if (!/^[\p{L}\p{N} ._'’-]{2,20}$/u.test(name)) throw new LeaderboardError('Use 2–20 letters, numbers, spaces, or simple punctuation for your name.');
   if (!replay || (replay.version !== 1 && replay.version !== 2 && replay.version !== 3) || !Number.isInteger(replay.seed) || replay.seed < 0 || replay.seed > 0xffffffff || !Array.isArray(replay.moves) || !replay.moves.length || replay.moves.length > MAX_REPLAY_SEGMENTS) throw new LeaderboardError('This run cannot be verified. Start a new ranked run.');
@@ -44,7 +45,7 @@ export function verifySubmission(input: unknown): LeaderboardEntry & { mode: Ran
   // Keep legacy hashes stable so previously submitted runs remain deduplicated.
   const identity = { version: replay.version, seed: replay.seed, moves: replay.moves, ...(replay.version === 3 ? { mode } : {}) };
   const id = createHash('sha256').update(JSON.stringify(identity)).digest('hex');
-  return { id, name, mode, score: engine.score, floor: engine.floor, combo: engine.bestCombo, duration: Math.round(engine.time * 1000), createdAt: new Date().toISOString() };
+  return { id, name, mode, outfit: normalizeOutfit(outfit), score: engine.score, floor: engine.floor, combo: engine.bestCombo, duration: Math.round(engine.time * 1000), createdAt: new Date().toISOString() };
 }
 
 /** Bounded shared leaderboard with conditional writes, so simultaneous finishes cannot lose scores. */
