@@ -5,6 +5,9 @@ export type Platform = { id: number; x: number; y: number; width: number; gem: b
 export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over'; x: number; y: number; value?: number };
 export const FLOOR_HEIGHT = 2.35;
 export const WALL = 6.4;
+export const MAX_REPLAY_FRAMES = 216000;
+export const MAX_REPLAY_SEGMENTS = 12000;
+export type RunReplay = { version: 1; seed: number; moves: [number, number][] };
 export const freshControls = (): Controls => ({ left: false, right: false, jump: false });
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -27,7 +30,10 @@ export class TowerEngine {
   private accumulator = 0;
   private lastFloor = 0;
   private scrollStartedAt: number | null = null;
-  constructor(seed = 73091) { this.seed = seed; this.resetWorld(); }
+  private replay: [number, number][] | null = [];
+  private replayFrames = 0;
+  private recordReplay: boolean;
+  constructor(seed = 73091, recordReplay = true) { this.seed = seed; this.recordReplay = recordReplay; this.resetWorld(); }
   private random() { this.state = (Math.imul(1664525, this.state) + 1013904223) >>> 0; return this.state / 4294967296; }
   private resetWorld() {
     this.state = this.seed; this.nextId = 0; this.platforms = [];
@@ -47,6 +53,7 @@ export class TowerEngine {
     }
   }
   start(mode: GameMode = 'arcade', seed = this.seed) {
+    this.replay = []; this.replayFrames = 0;
     this.seed = seed; this.mode = mode; this.status = 'playing';
     this.x = this.y = this.vx = this.vy = this.time = this.maxY = this.floor = this.score = this.gems = this.combo = this.bestCombo = this.comboTime = this.lastFloor = 0;
     this.cameraY = 5.2; this.stormY = -8; this.facing = 1; this.grounded = true; this.standingId = 0;
@@ -54,6 +61,10 @@ export class TowerEngine {
     this.resetWorld();
   }
   togglePause() {
+    if (this.status === 'playing' && this.recordReplay && this.replay) {
+      if (this.replay.length >= MAX_REPLAY_SEGMENTS) this.replay = null;
+      else this.replay.push([0, 8]);
+    }
     if (this.status === 'playing') this.status = 'paused';
     else if (this.status === 'paused') this.status = 'playing';
     this.jumpBuffer = this.accumulator = 0; this.jumpWasDown = false;
@@ -67,6 +78,13 @@ export class TowerEngine {
   }
   private emit(type: GameEvent['type'], value?: number) { this.events.push({ type, x: this.x, y: this.y, value }); }
   private step(dt: number, input: Controls) {
+    if (this.recordReplay && this.mode === 'arcade' && this.replay) {
+      const mask = Number(input.left) | (Number(input.right) << 1) | (Number(input.jump) << 2);
+      const last = this.replay[this.replay.length - 1];
+      if (++this.replayFrames > MAX_REPLAY_FRAMES || (last?.[1] !== mask && this.replay.length >= MAX_REPLAY_SEGMENTS)) this.replay = null;
+      else if (last?.[1] === mask) last[0]++;
+      else this.replay.push([1, mask]);
+    }
     this.time += dt;
     this.comboTime = Math.max(0, this.comboTime - dt);
     if (this.comboTime === 0) this.combo = 0;
@@ -146,6 +164,10 @@ export class TowerEngine {
     if (this.y < this.stormY + .05) { this.status = 'over'; this.emit('over'); }
   }
   drainEvents() { const e = this.events; this.events = []; return e; }
+  getReplay(): RunReplay | null {
+    if (this.status !== 'over' || this.mode !== 'arcade' || !this.replay || this.floor < 1) return null;
+    return { version: 1, seed: this.seed, moves: this.replay.map(([frames, mask]) => [frames, mask]) };
+  }
   snapshot() {
     return { status: this.status, mode: this.mode, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY };
   }

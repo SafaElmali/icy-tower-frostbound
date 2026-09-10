@@ -2,6 +2,10 @@
   command = "npm run build:netlify"
   publish = "dist/client"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 [build.environment]
   NODE_VERSION = "22.19.0"
   DEPLOY_TARGET = "netlify"
