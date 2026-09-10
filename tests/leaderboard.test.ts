@@ -92,3 +92,14 @@ void test('simultaneous finishes retry conflicting writes without losing either 
   assert.equal((await board.list()).length, 50);
   assert.equal((await board.submit({ ...entry, id: 'too-low', score: 1 })).rank, null);
 });
+
+void test('leaderboard keeps catalog cosmetics without trusting client score fields and defaults legacy outfits', () => {
+  const engine = completedRun();
+  const outfit = { hat: 'frost-beanie', sweater: 'berry-knit', trail: 'glacier' };
+  const entry = verifySubmission({ name: 'Harold', replay: engine.getReplay(), outfit, score: 999999 });
+  assert.deepEqual(entry.outfit, outfit); assert.equal(entry.score, engine.score);
+  const legacy = verifySubmission({ name: 'Harold', replay: engine.getReplay() });
+  assert.deepEqual(legacy.outfit, { hat: 'blue-beanie', sweater: 'green-knit', trail: 'rainbow' });
+  assert.deepEqual(verifySubmission({ name: 'Harold', replay: engine.getReplay(), outfit: { hat: '<img>', trail: 'berry-knit' } }).outfit, legacy.outfit);
+  assert.equal(entry.id, legacy.id, 'Changing outfits cannot duplicate a ranked run');
+});

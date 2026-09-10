@@ -10,6 +10,7 @@ const COLORS = [0xffd65c, 0xff71c5, 0x68daff, 0xabf767, 0xb496ff];
 export class ComboStarTrail {
   readonly mesh: THREE.InstancedMesh;
   private stars: Star[] = [];
+  private palette: readonly number[] = COLORS;
   private previous: { x: number; y: number; time: number } | null = null;
   private emissionTime = 0;
   private transform = new THREE.Object3D();
@@ -29,6 +30,11 @@ export class ComboStarTrail {
     this.mesh = new THREE.InstancedMesh(new THREE.ShapeGeometry(shape), material, CAPACITY);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false; this.mesh.count = 0;
+  }
+
+  setPalette(colors: readonly number[]) {
+    this.palette = colors.length ? colors : COLORS;
+    this.stars = []; this.mesh.count = 0; this.emissionTime = 0;
   }
 
   update(state: TrailState) {
@@ -53,7 +59,7 @@ export class ComboStarTrail {
           y: THREE.MathUtils.lerp(this.previous.y, state.y, blend) + .8 - dy * .3 + (this.random() - .5) * .36,
           vx: -dx * .45 + (this.random() - .5) * .45, vy: -dy * .3 + (this.random() - .5) * .5,
           born, life: .7 + this.random() * .4, angle: this.random() * Math.PI * 2, spin: (this.random() - .5) * 7,
-          size: .095 + this.random() * .075, color: COLORS[Math.floor(this.random() * COLORS.length)],
+          size: .095 + this.random() * .075, color: this.palette[Math.floor(this.random() * this.palette.length)],
         });
       }
     } else if (state.status !== 'paused') this.emissionTime = 0;

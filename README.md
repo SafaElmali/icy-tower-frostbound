@@ -16,6 +16,23 @@ Run to jump higher. At high speed, Harold spreads his arms and legs into a star-
 
 Every 10th floor has a wooden number plaque on its front edge. Every 50th floor is a full-width landing stage, providing room to land and build momentum before the next climb. Stages still scroll toward the frost like other floors.
 
+## Unlockable outfits
+
+Open **Outfits** from the title screen, shirt button, or pause/results menu. Equip a hat, sweater, and star-trail palette independently; colors update on the climber immediately. The original blue beanie, green knit, and rainbow stars are always available.
+
+| Achievement | Reward |
+| --- | --- |
+| Reach floor 10 | Frost beanie |
+| Reach floor 50 | Summit beanie |
+| Score 1,000 in one run | Berry knit |
+| Score 5,000 in one run | Aurora knit |
+| Land a 5× combo | Glacier stars |
+| Land a 15× combo | Sunset stars |
+
+Arcade and practice both earn rewards as soon as milestones are reached. Personal bests count across sessions, and existing saved floor/score records earn their corresponding rewards. Progress and equipped items are stored on this browser; clearing browser storage resets them. If storage is unavailable, the wardrobe works for the current session. Trails still require an airborne combo of at least 2×.
+
+New leaderboard entries save the outfit equipped when submitted and show its three badges beside the name. Older entries use the original outfit. Cosmetic IDs are checked against the catalog, but unlock ownership is device-local and client-reported; cosmetics do not affect server-verified scores or ranking.
+
 ## Leaderboard
 
 Open the trophy button to see the all-time top 50 arcade runs. After a completed arcade run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, and combos are replayed and calculated on the server. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.
