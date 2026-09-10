@@ -37,4 +37,8 @@ The gameplay simulation is covered by automated tests. The GLB is checked for a 
 
 ## Netlify
 
+Play: https://icy-tower-frostbound.netlify.app
+
+The public GitHub repository is connected to Netlify. Pushes to `main` automatically build and publish the game.
+
 `npm run build:netlify` produces a static export in `dist/client`. `netlify.toml` configures that build for Netlify. From the linked project, publish it with `netlify deploy --prod --dir=dist/client`. The normal development command and Sites build remain available.
