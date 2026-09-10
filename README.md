@@ -18,6 +18,10 @@ Every 10th floor has a wooden number plaque on its front edge. Every 50th floor 
 
 The layout supports portrait and landscape, device safe areas, and scrolling menus on short screens. Rotating the device or leaving the game pauses the run and clears held controls. Touch devices start in Performance quality; change quality from the main menu. Leaderboard dialogs adjust to the visible screen when the on-screen keyboard opens.
 
+## Quick challenges
+
+Each climb starts three fresh challenges: reach floor 30 with an unbroken combo, collect 10 crystals, and perform 5 wall jumps. Track progress during play and see results when you pause or finish. The combo challenge starts with your first higher-floor landing; letting the 3.8-second timer expire before reaching floor 30 fails it for that run. Passing floor 30 in the air is not enough — land on floor 30 or higher. Wall jumps count fast airborne wall rebounds, not ground-level wall impacts. Completed challenges stay complete until you start again. Challenges work in Classic, Party, and Practice and do not change scoring.
+
 ## Unlockable outfits
 
 Open **Outfits** from the title screen, shirt button, or pause/results menu. Equip a hat, sweater, and star-trail palette independently; colors update on the climber immediately. The original blue beanie, green knit, and rainbow stars are always available.

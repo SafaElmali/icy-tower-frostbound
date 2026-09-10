@@ -4,6 +4,10 @@ export type RankedMode = Exclude<GameMode, 'practice'>;
 export const MODE_LABELS = { arcade: 'Classic', party: 'Party', practice: 'Practice' } as const;
 export const DOUBLE_JUMP_DURATION = 8;
 export type Controls = { left: boolean; right: boolean; jump: boolean };
+export type QuickChallenge = {
+  id: 'combo' | 'crystals' | 'walls'; title: string; description: string;
+  progress: number; target: number; status: 'active' | 'complete' | 'failed' | 'missed';
+};
 export type Platform = { id: number; x: number; y: number; width: number; gem: boolean; collected: boolean; moving: boolean; spring: boolean; origin: number; phase: number };
 export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over'; x: number; y: number; value?: number };
 export const FLOOR_HEIGHT = 2.35;
@@ -25,6 +29,9 @@ export class TowerEngine {
   grounded = true; standingId = 0; facing = 1;
   time = 0; maxY = 0; cameraY = 5.2; stormY = -8;
   floor = 0; score = 0; gems = 0; combo = 0; bestCombo = 0; comboTime = 0;
+  wallJumps = 0;
+  private comboChallengeFloor = 0;
+  private comboChallengeBroken = false;
   doubleJumpTime = 0;
   private doubleJumpUsed = false;
   platforms: Platform[] = [];
@@ -70,6 +77,7 @@ export class TowerEngine {
     this.seed = seed; this.mode = mode; this.status = 'playing';
     this.x = this.y = this.vx = this.vy = this.time = this.maxY = this.floor = this.score = this.gems = this.combo = this.bestCombo = this.comboTime = this.lastFloor = 0;
     this.cameraY = 5.2; this.stormY = -8; this.facing = 1; this.grounded = true; this.standingId = 0;
+    this.wallJumps = this.comboChallengeFloor = 0; this.comboChallengeBroken = false;
     this.accumulator = this.jumpBuffer = 0; this.coyote = .12; this.jumpWasDown = false; this.events = []; this.scrollStartedAt = null;
     this.doubleJumpTime = 0; this.doubleJumpUsed = false;
     this.resetWorld();
@@ -102,7 +110,10 @@ export class TowerEngine {
     this.time += dt;
     this.doubleJumpTime = Math.max(0, this.doubleJumpTime - dt);
     this.comboTime = Math.max(0, this.comboTime - dt);
-    if (this.comboTime === 0) this.combo = 0;
+    if (this.comboTime === 0) {
+      if (this.combo > 0 && this.comboChallengeFloor < 30) this.comboChallengeBroken = true;
+      this.combo = 0;
+    }
     const jumpPressed = input.jump && !this.jumpWasDown;
     if (jumpPressed) this.jumpBuffer = .16;
     this.jumpWasDown = input.jump;
@@ -133,7 +144,10 @@ export class TowerEngine {
     this.x += this.vx * dt;
     if (Math.abs(this.x) > WALL - .28) {
       this.x = Math.sign(this.x) * (WALL - .28);
-      if (Math.abs(this.vx) > 4) { this.vx *= -.83; this.emit('wall'); }
+      if (Math.abs(this.vx) > 4) {
+        this.vx *= -.83; this.emit('wall');
+        if (!this.grounded) this.wallJumps++;
+      }
       else this.vx = 0;
     }
     if (this.grounded) {
@@ -162,6 +176,7 @@ export class TowerEngine {
             this.lastFloor = landing.id;
           }
           this.floor = Math.max(this.floor, landing.id);
+          if (!this.comboChallengeBroken) this.comboChallengeFloor = Math.min(30, this.floor);
           if (landing.spring) {
             this.vy = 19 + Math.abs(this.vx) * .25;
             this.grounded = false; this.standingId = -1; this.coyote = 0; this.jumpBuffer = 0;
@@ -197,7 +212,16 @@ export class TowerEngine {
     return this.rulesVersion === 3 ? { ...recording, version: 3, mode: this.mode } : { ...recording, version: this.rulesVersion };
   }
   snapshot() {
-    return { status: this.status, mode: this.mode, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY, doubleJumpTime: this.doubleJumpTime, doubleJumpReady: this.doubleJumpTime > 0 && !this.doubleJumpUsed };
+    const challenge = (id: QuickChallenge['id'], title: string, description: string, progress: number, target: number, failed = false): QuickChallenge => ({
+      id, title, description, progress: Math.min(progress, target), target,
+      status: progress >= target ? 'complete' : failed ? 'failed' : this.status === 'over' ? 'missed' : 'active',
+    });
+    const challenges = [
+      challenge('combo', 'Unbroken ascent', 'Reach floor 30 without breaking your combo. Keep the chain alive from your first higher-floor landing.', this.comboChallengeFloor, 30, this.comboChallengeBroken),
+      challenge('crystals', 'Crystal collector', 'Collect 10 crystals in one run.', this.gems, 10),
+      challenge('walls', 'Wall jumper', 'Perform 5 wall jumps in one run. Hit a wall at speed while airborne to rebound.', this.wallJumps, 5),
+    ];
+    return { status: this.status, mode: this.mode, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY, wallJumps: this.wallJumps, challenges, doubleJumpTime: this.doubleJumpTime, doubleJumpReady: this.doubleJumpTime > 0 && !this.doubleJumpUsed };
   }
 }
 export type Snapshot = ReturnType<TowerEngine['snapshot']>;
