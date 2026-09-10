@@ -9,6 +9,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ClimberMotion } from './climber-motion';
 import { ComboStarTrail } from './combo-star-trail';
+import { TowerInterior } from './tower-interior';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 
 type Ledge = { group: THREE.Group; gem?: THREE.Mesh; id: number };
@@ -18,7 +19,7 @@ const damp = (a: number, b: number, rate: number, dt: number) => THREE.MathUtils
 export class TowerWorld {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
-  camera = new THREE.OrthographicCamera(-12, 12, 8, -8, .1, 100);
+  camera = new THREE.PerspectiveCamera(34, 1, .1, 110);
   root = new THREE.Group();
   character = new THREE.Group();
   private composer: EffectComposer;
@@ -35,7 +36,8 @@ export class TowerWorld {
   private tumble = new THREE.Group();
   private motion = new ClimberMotion();
   private starTrail = new ComboStarTrail();
-  private backdrop?: THREE.Texture;
+  private interior: TowerInterior;
+  private cameraX = 0;
   private flecks: Fleck[] = [];
   private columns = new THREE.Group();
   private snow: THREE.Points;
@@ -62,7 +64,8 @@ export class TowerWorld {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
     this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.scene.fog = new THREE.FogExp2(0x101f2c, .022);
+    this.scene.background = new THREE.Color(0x07121e);
+    this.scene.fog = new THREE.FogExp2(0x101f2c, .018);
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     const environment = new RoomEnvironment();
     this.env = pmrem.fromScene(environment, .04);
@@ -82,6 +85,7 @@ export class TowerWorld {
     this.stone = new THREE.MeshStandardMaterial({ color: 0x405a65, roughness: .89, metalness: .08, bumpMap: stoneNoise, bumpScale: .12, roughnessMap: stoneNoise });
     this.iceMat = new THREE.MeshPhysicalMaterial({ color: 0x4cbbcf, roughness: .2, metalness: .22, clearcoat: 1, clearcoatRoughness: .16, emissive: 0x185160, emissiveIntensity: .45, bumpMap: stoneNoise, bumpScale: .055 });
     this.fallbackCharacter(); this.buildColumns(); this.batchMeshes(this.columns);
+    this.interior = new TowerInterior(stoneNoise); this.root.add(this.interior.group);
     const shadowTexture = this.radialTexture();
     this.groundShadow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, .42), new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, opacity: .48, depthWrite: false, color: 0x071320 }));
     this.groundShadow.rotation.x = -Math.PI / 2; this.root.add(this.groundShadow);
@@ -98,11 +102,6 @@ export class TowerWorld {
     this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(canvas); this.resize();
   }
   async load() {
-    const texture = await new THREE.TextureLoader().loadAsync('/assets/cathedral.png');
-    if (this.disposed) { texture.dispose(); return; }
-    texture.colorSpace = THREE.SRGBColorSpace; this.backdrop = texture; this.scene.background = texture;
-    this.scene.backgroundIntensity = .55;
-    this.resize();
     // The custom GLB is optional while the playable model remains available.
     try {
       const gltf = await new GLTFLoader().loadAsync('/assets/harold.glb');
@@ -207,13 +206,9 @@ export class TowerWorld {
     const { width, height } = this.renderer.domElement.getBoundingClientRect();
     if (!width || !height) return;
     const aspect = width / height; const h = Math.max(15.5, 15 / aspect);
-    this.camera.left = -h * aspect / 2; this.camera.right = h * aspect / 2; this.camera.top = h / 2; this.camera.bottom = -h / 2; this.camera.updateProjectionMatrix();
+    this.camera.aspect = aspect; this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(h / 52)); this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false); this.composer.setSize(width, height);
-    if (this.backdrop) {
-      const imageAspect = 1.5;
-      this.backdrop.repeat.set(Math.min(1, aspect / imageAspect), Math.min(1, imageAspect / aspect));
-      this.backdrop.offset.set((1 - this.backdrop.repeat.x) / 2, (1 - this.backdrop.repeat.y) / 2);
-    }
+
   }
   effect(e: GameEvent, time: number) {
     if (e.type === 'jump') this.motion.jump(e.value ?? 0, time);
@@ -234,10 +229,12 @@ export class TowerWorld {
     const aspect = this.renderer.domElement.clientWidth / this.renderer.domElement.clientHeight;
     this.cameraY = damp(this.cameraY, e.cameraY, e.cameraY < this.cameraY ? 10 : 6, dt);
     this.shake *= Math.exp(-12 * dt); this.squish *= Math.exp(-12 * dt);
-    this.camera.position.set(Math.sin(t * 63) * this.shake, this.cameraY + 3.8 + Math.cos(t * 58) * this.shake, 26);
+    this.cameraX = damp(this.cameraX, menu ? -.45 : e.x * .16, 2.5, dt);
+    this.camera.position.set(this.cameraX + Math.sin(t * 63) * this.shake, this.cameraY + 3.8 + Math.cos(t * 58) * this.shake, 26);
     this.camera.lookAt(0, this.cameraY, 0);
     this.root.position.x = damp(this.root.position.x, menu && aspect > 1 ? 3.7 : 0, 4, dt);
     this.columns.position.y = Math.floor(this.cameraY / 20) * 20;
+    this.interior.update(this.cameraY, menu ? t : e.time, this.high);
     const keep = new Set<number>();
     for (const p of e.platforms) {
       if (p.y < this.cameraY - 15 || p.y > this.cameraY + 18) continue;
@@ -281,6 +278,6 @@ export class TowerWorld {
     const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>(), textures = new Set<THREE.Texture>();
     this.scene.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Points) { geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m); } });
     for (const m of materials) { for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value); m.dispose(); }
-    geometries.forEach(g => g.dispose()); textures.forEach(t => t.dispose()); this.backdrop?.dispose(); this.env.dispose(); this.fleckGeometry.dispose(); this.fleckMat.dispose(); this.composer.dispose(); this.bloom.dispose(); this.renderer.dispose();
+    geometries.forEach(g => g.dispose()); textures.forEach(t => t.dispose()); this.env.dispose(); this.fleckGeometry.dispose(); this.fleckMat.dispose(); this.composer.dispose(); this.bloom.dispose(); this.renderer.dispose();
   }
 }

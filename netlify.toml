@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build:netlify"
+  publish = "dist/client"
+
+[build.environment]
+  NODE_VERSION = "22.19.0"
+  DEPLOY_TARGET = "netlify"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
