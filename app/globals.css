@@ -28,6 +28,9 @@
 @media(max-width:760px){.challenges-preview{display:none}.title-screen{left:8%}.challenges-hud{top:275px;left:24px;width:220px;padding:12px}.challenges-compact .challenge-label strong{font-size:12px}.challenges-compact .challenges-heading>span{font-size:12px}.challenges-compact ul{gap:10px}.challenges-hud .challenge-label{flex-wrap:wrap;column-gap:6px;row-gap:0}.extra-menu-actions button{font-size:13px}.extra-menu-actions{gap:16px}}
 @media(max-height:720px) and (min-width:761px){.challenges-hud{top:105px;left:auto;right:5%;width:250px}.combo-hud{top:300px}.challenges-preview{padding:20px;transform:translateY(-45%)}.challenges-preview ul{gap:14px}.challenges-preview .challenges-footnote{display:none}}
 @media(max-height:700px) and (max-width:760px){.challenges-hud{top:96px;left:auto;right:18px;width:190px;padding:10px}.challenges-hud .challenges-heading{gap:5px}.challenges-hud .challenges-heading svg,.challenges-hud li>svg{display:none}.combo-hud{top:278px;right:24px}.title-screen>p{display:none}.title-screen h1{font-size:76px;margin:18px 0}.title-screen .personal-best{margin-top:12px;padding-top:12px}.title-screen .subtitle{margin-bottom:20px}.title-screen .enter-hint{margin-bottom:12px}.title-screen{top:48%}}
+/* Party controls and power-up status extend the frozen tower palette. */
+.mode-picker{display:flex;align-items:center;gap:8px;color:#b0c7cf;font-size:14px}.mode-picker select{color:#e7f0ed;background:#132c39;border:1px solid #92b3be55;border-radius:4px;padding:5px 26px 5px 8px;font-size:14px;cursor:pointer}.party-hud{display:flex;flex-direction:column;gap:6px;margin-top:18px;padding:12px;border-left:2px solid #ff8fce;background:#172332cc;max-width:255px}.party-hud strong{font-size:13px;color:#ffb3df;letter-spacing:.8px}.party-hud span{font-size:12px;color:#f9e3f1}.party-hud small{font-size:12px;color:#b5c7d4}.ranking-tabs{min-height:0;gap:16px}.ranking-tabs>[data-slot=tabs-list]{height:40px;width:100%}.ranking-tabs [data-slot=tabs-trigger]{font-size:14px}.ranking-tabs [data-slot=tabs-content]{display:flex;flex-direction:column;min-height:0}.ranking-tabs [data-slot=tabs-trigger][data-active]{color:#f5c4e2}.title-screen .menu-actions{width:310px}.title-screen .menu-actions button{font-size:14px}.title-screen .enter-hint{line-height:1.6}
+@media(max-width:760px){.party-hud{max-width:190px;padding:9px;margin-top:12px}.party-hud strong,.party-hud span,.party-hud small{font-size:12px}.mode-picker{font-size:14px}.title-screen .menu-actions{max-width:100%}.title-screen .menu-actions button{font-size:14px}}
 
 /* Touch layouts keep the playfield clear and controls inside device safe areas. */
 :root {
@@ -181,3 +184,8 @@
   .challenges-hud{top:calc(70px + var(--safe-top));left:auto;right:calc(130px + var(--safe-right));width:220px}
   .combo-hud{top:calc(68px + var(--safe-top))}
 }
+@media(max-width:760px),(any-pointer:coarse){.mode-picker select{min-height:44px}.title-screen .menu-actions{width:100%}}
+@media(max-height:500px) and (orientation:landscape){.party-hud{margin-top:6px;padding:6px;gap:3px}.party-hud small{display:none}}
+
+@media(min-width:761px) and (min-height:721px){.mode-party .challenges-hud{left:auto;right:6%;top:auto;bottom:100px}}
+@media(max-width:760px) and (min-height:701px){.mode-party .challenges-hud{top:calc(365px + var(--safe-top));left:auto;right:calc(18px + var(--safe-right))}}

@@ -24,6 +24,6 @@ export function QuickChallenges({ challenges, compact = false, preview = false }
       </li>;
     })}</ul>
     {!preview && <output className="sr-only">{completed.length ? `Challenge complete: ${completed.map(challenge => challenge.title).join(', ')}.` : ''}{challenges.some(challenge => challenge.status === 'failed') ? ' Unbroken ascent failed. Try again next run.' : ''}</output>}
-    {!compact && <p className="challenges-footnote">Three fresh goals every climb. Available in Arcade and Practice.</p>}
+    {!compact && <p className="challenges-footnote">Three fresh goals every climb. Available in Classic, Party, and Practice.</p>}
   </section>;
 }

@@ -9,15 +9,15 @@ const challenge = (engine: TowerEngine, id: string) => engine.snapshot().challen
 // Place the climber just above a ledge to exercise the real landing path.
 function land(engine: TowerEngine, id: number) {
   const y = id * FLOOR_HEIGHT;
-  engine.platforms = [{ id, x: 0, y, width: 4, gem: false, collected: false, moving: false, origin: 0, phase: 0 }];
+  engine.platforms = [{ id, x: 0, y, width: 4, gem: false, collected: false, moving: false, spring: false, origin: 0, phase: 0 }];
   engine.x = 0; engine.y = y + .01; engine.vx = 0; engine.vy = -3;
   engine.grounded = false; engine.standingId = -1;
   tick(engine);
   assert.equal(engine.standingId, id);
 }
 
-void test('an uninterrupted climb completes floor 30 in both modes and stays complete after expiration', () => {
-  for (const mode of ['arcade', 'practice'] as GameMode[]) {
+void test('an uninterrupted climb completes floor 30 in every mode and stays complete after expiration', () => {
+  for (const mode of ['arcade', 'party', 'practice'] as GameMode[]) {
     const engine = new TowerEngine(); engine.start(mode);
     tick(engine, 600); // Waiting before the first landing cannot break a nonexistent combo.
     assert.equal(challenge(engine, 'combo').status, 'active');
