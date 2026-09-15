@@ -1,5 +1,7 @@
 import type { ComboMilestone } from './combo-feedback';
-import { FrenzyRhythm } from './frenzy-rhythm';
+import { FrenzyRhythm } from './frenzy-rhythm.ts';
+import { TowerSampleBank } from './tower-samples.ts';
+import { TowerMusic } from './tower-music.ts';
 
 const COMBO_MELODIES: Record<ComboMilestone, readonly number[]> = {
   3: [293.66, 440],
@@ -8,7 +10,19 @@ const COMBO_MELODIES: Record<ComboMilestone, readonly number[]> = {
   15: [739.99, 880, 1108.73, 1174.66],
 };
 
-/** Quiet synthesized wind, resonant crystal notes, and tactile movement sounds. */
+// Multiple crystals or hazard fragments can arrive in the same simulation step.
+const CUE_COOLDOWNS: Readonly<Record<string, number>> = {
+  jump: 0.055,
+  land: 0.075,
+  wall: 0.075,
+  gem: 0.065,
+  crumble: 0.12,
+  collapse: 0.16,
+  'icicle-warning': 0.18,
+  'bat-warning': 0.18,
+};
+
+/** Recorded snow, ice and movement foley with musical cues and offline synthesis. */
 export class TowerAudio {
   private context?: AudioContext;
   private master?: GainNode;
@@ -19,14 +33,28 @@ export class TowerAudio {
   private paused = false;
   private rhythm = new FrenzyRhythm();
   private sources: AudioScheduledSourceNode[] = [];
+  private samples?: TowerSampleBank;
+  private music?: TowerMusic;
+  private musicEnabled = true;
+  private voices = new Map<AudioScheduledSourceNode, AudioNode[]>();
+  private lastCue = new Map<string, number>();
+  private disposed = false;
   private init() {
     if (this.context) return this.context;
     const ctx = new AudioContext();
     this.context = ctx;
     const master = ctx.createGain();
     master.gain.value = this.enabled ? 0.65 : 0;
-    master.connect(ctx.destination);
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -12;
+    compressor.knee.value = 10;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.16;
+    master.connect(compressor);
+    compressor.connect(ctx.destination);
     this.master = master;
+    this.music = new TowerMusic(ctx, master);
     const rhythmGain = ctx.createGain();
     rhythmGain.gain.value = this.paused ? 0 : 1;
     rhythmGain.connect(master);
@@ -49,6 +77,8 @@ export class TowerAudio {
     ambience.gain.value = 0.23;
     ambience.connect(master);
     this.ambience = ambience;
+    const fallback = ctx.createGain();
+    fallback.connect(ambience);
     const noise = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate);
     const data = noise.getChannelData(0);
     let brown = 0;
@@ -63,7 +93,7 @@ export class TowerAudio {
     filter.type = 'lowpass';
     filter.frequency.value = 750;
     wind.connect(filter);
-    filter.connect(ambience);
+    filter.connect(fallback);
     wind.start();
     this.sources.push(wind);
     // A subtle open fifth: atmosphere without a repetitive music loop.
@@ -74,30 +104,63 @@ export class TowerAudio {
       const gain = ctx.createGain();
       gain.gain.value = 0.021;
       osc.connect(gain);
-      gain.connect(ambience);
-      gain.connect(reverb);
+      gain.connect(fallback);
       osc.start();
       this.sources.push(osc);
     }
+    this.samples = new TowerSampleBank(ctx);
+    void this.samples.preload((buffer) => {
+      if (this.disposed) return;
+      const recordedWind = ctx.createBufferSource();
+      const fade = ctx.createGain();
+      recordedWind.buffer = buffer;
+      recordedWind.loop = true;
+      recordedWind.connect(fade);
+      fade.connect(ambience);
+      fade.gain.setValueAtTime(0, ctx.currentTime);
+      fade.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.5);
+      fallback.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+      this.sources.forEach((source) => source.stop(ctx.currentTime + 0.6));
+      recordedWind.start();
+      this.sources.push(recordedWind);
+    });
     return ctx;
   }
   setEnabled(enabled: boolean) {
+    if (this.disposed) return;
     this.enabled = enabled;
-    if (!enabled) this.rhythm.observe(0, false);
-    if (!this.context && enabled) this.init();
-    if (this.context && this.master) {
-      void this.context.resume().catch(() => {});
-      this.master.gain.setTargetAtTime(
-        enabled ? 0.65 : 0,
-        this.context.currentTime,
-        0.08,
-      );
+    if (!enabled) {
+      this.rhythm.observe(0, false);
+      this.stopVoices();
     }
+    try {
+      if (!this.context && enabled) this.init();
+      if (this.context && this.master) {
+        void this.context.resume().catch(() => {});
+        this.master.gain.setTargetAtTime(
+          enabled ? 0.65 : 0,
+          this.context.currentTime,
+          0.025,
+        );
+        this.music?.setPlaying(enabled && this.musicEnabled && !this.paused);
+      }
+    } catch {
+      // Sound settings must also work on devices without Web Audio.
+    }
+  }
+  setMusicEnabled(enabled: boolean) {
+    if (this.musicEnabled === enabled || this.disposed) return;
+    this.musicEnabled = enabled;
+    this.music?.setPlaying(enabled && this.enabled && !this.paused);
   }
   setPaused(paused: boolean) {
     if (this.paused === paused) return;
     this.paused = paused;
-    if (paused) this.rhythm.observe(0, false);
+    this.music?.setPlaying(!paused && this.enabled && this.musicEnabled);
+    if (paused) {
+      this.rhythm.observe(0, false);
+      this.stopVoices();
+    }
     if (this.context && this.rhythmGain)
       this.rhythmGain.gain.setTargetAtTime(
         paused ? 0 : 1,
@@ -120,12 +183,41 @@ export class TowerAudio {
     if (beat !== null) this.play(`frenzy-beat-${beat}`);
   }
   play(kind: string, comboMilestone: ComboMilestone = 3) {
-    if (!this.enabled) return;
+    if (!this.enabled || this.disposed) return;
     try {
       const ctx = this.init();
       void ctx.resume().catch(() => {});
       const now = ctx.currentTime;
+      this.music?.setPlaying(this.musicEnabled && !this.paused);
+      if (
+        [
+          'icicle-warning',
+          'bat-warning',
+          'hurt',
+          'combo',
+          'encounter',
+          'frenzy',
+        ].includes(kind)
+      )
+        this.music?.duck(kind === 'frenzy' ? 6 : 0.65);
       const isRhythm = kind.startsWith('frenzy-beat-');
+      if (isRhythm && this.paused) return;
+      const last = this.lastCue.get(kind);
+      if (last !== undefined && now - last < (CUE_COOLDOWNS[kind] ?? 0)) return;
+      this.lastCue.set(kind, now);
+      const sample = this.samples?.take(kind);
+      if (sample) {
+        const source = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        source.buffer = sample.buffer;
+        source.playbackRate.value = sample.rate;
+        gain.gain.value = sample.volume;
+        source.connect(gain);
+        gain.connect(this.master!);
+        this.track(source, [gain]);
+        source.start(now);
+        if (!sample.layered) return;
+      }
       const note = (
         frequency: number,
         end: number,
@@ -134,6 +226,7 @@ export class TowerAudio {
         delay = 0,
         type: OscillatorType = 'sine',
       ) => {
+        if (this.voices.size >= 48) return;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         const time = now + delay;
@@ -141,7 +234,10 @@ export class TowerAudio {
         osc.frequency.setValueAtTime(frequency, time);
         osc.frequency.exponentialRampToValueAtTime(end, time + duration);
         gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(amplitude, time + 0.009);
+        gain.gain.linearRampToValueAtTime(
+          amplitude * (sample ? 0.65 : 1),
+          time + 0.009,
+        );
         gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
         osc.connect(gain);
         if (isRhythm) gain.connect(this.rhythmGain!);
@@ -149,6 +245,7 @@ export class TowerAudio {
           gain.connect(this.master!);
           gain.connect(this.reverb!);
         }
+        this.track(osc, [gain]);
         osc.start(time);
         osc.stop(time + duration + 0.03);
       };
@@ -218,7 +315,46 @@ export class TowerAudio {
       /* A blocked audio device must never interrupt gameplay. */
     }
   }
+  private track(source: AudioScheduledSourceNode, nodes: AudioNode[]) {
+    // Keep polyphony bounded during a burst of pickups or collapsing platforms.
+    if (this.voices.size >= 48) {
+      const oldest = this.voices.keys().next().value!;
+      oldest.stop();
+      oldest.disconnect();
+      this.voices.get(oldest)?.forEach((node) => node.disconnect());
+      this.voices.delete(oldest);
+    }
+    this.voices.set(source, nodes);
+    source.onended = () => {
+      source.disconnect();
+      nodes.forEach((node) => node.disconnect());
+      this.voices.delete(source);
+    };
+  }
+  private stopVoices() {
+    this.voices.forEach((nodes, source) => {
+      try {
+        source.stop();
+      } catch {
+        /* Already stopped. */
+      }
+      source.disconnect();
+      nodes.forEach((node) => node.disconnect());
+    });
+    this.voices.clear();
+  }
+  resetRun() {
+    this.stopVoices();
+    this.lastCue.clear();
+    this.rhythm.observe(0, false);
+    this.setPaused(false);
+  }
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.samples?.dispose();
+    this.music?.dispose();
+    this.stopVoices();
     this.sources.forEach((s) => {
       try {
         s.stop();

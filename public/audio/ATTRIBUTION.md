@@ -1,0 +1,40 @@
+# Frostbound audio
+
+The imported recordings below are offered under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) by their source pages, checked on September 15, 2026. Thank you to their creators. Audio ships with the game; playback never contacts these sites.
+
+| Creator / pack | Source | Used for |
+| --- | --- | --- |
+| Kenney — Impact Sounds | https://kenney.nl/assets/impact-sounds | Snow and concrete landings, wall impacts, glass pickup textures, hurt and stomp impacts |
+| Kenney — RPG Audio | https://kenney.nl/assets/rpg-audio | Cloth jump whooshes, wall movement, knife-swish dodges, book-flip bat flutters |
+| Kenney — Digital Audio | https://kenney.nl/assets/digital-audio | Jump accents, frenzy activation / ending, game-over descent |
+| bart — Ice spells, using Stephan's recording from pdsounds | https://opengameart.org/content/ice-spells | Crumbling platforms, collapse, icicle warning, encounter and hurt textures |
+| Écrivain — Icy Heights (`wind.ogg`) | https://opengameart.org/content/icy-heights | Tower wind loop |
+| Joth — Black Diamond | https://opengameart.org/content/black-diamond | Looping 143 BPM background music |
+
+The WAVs are edited mixes, not untouched source recordings: silence trimmed, pitch / speed adjusted, layers mixed, DC removed, tails faded, and peaks balanced to 0.72. The wind is converted to mono with a one-second crossfade at the loop boundary and encoded as MP3. `sources.json` records each source filename, SHA-256 and layer settings. Kenney's original license notices are retained in `licenses/`.
+
+The combo melodies, crystal overtones, frenzy rhythm and fallback synthesis are authored in `lib/tower-audio.ts`. They remain synchronized with game events. The imported files supply the physical textures underneath the musical cues.
+
+## Rebuild
+
+Download and extract each pack into a source directory with these subfolders:
+
+- `impact-sounds/Audio/` — [official ZIP](https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip)
+- `rpg-audio/Audio/` — [official ZIP](https://kenney.nl/media/pages/assets/rpg-audio/8e99002d76-1677590336/kenney_rpg-audio.zip)
+- `digital-audio/Audio/` — [official ZIP](https://kenney.nl/media/pages/assets/digital-audio/216eac4753-1677590265/kenney_digital-audio.zip)
+- `ice-spells/` — [official ZIP](https://opengameart.org/sites/default/files/icespells.zip)
+- `icy-heights/wind.ogg` — [original wind](https://opengameart.org/sites/default/files/wind.ogg)
+
+Run `python3 scripts/prepare-audio.py /path/to/source-directory` with FFmpeg installed. Python uses only its standard library. The output is 22 short 24 kHz mono PCM WAVs and one wind MP3, approximately 755 KiB in total.
+
+To replace a sound later, keep its filename or update `lib/tower-samples.ts`, balance its peak to the other samples, and update these credits and `sources.json`. Each movement cue rotates through its available variants. Missing or undecodable files fall back to synthesis without delaying gameplay.
+
+## Background music
+
+**Black Diamond** by **Joth** is a 143 BPM drum-and-bass loop composed for icy racing levels. The [creator's source page](https://opengameart.org/content/black-diamond) offers it under CC0, with credit appreciated but optional.
+
+The download used here is the OGG copy bundled with [SuperTux Advance](https://github.com/kelvinshadewing/supertux-advance/blob/main/res/mus/blackdiamond.ogg); Joth's source page links that game's use of the track. The original OpenGameArt download was timing out. `music.json` records both URLs, the source hash, output hash, duration, and conversion settings.
+
+Rebuild with `python3 scripts/prepare-music.py /path/to/blackdiamond.ogg`. This preserves the full track and converts it to 44.1 kHz stereo MP3 at 128 kbps, with -18 LUFS / -2 dBTP loudness targets. It is separate from the sound-effect manifest so rebuilding effects does not replace the soundtrack metadata.
+
+The game streams the local MP3 through its audio mixer. Music loops at a low level, pauses with gameplay, resumes from the same position, and briefly dips beneath hazard/reward cues. **Menu → Settings → Background music** controls it independently; **Sound** mutes all audio. The race header also provides a music toggle. No music service or external playback request is required.

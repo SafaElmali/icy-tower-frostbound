@@ -169,6 +169,7 @@ export default function Home() {
   const [error, setError] = useState('');
   const [mode, setMode] = useState<GameMode>('arcade');
   const [sound, setSound] = useState(true);
+  const [music, setMusic] = useState(true);
   const [quality, setQuality] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
   const reducedMotionRef = useRef(false);
@@ -328,7 +329,7 @@ export default function Home() {
     setRace(ghost.current?.snapshot(e) ?? null);
     setNewGhost(false);
     setGhostUnavailable(false);
-    audio.current?.setPaused(false);
+    audio.current?.resetRun();
   }
 
   function saveProfile(next: WardrobeProfile) {
@@ -367,6 +368,7 @@ export default function Home() {
   function tone(type: string, milestone?: ComboMilestone) {
     if (!soundRef.current) return;
     audio.current ??= new TowerAudio();
+    audio.current.setPaused(engine.current?.status !== 'playing');
     audio.current.play(type, milestone);
   }
   function begin(selectedMode = mode) {
@@ -1570,6 +1572,19 @@ export default function Home() {
                   />
                 </label>
                 <label>
+                  <span>Background music</span>
+                  <input
+                    type="checkbox"
+                    checked={music}
+                    onChange={(event) => {
+                      const enabled = event.target.checked;
+                      setMusic(enabled);
+                      audio.current ??= new TowerAudio();
+                      audio.current.setMusicEnabled(enabled);
+                    }}
+                  />
+                </label>
+                <label>
                   <span>Reduce motion</span>
                   <input
                     type="checkbox"
@@ -1771,8 +1786,9 @@ export default function Home() {
                 seconds, with an extra speed increase every 50 floors. Each
                 50-floor milestone also brings narrower regular ledges; the
                 full-width stages give you room to prepare. Time and pace appear
-                below your score. Pausing freezes both. Practice removes automatic
-                scrolling; older friend challenges keep their original pace.
+                below your score. Pausing freezes both. Practice removes
+                automatic scrolling; older friend challenges keep their original
+                pace.
               </p>
             </div>
           </div>
@@ -1784,9 +1800,9 @@ export default function Home() {
                 Cracked ledges crumble about a second after landing — jump away.
                 Icicles drop without landing markers, and bats enter without
                 spawn warnings. Both appear more often as you climb and can
-                arrive together. Land on a bat from above for a
-                powerful bounce and bonus points. Side hits knock you back, with
-                a brief recovery window.
+                arrive together. Land on a bat from above for a powerful bounce
+                and bonus points. Side hits knock you back, with a brief
+                recovery window.
               </p>
             </div>
           </div>

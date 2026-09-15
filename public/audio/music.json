@@ -1,0 +1,15 @@
+{
+  "title": "Black Diamond",
+  "artist": "Joth",
+  "bpm": 143,
+  "license": "CC0-1.0",
+  "source": "https://opengameart.org/content/black-diamond",
+  "originalDownload": "https://opengameart.org/sites/default/files/Black%20Diamond.mp3",
+  "downloadedFrom": "https://raw.githubusercontent.com/kelvinshadewing/supertux-advance/main/res/mus/blackdiamond.ogg",
+  "sourceSha256": "3fcf32f840f9308e077ad31ec95fdadaa416afd0b1cde1c2f5667ac578f25f53",
+  "file": "black-diamond.mp3",
+  "sha256": "2c33d7c66fed3e1f5f779ab4ad3351f1066a878cf916004ea8376f3962ebaeaf",
+  "duration": 201.456327,
+  "bytes": 3224222,
+  "processing": "Full track; loudness normalized to -18 LUFS / -2 dBTP; 44.1 kHz stereo MP3 at 128 kbps"
+}

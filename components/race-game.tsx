@@ -9,6 +9,7 @@ import {
   Copy,
   Flag,
   Hand,
+  Music2,
   RotateCcw,
   Users,
   Volume2,
@@ -38,6 +39,7 @@ import {
 import { TowerEngine, type Controls } from '@/lib/tower-engine';
 import { TowerInput } from '@/lib/tower-input';
 import { TowerAudio } from '@/lib/tower-audio';
+import { ComboFeedbackTracker } from '@/lib/combo-feedback';
 import { readProfile, OUTFIT_STORAGE_KEY } from '@/lib/outfits';
 import type { TowerWorld } from '@/lib/tower-world';
 import styles from './race-game.module.css';
@@ -66,6 +68,7 @@ export function RaceGame() {
   const rival = useRef(new RaceRival());
   const input = useRef(new TowerInput());
   const audio = useRef<TowerAudio | null>(null);
+  const comboFeedback = useRef(new ComboFeedbackTracker());
   const soundRef = useRef(true);
   const roomRef = useRef<RaceView | null>(null);
   const [room, setRoom] = useState<RaceView | null>(null);
@@ -79,6 +82,7 @@ export function RaceGame() {
   const [copied, setCopied] = useState(false);
   const [invite, setInvite] = useState('');
   const [sound, setSound] = useState(true);
+  const [music, setMusic] = useState(true);
   const [clock, setClock] = useState(0);
   const [floor, setFloor] = useState(0);
   const [climbEnded, setClimbEnded] = useState(false);
@@ -237,6 +241,7 @@ export function RaceGame() {
     setBusy(true);
     setNetworkError('');
     audio.current ??= new TowerAudio();
+    audio.current.setPaused(true);
     audio.current.setEnabled(soundRef.current);
     try {
       await client.send({
@@ -508,7 +513,12 @@ export function RaceGame() {
       resetInput();
       audio.current?.setPaused(true);
     };
-    const focus = () => audio.current?.setPaused(false);
+    const focus = () =>
+      audio.current?.setPaused(
+        !runner.current?.started ||
+          !!runner.current.recording ||
+          roomRef.current?.phase === 'finished',
+      );
     window.addEventListener('keydown', keyDown);
     window.addEventListener('keyup', keyUp);
     window.addEventListener('blur', blur);
@@ -561,13 +571,31 @@ export function RaceGame() {
             if (!wasRecorded && local.recording) wakePoll.current?.();
             if (!wasStarted && local.started) {
               resetInput();
+              comboFeedback.current.reset();
+              audio.current?.resetRun();
               canvas.current?.focus({ preventScroll: true });
               audio.current?.play('jump');
             }
             peer.current?.sendPose(current.round, local.pose);
-            for (const event of local.engine.drainEvents()) {
+            audio.current?.setPaused(
+              !local.started ||
+                !!local.recording ||
+                current.phase === 'finished' ||
+                !document.hasFocus(),
+            );
+            const events = local.engine.drainEvents();
+            const milestone = comboFeedback.current.observe(
+              local.engine.combo,
+              local.engine.comboTime,
+            );
+            if (
+              milestone !== null &&
+              !events.some((event) => event.type === 'frenzy')
+            )
+              audio.current?.play('combo', milestone);
+            for (const event of events) {
               scene.effect(event, local.engine.time);
-              audio.current?.play(event.type);
+              if (event.type !== 'combo') audio.current?.play(event.type);
             }
           }
           rival.current.advance(now, dt);
@@ -730,10 +758,26 @@ export function RaceGame() {
             setSound(enabled);
             soundRef.current = enabled;
             audio.current ??= new TowerAudio();
+            audio.current.setPaused(
+              !runner.current?.started || !!runner.current.recording,
+            );
             audio.current.setEnabled(enabled);
           }}
         >
           {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
+        </button>
+        <button
+          type="button"
+          aria-label={music ? 'Mute music' : 'Enable music'}
+          aria-pressed={music}
+          onClick={() => {
+            const enabled = !music;
+            setMusic(enabled);
+            audio.current ??= new TowerAudio();
+            audio.current.setMusicEnabled(enabled);
+          }}
+        >
+          <Music2 size={18} />
         </button>
       </header>
       {(networkError || renderError) && (

@@ -120,7 +120,8 @@ Classic, Party, and Practice runs can be shared, and a challenge keeps its origi
 - `scripts/climber.blend`: editable Blender source.
 - `scripts/build-climber.py`: rebuilds the character asset with Blender 5.2.
 - Ledges and architectural geometry use physically based materials with procedural surface detail. Static meshes are batched by material.
-- Wind, ambient tones, movement, and crystal sounds are synthesized locally. No audio service is required.
+- Movement, snow landings, glass pickups, ice hazards and wind use 23 locally bundled CC0 audio clips (about 755 KiB). Jump, landing, wall and pickup variations reduce repetition; combo melodies and frenzy rhythm remain synchronized synthesized cues. A bounded mixer controls overlapping effects, pause/mute/retry stop active effects, and synthesis is the immediate fallback while recordings load or if a file fails. See `public/audio/ATTRIBUTION.md` for sources and rebuilding instructions.
+- Background music is **Black Diamond** by **Joth**, a CC0 143 BPM winter-themed drum-and-bass loop. The local MP3 streams quietly under gameplay, dips during warnings/rewards, and pauses/resumes with the game. **Menu → Settings → Background music** (or the race header's music button) can mute it independently of effects; **Sound** still mutes everything. Music credits and reproducible conversion details are in `public/audio/ATTRIBUTION.md` and `scripts/prepare-music.py`.
 
 This is an independent Icy Tower-inspired browser prototype, with no original game assets or affiliation. It is not a commercial AAA release. High quality enables bloom and soft shadows; performance quality reduces rendering cost. WebGL is required.
 
