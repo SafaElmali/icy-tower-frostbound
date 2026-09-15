@@ -990,11 +990,13 @@ export default function Home() {
           <section
             className={`title-screen ${challenge || daily || challengeError ? 'has-challenge' : ''}`}
           >
-            <h1>
-              ICY
-              <br />
-              <span>TOWER</span>
-            </h1>
+            <div className="title-heading">
+              <h1>
+                ICY
+                <br />
+                <span>TOWER</span>
+              </h1>
+            </div>
             <div className="subtitle">
               <i /> F R O S T B O U N D <i />
             </div>

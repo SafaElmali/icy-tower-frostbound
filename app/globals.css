@@ -194,8 +194,9 @@
     align-content: start; padding-bottom: 8px;
   }
   .title-screen .eyebrow, .title-screen .subtitle, .title-screen > p, .title-screen .enter-hint { display: none; }
-  .title-screen h1 { grid-column: 1; grid-row: 1 / 6; align-self: center; font-size: clamp(48px, min(10.5vw, 20dvh), 94px); margin: 0; }
-  .title-screen > :not(h1) { grid-column: 2; }
+  .title-screen .title-heading { grid-column: 1; grid-row: 1 / 4; align-self: center; }
+  .title-screen h1 { font-size: clamp(48px, min(10.5vw, 20dvh), 94px); margin: 0; }
+  .title-screen > :not(.title-heading) { grid-column: 2; }
   .title-screen .touch-hint { margin: 4px 0; }
   .title-screen .personal-best { margin-top: 0; padding-top: 8px; }
   .score-hud { top: calc(64px + var(--safe-top)); }
@@ -296,27 +297,29 @@
   max-width: calc(100% - 48px); max-height: calc(100dvh - 160px);
   transform: translateY(-50%); padding: 4px; overflow-y: auto;
 }
-.state-ready .title-screen h1 { margin: 0 0 28px; font-size: clamp(88px, min(9.5vw, 20dvh), 142px); }
+/* Fit the full word inside its actual column, including the landscape grid. */
+.title-heading { container-type: inline-size; min-width: 0; }
+.state-ready .title-screen h1 { margin: 0 0 28px; font-size: min(28cqi, clamp(88px, min(9.5vw, 20dvh), 142px)); }
 .state-ready .title-screen .subtitle { margin-bottom: 0; }
 .title-play { width: 285px; max-width: 100%; margin-top: 38px; }
 .title-play .start-button { width: 100%; }
 .title-play .enter-hint { width: 100%; margin: 12px 0 0; }
 .title-record { color: #abc3c7; font-size: 12px; text-align: center; margin: 20px 0 0; font-variant-numeric: tabular-nums; }
-.state-ready .title-screen.has-challenge h1 { font-size: clamp(64px, 12dvh, 94px); }
+.state-ready .title-screen.has-challenge h1 { font-size: min(28cqi, clamp(64px, 12dvh, 94px)); }
 .state-ready .title-screen.has-challenge .title-play { margin-top: 24px; }
 @media (max-width: 760px), (any-pointer: coarse) {
   .state-ready .title-screen { left: 7%; right: 7%; width: auto; max-width: none; max-height: calc(100dvh - 140px); }
-  .state-ready .title-screen h1 { font-size: clamp(84px, min(25vw, 18dvh), 120px); }
+  .state-ready .title-screen h1 { font-size: min(28cqi, clamp(84px, min(25vw, 18dvh), 120px)); }
   .title-play { width: min(100%, 320px); margin-top: 30px; }
   .state-ready .title-screen .start-button { max-width: none; }
   .title-record { margin-top: 16px; }
 }
 @media (max-height: 500px) and (orientation: landscape) {
   .state-ready .title-screen { top: calc(66px + var(--safe-top)); bottom: calc(16px + var(--safe-bottom)); left: 7%; right: 7%; width: auto; max-height: none; transform: none; align-content: center; }
-  .state-ready .title-screen h1 { font-size: clamp(64px, 21dvh, 94px); margin: 0; grid-row: 1 / 4; }
+  .state-ready .title-screen h1 { font-size: min(28cqi, clamp(64px, 21dvh, 94px)); margin: 0; }
   .state-ready .title-screen .title-play { margin-top: 0; align-self: center; }
   .state-ready .title-screen.has-challenge .title-play { margin-top: 8px; }
-  .state-ready .title-screen.has-challenge h1 { font-size: 64px; }
+  .state-ready .title-screen.has-challenge h1 { font-size: min(28cqi, 64px); }
 }
 
 /* A finished run offers one clear next action; the report is optional. */
