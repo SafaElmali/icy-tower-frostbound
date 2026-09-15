@@ -20,8 +20,8 @@ export function verifySubmission(input: unknown): LeaderboardEntry & { mode: Ran
   const { name: rawName, replay, outfit } = input as { name?: unknown; replay?: RunReplay; outfit?: unknown };
   const name = typeof rawName === 'string' ? rawName.normalize('NFKC').trim().replace(/\s+/g, ' ') : '';
   if (!/^[\p{L}\p{N} ._'’-]{2,20}$/u.test(name)) throw new LeaderboardError('Use 2–20 letters, numbers, spaces, or simple punctuation for your name.');
-  if (!replay || (replay.version !== 1 && replay.version !== 2 && replay.version !== 3) || !Number.isInteger(replay.seed) || replay.seed < 0 || replay.seed > 0xffffffff || !Array.isArray(replay.moves) || !replay.moves.length || replay.moves.length > MAX_REPLAY_SEGMENTS) throw new LeaderboardError('This run cannot be verified. Start a new ranked run.');
-  if (replay.version === 3 ? replay.mode !== 'arcade' && replay.mode !== 'party' : replay.mode !== undefined) throw new LeaderboardError('Invalid ranked mode.');
+  if (!replay || (replay.version !== 1 && replay.version !== 2 && replay.version !== 3 && replay.version !== 4) || !Number.isInteger(replay.seed) || replay.seed < 0 || replay.seed > 0xffffffff || !Array.isArray(replay.moves) || !replay.moves.length || replay.moves.length > MAX_REPLAY_SEGMENTS) throw new LeaderboardError('This run cannot be verified. Start a new ranked run.');
+  if (replay.version >= 3 ? replay.mode !== 'arcade' && replay.mode !== 'party' : replay.mode !== undefined) throw new LeaderboardError('Invalid ranked mode.');
   const mode = replayMode(replay);
   let totalFrames = 0;
   for (const move of replay.moves) {
@@ -43,7 +43,7 @@ export function verifySubmission(input: unknown): LeaderboardEntry & { mode: Ran
   }
   if (engine.status !== 'over' || engine.floor < 1) throw new LeaderboardError('Finish a ranked run and reach at least floor 1 to submit.');
   // Keep legacy hashes stable so previously submitted runs remain deduplicated.
-  const identity = { version: replay.version, seed: replay.seed, moves: replay.moves, ...(replay.version === 3 ? { mode } : {}) };
+  const identity = { version: replay.version, seed: replay.seed, moves: replay.moves, ...(replay.version >= 3 ? { mode } : {}) };
   const id = createHash('sha256').update(JSON.stringify(identity)).digest('hex');
   return { id, name, mode, outfit: normalizeOutfit(outfit), score: engine.score, floor: engine.floor, combo: engine.bestCombo, duration: Math.round(engine.time * 1000), createdAt: new Date().toISOString() };
 }

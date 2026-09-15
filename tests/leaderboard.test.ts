@@ -35,7 +35,7 @@ void test('server verification reproduces real runs, including pauses and mixed 
 });
 
 void test('leaderboard verifies both legacy and new stage layouts beyond floor 50', () => {
-  for (const version of [1, 2, 3] as const) {
+  for (const version of [1, 2, 3, 4] as const) {
     const engine = completedRun(17, false, 53, version);
     assert.ok(engine.floor >= 53); assert.equal(engine.getReplay()!.version, version);
     const entry = verifySubmission({ name: 'Harold', replay: engine.getReplay() });
@@ -113,8 +113,8 @@ void test('leaderboard keeps catalog cosmetics without trusting client score fie
 });
 
 void test('party recordings reproduce power-ups and pauses, and reject missing or legacy mode tags', () => {
-  for (const paused of [false, true]) {
-    const engine = completedRun(17, paused, 12, 3, 'party');
+  for (const version of [3, 4] as const) for (const paused of [false, true]) {
+    const engine = completedRun(17, paused, 12, version, 'party');
     const replay = engine.getReplay()!;
     assert.ok(engine.gems > 0);
     assert.equal(replay.mode, 'party');
@@ -126,4 +126,28 @@ void test('party recordings reproduce power-ups and pauses, and reject missing o
     }
     assert.throws(() => verifySubmission({ name: 'Party climber', replay: { ...replay, mode: 'arcade' } }));
   }
+});
+
+void test('a controlled wall jump and subsequent climb replay to the same verified result', () => {
+  const engine = new TowerEngine(17); engine.start();
+  let boosted = false;
+  for (let i = 0; i < 240 && !boosted; i++) {
+    const wallPress = i > 40 && engine.x > 5.93;
+    engine.tick(1 / 120, { left: false, right: true, jump: i === 40 || wallPress });
+    boosted = engine.drainEvents().some(event => event.type === 'wall') && engine.vy > 10;
+  }
+  assert.ok(boosted, 'the recording contains a vertical wall boost from real inputs');
+  let target = engine.platforms[1], wasJump = false;
+  for (let i = 0; i < 18000 && engine.status === 'playing'; i++) {
+    if (engine.grounded) target = engine.platforms.find(p => p.id === engine.standingId + 1)!;
+    const steering = (target.x - engine.x) * 3.8 - engine.vx * 1.1;
+    const jump: boolean = engine.grounded && !wasJump;
+    engine.tick(1 / 120, engine.floor >= 12 ? freshControls() : { left: steering < -.35, right: steering > .35, jump });
+    wasJump = jump; engine.drainEvents();
+  }
+  assert.equal(engine.status, 'over');
+  const replay = engine.getReplay()!; assert.equal(replay.version, 4);
+  const verified = verifySubmission({ name: 'Wall climber', replay });
+  assert.equal(verified.score, engine.score); assert.equal(verified.floor, engine.floor);
+  assert.equal(verified.duration, Math.round(engine.time * 1000));
 });

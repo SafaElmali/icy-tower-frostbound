@@ -22,7 +22,7 @@ void test('completed runs round-trip layout, mode, floor, and score in a compact
 
 void test('shared seeds and retries reproduce platforms, moving ledges, gems, and scores', () => {
   const challenge = decodeChallenge('2.42.p.87.123450')!;
-  const original = new TowerEngine(challenge.seed), friend = new TowerEngine();
+  const original = new TowerEngine(challenge.seed, true, challenge.version), friend = new TowerEngine();
   original.start('practice'); startChallengeRun(friend, challenge, 'arcade');
   assert.equal(friend.mode, 'practice');
   const initial = structuredClone(original.platforms);
@@ -47,7 +47,7 @@ void test('shared seeds and retries reproduce platforms, moving ledges, gems, an
 });
 
 void test('invalid and unsupported challenge links are rejected without throwing', () => {
-  for (const value of [null, '', '1.42.a.87.100', '4.42.a.87.100', '2.42.t.87.100', '2.42.x.87.100', '2.42.a.0.100', '2.-1.a.87.100', '2.4294967296.a.87.100', '2.42.a.87.-1', '2.42.a.87.NaN', '2.42.a.87.Infinity', '2.42.a.87.1e3', '2.42.a.87.1.5', '2.42.a.9007199254740992.100', '2.42.a.87.9007199254740992', '2.42.a.87.100.extra', '2. 42.a.87.100', '2.042.a.87.100', 'x'.repeat(10000)]) {
+  for (const value of [null, '', '1.42.a.87.100', '5.42.a.87.100', '2.42.t.87.100', '2.42.x.87.100', '2.42.a.0.100', '2.-1.a.87.100', '2.4294967296.a.87.100', '2.42.a.87.-1', '2.42.a.87.NaN', '2.42.a.87.Infinity', '2.42.a.87.1e3', '2.42.a.87.1.5', '2.42.a.9007199254740992.100', '2.42.a.87.9007199254740992', '2.42.a.87.100.extra', '2. 42.a.87.100', '2.042.a.87.100', 'x'.repeat(10000)]) {
     assert.equal(decodeChallenge(value), null, String(value).slice(0, 100));
   }
   assert.deepEqual(decodeChallenge('2.0.a.1.0'), { version: 2, seed: 0, mode: 'arcade', floor: 1, score: 0 });
@@ -64,4 +64,17 @@ void test('sharing is limited to completed climbs and ordinary runs still select
   startChallengeRun(engine, null, 'arcade');
   assert.equal(engine.mode, 'arcade'); assert.equal(engine.floor, 0);
   engine.tick(1 / 120, freshControls()); assert.ok(engine.time > 0);
+});
+
+void test('challenge retries and re-sharing retain rules, and leaving restores current rules', () => {
+  for (const version of [2, 3, 4] as const) {
+    const challenge = decodeChallenge(`${version}.42.a.87.123450`)!;
+    const engine = new TowerEngine();
+    startChallengeRun(engine, challenge, 'practice');
+    assert.equal(engine.version, version);
+    engine.floor = 1; engine.status = 'over';
+    assert.equal(challengeFromRun(engine)?.version, version);
+    startChallengeRun(engine, null, 'arcade');
+    assert.equal(engine.version, 4);
+  }
 });

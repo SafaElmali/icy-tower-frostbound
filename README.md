@@ -12,7 +12,9 @@ A playable 2.5D arcade tower climber. Three.js renders the scene; a fixed-step s
 - Enter: begin/retry
 - On phones and touch tablets: hold left/right with one thumb and tap JUMP with the other. Slide across the direction pad to turn; release JUMP before the next jump.
 
-Run to jump higher. At high speed, Harold spreads his arms and legs into a star-shaped 360° spin and straightens before landing. Active combos leave a rotating, multicolored five-point star trail behind him. Land on new floors within 3.8 seconds to extend a combo. Arcade scrolling starts when you reach floor 5, making ledges descend even when you stand still. The pace increases every 30 seconds, up to five increases. The camera tracks downward falls to reveal recovery ledges, while the frost keeps advancing independently. Practice disables automatic scrolling; falling into the frost still ends the run. Personal records are saved on this browser.
+Run to jump higher. At high speed, Harold spreads his arms and legs into a star-shaped 360° spin and straightens before landing. Active combos leave a rotating, multicolored five-point star trail behind him. Land on new floors within 3.8 seconds to extend a combo. Arcade scrolling starts when you reach floor 5, making ledges descend even when you stand still. The pace increases every 30 seconds without a speed cap, so the rising frost eventually overtakes a slow climb. A small line below the score shows elapsed play time and the current pace level, including on short and touch screens. Pausing freezes the clock and pace progression. Results also show time and pace. The camera tracks downward falls to reveal recovery ledges, while the frost keeps advancing independently. Practice disables automatic scrolling; falling into the frost still ends the run. Personal records are saved on this browser.
+
+While airborne beside a wall, release and tap JUMP to launch up and away, even with little horizontal speed. The push briefly resists the incoming direction so you can turn reliably above floor 90. Land or jump from the opposite wall before boosting from the same wall again. Fast automatic rebounds still work.
 
 Every 10th floor has a wooden number plaque on its front edge. Every 50th floor is a full-width landing stage, providing room to land and build momentum before the next climb. Stages still scroll toward the frost like other floors.
 
@@ -20,11 +22,11 @@ The layout supports portrait and landscape, device safe areas, and scrolling men
 
 ## Quick challenges
 
-Each climb starts three fresh challenges: reach floor 30 with an unbroken combo, collect 10 crystals, and perform 5 wall jumps. Track progress during play and see results when you pause or finish. The combo challenge starts with your first higher-floor landing; letting the 3.8-second timer expire before reaching floor 30 fails it for that run. Passing floor 30 in the air is not enough — land on floor 30 or higher. Wall jumps count fast airborne wall rebounds, not ground-level wall impacts. Completed challenges stay complete until you start again. Challenges work in Classic, Party, and Practice and do not change scoring.
+Each climb starts three fresh challenges: reach floor 30 with an unbroken combo, collect 10 crystals, and perform 5 wall jumps. Challenges track progress in the background while you play. View progress and results when you pause or finish. The combo challenge starts with your first higher-floor landing; letting the 3.8-second timer expire before reaching floor 30 fails it for that run. Passing floor 30 in the air is not enough — land on floor 30 or higher. Wall jumps count fast airborne wall rebounds and controlled wall boosts, not ground-level wall impacts. Completed challenges stay complete until you start again. Challenges work in Classic, Party, and Practice and do not change scoring.
 
 ## Unlockable outfits
 
-Open **Outfits** from the title screen, shirt button, or pause/results menu. Equip a hat, sweater, and star-trail palette independently; colors update on the climber immediately. The original blue beanie, green knit, and rainbow stars are always available.
+Open **Outfits** from the title screen, shirt button, or pause/results menu. Equip a hat, sweater, and star-trail palette independently; colors update on the climber immediately. The outfit picker shows the same 3D character walking and gently turning in a continuous loop, with flowing stars that update as you equip items. Pause or play the preview independently of the game; reduced-motion preferences start it paused. The preview stays visible while you scroll through the collection. The original blue beanie, green knit, and rainbow stars are always available.
 
 | Achievement | Reward |
 | --- | --- |
@@ -49,11 +51,11 @@ Party keeps the rising frost and combo scoring, with its own online rankings and
 
 Finish an arcade climb to create a translucent blue replay of Harold. On subsequent arcade runs, the ghost repeats that climb alongside you on the same generated tower, including jumps and spins. The HUD shows your height lead in metres and celebrates passing its best floor. Pauses freeze the race, and the ghost never affects collisions, crystals, or scoring.
 
-Your highest completed arcade climb becomes the next ghost; score, then shorter duration, break floor ties. One ghost is saved locally in this browser (or kept for the session if storage is unavailable). Practice and abandoned runs do not replace it. Old personal records have no recording, so complete a new run to create your first ghost. Recordings share the leaderboard limits of 30 minutes and 12,000 input changes; longer runs remain playable but cannot create a ghost.
+Your highest completed arcade climb under the current rules becomes the next ghost; score, then shorter duration, break floor ties. One ghost is saved locally in this browser (or kept for the session if storage is unavailable). Practice and abandoned runs do not replace it. Old personal records have no recording, so complete a new run to create your first ghost. Ghosts from earlier physics versions are retired from racing when the rules change; finish a new Classic run to record a compatible ghost. Personal records stay saved. Recordings share the leaderboard limits of 30 minutes and 12,000 input changes; longer runs remain playable but cannot create a ghost.
 
 ## Leaderboard
 
-Open the trophy button to see the all-time top 50 runs on the **Classic** or **Party** tab. After a completed Classic or Party run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, combos, and mode-specific physics are replayed and calculated on the server. The verified recording selects the board; Party scores cannot be submitted to Classic rankings. Legacy arcade recordings remain valid. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.
+Open the trophy button to see the all-time top 50 runs on the **Classic** or **Party** tab. After a completed Classic or Party run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, combos, and mode-specific physics are replayed and calculated on the server. The verified recording selects the board; Party scores cannot be submitted to Classic rankings. Legacy recordings remain valid under their original rules; version 4 recordings use uncapped pace and controlled wall jumps. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.
 
 The leaderboard uses a Netlify Function and site-wide Netlify Blobs storage, so scores persist across deployments and are shared across devices. Conditional writes protect concurrent submissions, and identical recordings cannot be added twice while on the board. Replay validation prevents fabricated score totals; it is not a guarantee against automated play. No login is required, and display names are not reserved identities. The name field is remembered only on the player's device.
 
@@ -63,13 +65,13 @@ The online API runs on Netlify; the plain Vite preview serves only the game fron
 
 After a completed run that reaches at least floor 1, choose **Challenge a friend** to share or copy a “Beat my floor 87” link. The link contains that run's tower seed, layout/rules version, mode, floor, and score. Friends open it, choose **Accept challenge**, and climb the same tower; **Retry challenge** and Enter keep that layout and mode. The HUD and results show the targets, with floor and score wins tracked separately. Matching the floor is a tie; climb one higher to beat it.
 
-Classic, Party, and Practice runs can be shared, and a challenge keeps its original mode. Choose **Leave challenge** on the title screen to return to random towers. Invalid or unsupported links show a message and allow a normal climb. If native sharing or clipboard access is unavailable, the share dialog has a selectable link for manual copying. Challenge targets are informal, editable link data; leaderboard submissions still require server replay verification.
+Classic, Party, and Practice runs can be shared, and a challenge keeps its original mode and rules, including on retry and re-sharing. Older challenges retain capped pace and automatic rebounds; leaving a challenge restores the current rules. Choose **Leave challenge** on the title screen to return to random towers. Invalid or unsupported links show a message and allow a normal climb. If native sharing or clipboard access is unavailable, the share dialog has a selectable link for manual copying. Challenge targets are informal, editable link data; leaderboard submissions still require server replay verification.
 
 ## Development
 
 `npm install`, then `npm run dev -- --port 5188`.
 
-`npm test` checks jump height, landings, wall rebounds, buffering, coyote time, pause, frost, restart, downward camera tracking, recoverable falls, floor-triggered scrolling, 30-second acceleration, frame-rate independence, simultaneous touch and keyboard input, stage collisions, legacy and current leaderboard recordings, Party springs and gravity, timed double jumps, separate ranked storage, and a simulated 105-floor climb through five generated layouts.
+`npm test` checks jump height, landings, wall rebounds, buffering, coyote time, pause, frost, restart, downward camera tracking, recoverable falls, floor-triggered scrolling, uncapped 30-second acceleration, high-floor wall boosts, legacy rules compatibility, frame-rate independence, simultaneous touch and keyboard input, stage collisions, legacy and current leaderboard recordings, Party springs and gravity, timed double jumps, separate ranked storage, and a simulated 105-floor climb through five generated layouts.
 
 `npm run typecheck`, `npm run lint`, and `npm run build` validate source and production output.
 

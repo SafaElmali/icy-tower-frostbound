@@ -114,3 +114,50 @@ void test('stage collision catches falls at both walls and allows jumping throug
     step(e, 120); assert.equal(e.standingId, 50);
   }
 });
+
+void test('low-speed wall jumps clear a floor after floor 90 on either wall and in every mode', () => {
+  for (const mode of ['arcade', 'party', 'practice'] as const) for (const floor of [10, 95, 150, 950]) for (const side of [-1, 1]) {
+    const e = new TowerEngine(17); e.start(mode);
+    e.grounded = false; e.y = 10; step(e, 16); // Let takeoff coyote time expire.
+    e.y = floor * FLOOR_HEIGHT; e.cameraY = e.y + 2.2; e.stormY = e.y - 10;
+    e.x = side * (WALL - .3); e.vx = 0; e.vy = -2; e.grounded = false; e.standingId = -1;
+    const launchY = e.y;
+    e.tick(1 / 120, { left: side < 0, right: side > 0, jump: true });
+    assert.ok(e.vx * side < -6); assert.ok(e.vy > 15); assert.equal(e.wallJumps, 1);
+    const events = e.drainEvents();
+    assert.equal(events.filter(event => event.type === 'wall').length, 1);
+    assert.equal(events.filter(event => event.type === 'jump').length, 1);
+    step(e, 18, { left: side < 0, right: side > 0, jump: true });
+    assert.ok(e.x * side < WALL - 1, 'held incoming direction does not cancel the push away');
+    step(e, 25);
+    assert.ok(e.y > launchY + FLOOR_HEIGHT, `${mode} floor ${floor}: must clear a real floor gap`);
+    assert.equal(e.status, 'playing');
+  }
+});
+
+void test('wall boosts require a fresh press and landing or the opposite wall before reuse', () => {
+  const e = new TowerEngine(); e.start('practice');
+  e.grounded = false; e.y = 10; step(e, 16);
+  const nearWall = (side: number) => { e.x = side * (WALL - .3); e.y = 40; e.cameraY = 42.2; e.vx = 0; e.vy = -2; e.grounded = false; e.standingId = -1; };
+  nearWall(1); e.tick(1 / 120, { ...freshControls(), jump: true });
+  nearWall(-1); e.tick(1 / 120, { ...freshControls(), jump: true });
+  assert.ok(e.vy < 0, 'holding jump cannot automatically boost at the opposite wall');
+  e.tick(1 / 120, freshControls());
+  nearWall(1); e.tick(1 / 120, { ...freshControls(), jump: true });
+  assert.ok(e.vy < 0, 'cannot repeatedly boost up the same wall');
+  e.tick(1 / 120, freshControls());
+  nearWall(-1); e.tick(1 / 120, { ...freshControls(), jump: true });
+  assert.ok(e.vy > 0, 'opposite wall restores a boost');
+  e.start('practice'); e.grounded = false; e.y = 10; step(e, 16); nearWall(-1); e.tick(1 / 120, { ...freshControls(), jump: true });
+  assert.ok(e.vy > 0, 'restart clears the last wall');
+});
+
+void test('legacy rules keep horizontal rebounds without introducing vertical wall boosts', () => {
+  for (const version of [1, 2, 3] as const) {
+    const e = new TowerEngine(17, false, version); e.start('practice');
+    e.grounded = false; e.y = 10; step(e, 16);
+    e.x = WALL - .3; e.y = 40; e.cameraY = 42.2; e.vx = 0; e.vy = -2; e.grounded = false;
+    e.tick(1 / 120, { ...freshControls(), jump: true });
+    assert.ok(e.vy < 0); assert.equal(e.wallJumps, 0);
+  }
+});

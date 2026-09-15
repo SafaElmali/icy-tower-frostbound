@@ -1,5 +1,5 @@
 import { ClimberMotion } from './climber-motion.ts';
-import { MAX_REPLAY_FRAMES, MAX_REPLAY_SEGMENTS, TowerEngine, type RunReplay, type GameMode } from './tower-engine.ts';
+import { CURRENT_RULES_VERSION, MAX_REPLAY_FRAMES, MAX_REPLAY_SEGMENTS, TowerEngine, type RunReplay, type GameMode } from './tower-engine.ts';
 
 export const GHOST_STORAGE_KEY = 'frostbound-ghost-v1';
 export type GhostRecord = { floor: number; score: number; time: number; replay: RunReplay };
@@ -7,8 +7,8 @@ export type GhostRecord = { floor: number; score: number; time: number; replay: 
 /** Highest completed arcade climb wins; score, then duration, break floor ties. */
 export function bestGhost(current: GhostRecord | null, engine: TowerEngine): GhostRecord | null {
   const replay = engine.getReplay();
-  if (!replay || engine.mode !== 'arcade' || (replay.version !== 2 && replay.version !== 3)) return current;
-  if (current && (engine.floor < current.floor || (engine.floor === current.floor &&
+  if (!replay || engine.mode !== 'arcade' || (replay.version !== 2 && replay.version !== 3 && replay.version !== 4)) return current;
+  if (current && current.replay.version === replay.version && (engine.floor < current.floor || (engine.floor === current.floor &&
     (engine.score < current.score || (engine.score === current.score && engine.time >= current.time))))) return current;
   return { floor: engine.floor, score: engine.score, time: engine.time, replay };
 }
@@ -22,7 +22,7 @@ export function readGhost(raw: string | null): GhostRecord | null {
       !Number.isSafeInteger(record.score) || record.score < 0 || !Number.isFinite(record.time) ||
       record.time <= 0 || record.time > MAX_REPLAY_FRAMES / 120 + .001) return null;
     const replay = record.replay;
-    if (!replay || (replay.version !== 2 && replay.version !== 3) || (replay.version === 3 && replay.mode !== 'arcade') || !Number.isInteger(replay.seed) || replay.seed < 0 ||
+    if (!replay || (replay.version !== 2 && replay.version !== 3 && replay.version !== 4) || (replay.version >= 3 && replay.mode !== 'arcade') || !Number.isInteger(replay.seed) || replay.seed < 0 ||
       replay.seed > 0xffffffff || !Array.isArray(replay.moves) || !replay.moves.length ||
       replay.moves.length > MAX_REPLAY_SEGMENTS) return null;
     let total = 0;
@@ -82,7 +82,7 @@ export class TowerGhost {
 
 /** Choose the rematch layout once when a run starts. */
 export function startGhostRun(engine: TowerEngine, best: GhostRecord | null, mode: GameMode) {
-  const ghost = mode === 'arcade' && best ? new TowerGhost(best) : null;
-  engine.start(mode, ghost?.record.replay.seed ?? Math.floor(Math.random() * 2 ** 30));
+  const ghost = mode === 'arcade' && best?.replay.version === CURRENT_RULES_VERSION ? new TowerGhost(best) : null;
+  engine.start(mode, ghost?.record.replay.seed ?? Math.floor(Math.random() * 2 ** 30), CURRENT_RULES_VERSION);
   return ghost;
 }

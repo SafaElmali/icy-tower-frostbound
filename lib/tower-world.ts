@@ -7,9 +7,10 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { applyCharacterOutfit } from './character-outfit';
 import { ClimberMotion } from './climber-motion';
 import { ComboStarTrail } from './combo-star-trail';
-import { DEFAULT_OUTFIT, cosmeticFor, normalizeOutfit, type Outfit } from './outfits';
+import { cosmeticFor, normalizeOutfit, type Outfit } from './outfits';
 import { TowerInterior } from './tower-interior';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 import type { TowerGhost } from './tower-ghost';
@@ -135,21 +136,7 @@ export class TowerWorld {
   }
   setOutfit(value: Outfit) {
     const outfit = normalizeOutfit(value);
-    this.character.traverse(object => {
-      if (!(object instanceof THREE.Mesh)) return;
-      for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
-        if (!(material instanceof THREE.MeshStandardMaterial)) continue;
-        const slot = /beanie|knit ribs/i.test(material.name) && !/badge/i.test(material.name) ? 'hat' : /sweatshirt/i.test(material.name) ? 'sweater' : null;
-        if (!slot) continue;
-        material.userData.originalColor ??= material.color.clone();
-        if (outfit[slot] === DEFAULT_OUTFIT[slot]) material.color.copy(material.userData.originalColor);
-        else {
-          material.color.setHex(cosmeticFor(slot, outfit[slot]).colors[0]);
-          if (/seams|trim/i.test(material.name)) material.color.multiplyScalar(.5);
-          else if (/ribs/i.test(material.name)) material.color.multiplyScalar(1.15);
-        }
-      }
-    });
+    applyCharacterOutfit(this.character, outfit);
     this.starTrail.setPalette(cosmeticFor('trail', outfit.trail).colors);
   }
   private makeNoiseTexture() {

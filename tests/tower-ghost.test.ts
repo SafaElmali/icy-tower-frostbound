@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { TowerEngine, freshControls } from '../lib/tower-engine.ts';
 import { bestGhost, readGhost, startGhostRun, TowerGhost, type GhostRecord } from '../lib/tower-ghost.ts';
 
-function recordClimb(version: 2 | 3 = 3) {
+function recordClimb(version: 2 | 3 | 4 = 4) {
   const engine = new TowerEngine(17, true, version); engine.start('arcade');
   const checkpoints: { time: number; x: number; y: number; score: number; floor: number }[] = [];
   let target = engine.platforms[1], wasJump = false;
@@ -22,7 +22,7 @@ function recordClimb(version: 2 | 3 = 3) {
 }
 
 void test('ghost reproduces every position and score across mixed frame rates and recorded pauses', () => {
-  for (const version of [2, 3] as const) {
+  for (const version of [2, 3, 4] as const) {
   const { record, checkpoints } = recordClimb(version);
   assert.deepEqual(readGhost(JSON.stringify(record)), record);
   const ghost = new TowerGhost(record);
@@ -101,4 +101,13 @@ void test('starting a rematch reuses the ghost tower and other modes start witho
   }
   assert.equal(startGhostRun(player, null, 'arcade'), null);
   assert.equal(player.mode, 'arcade');
+});
+
+void test('old ghosts cannot pin new runs to capped pace and are replaced by a current recording', () => {
+  const legacy = recordClimb(3).record;
+  const player = new TowerEngine(99, true, 3);
+  assert.equal(startGhostRun(player, legacy, 'arcade'), null);
+  assert.equal(player.version, 4);
+  const current = recordClimb(4).engine;
+  assert.equal(bestGhost({ ...legacy, floor: 950 }, current)?.replay.version, 4);
 });
