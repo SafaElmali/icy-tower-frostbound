@@ -61,6 +61,14 @@ Choose **Party** from the mode selector before starting. Lower gravity gives jum
 
 Party keeps the rising frost and combo scoring, with its own online rankings and browser personal best. Classic retains the original physics and rankings. Practice remains unranked and now saves its personal best separately, too. Existing browser records remain under Classic.
 
+## Two-player race
+
+Open **Menu → Race a friend**, create a private room, and send the invite link to your friend. Both players ready up for a shared countdown on the same Classic tower. The first verified climb to floor 20 wins; if both fall or 90 seconds elapse, the higher verified floor wins. Equal results draw. Players pass through each other, and both must accept a rematch to start a new tower.
+
+Keyboard and touch controls work. A short connection interruption reconnects automatically; leaving, reloading during a race, or losing contact for 15 seconds forfeits that round. Race results are separate from solo leaderboards and progression. Rooms expire after an hour. No account or additional service credentials are required on the existing Netlify deployment.
+
+The live rival uses interpolated HTTP updates every 500 ms, so it can appear slightly behind the other player's screen. This is a casual private race, not a low-latency ranked arena. The server calculates finishes from recorded controls and uses its own clock for finishing order. See [multiplayer acceptance criteria and testing](docs/multiplayer.md).
+
 ## Race your ghost
 
 Finish an arcade climb to create a translucent blue replay of Harold. On subsequent arcade runs, the ghost repeats that climb alongside you on the same generated tower, including jumps and spins. The HUD shows your height lead in metres and celebrates passing its best floor. Pauses freeze the race, and the ghost never affects collisions, crystals, or scoring.
@@ -73,7 +81,7 @@ Open **Menu → Leaderboard** to see the all-time top 50 runs on the **Classic**
 
 The leaderboard uses a Netlify Function and site-wide Netlify Blobs storage, so scores persist across deployments and are shared across devices. Conditional writes protect concurrent submissions, and identical recordings cannot be added twice while on the board. Replay validation prevents fabricated score totals; it is not a guarantee against automated play. No login is required, and display names are not reserved identities. The name field is remembered only on the player's device.
 
-The online API runs on Netlify; the plain Vite preview serves only the game frontend. `npm test` includes real local Blobs persistence, replay verification, request validation, and concurrent-write coverage.
+The leaderboard API runs on Netlify; the plain Vite preview serves only the leaderboard frontend. Race rooms also work in Vite using a development-only shared memory store. `npm test` includes real local Blobs persistence, replay verification, request validation, and concurrent-write coverage.
 
 ## Friend challenges
 

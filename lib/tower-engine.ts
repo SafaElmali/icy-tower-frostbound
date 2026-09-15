@@ -272,6 +272,11 @@ export class TowerEngine {
   drainEvents() { const e = this.events; this.events = []; return e; }
   getReplay(): RunReplay | null {
     if (this.status !== 'over' || this.mode === 'practice' || !this.replay || this.floor < 1) return null;
+    return this.getRecording();
+  }
+  /** Live race finishes also need an input recording at the goal or time limit. */
+  getRecording(): RunReplay | null {
+    if (this.mode === 'practice' || !this.replay) return null;
     const recording = { seed: this.seed, moves: this.replay.map(([frames, mask]): [number, number] => [frames, mask]) };
     return this.rulesVersion === 3 || this.rulesVersion === 4 || this.rulesVersion === 5 ? { ...recording, version: this.rulesVersion, mode: this.mode } : { ...recording, version: this.rulesVersion };
   }

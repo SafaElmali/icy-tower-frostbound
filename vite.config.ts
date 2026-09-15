@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
 import { defineConfig } from 'vite';
 import hostingConfig from './.openai/hosting.json';
+import { raceDevelopmentServer } from './lib/race-dev-server';
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   '00000000-0000-4000-8000-000000000000';
@@ -39,7 +40,7 @@ export default defineConfig(async () => {
   if (process.env.DEPLOY_TARGET === 'netlify') {
     return {
       css: { postcss: { plugins: [tailwindcss()] } },
-      plugins: [vinext()],
+      plugins: [raceDevelopmentServer(), vinext()],
     };
   }
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
@@ -57,6 +58,7 @@ export default defineConfig(async () => {
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
     plugins: [
+      raceDevelopmentServer(),
       vinext(),
       sites(),
       cloudflare({

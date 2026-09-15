@@ -15,7 +15,11 @@ import { TowerInterior } from './tower-interior';
 import { PersonalBestMarker } from './personal-best-marker';
 import { getTowerSection } from './tower-sections';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
-import type { TowerGhost } from './tower-ghost';
+
+type ClimberView = {
+  engine: Pick<TowerEngine, 'x' | 'y' | 'vx' | 'vy' | 'facing' | 'grounded' | 'time' | 'status'>;
+  motion: ClimberMotion; finished: boolean;
+};
 
 type FloorPlaque = THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
 type Ledge = { group: THREE.Group; gem?: THREE.Mesh; plaque?: FloorPlaque; platform: Platform; id: number };
@@ -308,7 +312,7 @@ export class TowerWorld {
       }
     }
   }
-  render(e: TowerEngine, dt: number, t: number, ghost: TowerGhost | null = null) {
+  render(e: TowerEngine, dt: number, t: number, ghost: ClimberView | null = null) {
     const menu = e.status === 'ready';
     const aspect = this.renderer.domElement.clientWidth / this.renderer.domElement.clientHeight;
     this.cameraY = damp(this.cameraY, e.cameraY, e.cameraY < this.cameraY ? 10 : 6, dt);

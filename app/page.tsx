@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   ArrowLeft,
   ArrowRight,
@@ -22,6 +23,7 @@ import {
   Shirt,
   Target,
   Trophy,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import menuStyles from './game-menu.module.css';
@@ -1424,6 +1426,16 @@ export default function Home() {
               aria-labelledby="menu-play-heading"
             >
               <h3 id="menu-play-heading">Play</h3>
+              <Button
+                className={menuStyles.row}
+                variant="ghost"
+                render={<Link href="/race" aria-label="Race a friend" />}
+                nativeButton={false}
+              >
+                <Users aria-hidden="true" />
+                <span>Race a friend</span>
+                <ChevronRight aria-hidden="true" />
+              </Button>
               <Button
                 className={menuStyles.row}
                 variant="ghost"
