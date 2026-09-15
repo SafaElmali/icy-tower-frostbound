@@ -13,7 +13,7 @@ function collectCrystal(engine: TowerEngine, id = 3) {
   step(engine, 1);
 }
 
-void test('party lowers gravity while versions 2, 3, and 4 keep Classic movement physics', () => {
+void test('party lowers gravity while legacy and current Classic jumps retain their gravity', () => {
   const legacy = new TowerEngine(17, true, 2), v3 = new TowerEngine(17, true, 3);
   const classic = new TowerEngine(17), festive = party();
   for (const engine of [legacy, v3, classic]) engine.start();

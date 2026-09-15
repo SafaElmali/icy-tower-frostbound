@@ -15,12 +15,13 @@ export const FLOOR_HEIGHT = 2.35;
 export const WALL = 6.4;
 export const STAGE_WIDTH = 13.6;
 export const isStageFloor = (id: number) => id > 0 && id % 50 === 0;
-export const CURRENT_RULES_VERSION = 4;
+export const CURRENT_RULES_VERSION = 5;
+export const PACE_INTERVAL = 30;
 export const platformFloor = (platform: Platform) => platform.floor ?? platform.id;
 export const MAX_REPLAY_FRAMES = 216000;
 export const MAX_REPLAY_SEGMENTS = 12000;
-export type RunReplay = { seed: number; moves: [number, number][] } & ({ version: 1 | 2; mode?: never } | { version: 3 | 4; mode: RankedMode });
-export const replayMode = (replay: RunReplay): RankedMode => replay.version === 3 || replay.version === 4 ? replay.mode : 'arcade';
+export type RunReplay = { seed: number; moves: [number, number][] } & ({ version: 1 | 2; mode?: never } | { version: 3 | 4 | 5; mode: RankedMode });
+export const replayMode = (replay: RunReplay): RankedMode => replay.mode ?? 'arcade';
 export const freshControls = (): Controls => ({ left: false, right: false, jump: false });
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -51,12 +52,22 @@ export class TowerEngine {
   private accumulator = 0;
   private lastFloor = 0;
   private scrollStartedAt: number | null = null;
+  private wallControlTime = 0;
+  private lastWallJumpSide = 0;
   private replay: [number, number][] | null = [];
   private replayFrames = 0;
   private recordReplay: boolean;
   private _rulesVersion: RunReplay['version'];
   get rulesVersion() { return this._rulesVersion; }
   constructor(seed = 73091, recordReplay = true, rulesVersion: RunReplay['version'] = CURRENT_RULES_VERSION) { this.seed = seed; this.recordReplay = recordReplay; this._rulesVersion = rulesVersion; this.resetWorld(); }
+  get version() { return this.rulesVersion; }
+  get pace() {
+    const elapsed = this.scrollStartedAt === null ? 0 : Math.max(0, this.time - this.scrollStartedAt);
+    const increases = Math.floor((elapsed + (this.rulesVersion >= 4 ? 1e-8 : 0)) / PACE_INTERVAL);
+    const level = this.scrollStartedAt === null ? 0 : 1 + (this.rulesVersion >= 4 ? increases : Math.min(5, increases));
+    return { level, speed: level === 0 ? 0 : .65 + (level - 1) * .4,
+      nextIn: level === 0 || (this.rulesVersion < 4 && level === 6) ? null : clamp((increases + 1) * PACE_INTERVAL - elapsed, 0, PACE_INTERVAL) };
+  }
   private random() { this.state = (Math.imul(1664525, this.state) + 1013904223) >>> 0; return this.state / 4294967296; }
   private resetWorld() {
     this.state = this.seed; this.nextId = 0; this.platforms = [];
@@ -77,7 +88,7 @@ export class TowerEngine {
       // Four-floor route sections leave the first eleven floors and rest stages alone.
       const section = Math.floor(id / 12) * 12;
       const routeStep = id - section;
-      const routeSection = this.rulesVersion >= 4 && section >= 12 && routeStep <= 3 &&
+      const routeSection = this.rulesVersion >= 5 && section >= 12 && routeStep <= 3 &&
         ![section, section + 1, section + 2, section + 3].some(isStageFloor);
       const side = ((this.seed ^ (section / 12)) & 1) ? -1 : 1;
       const width = stage ? STAGE_WIDTH : routeSection ? 3.7 : normalWidth;
@@ -106,6 +117,7 @@ export class TowerEngine {
     this.failureEvidence = null; this.walkedOff = null;
     this.accumulator = this.jumpBuffer = 0; this.coyote = .12; this.jumpWasDown = false; this.events = []; this.scrollStartedAt = null;
     this.doubleJumpTime = 0; this.doubleJumpUsed = false;
+    this.wallControlTime = 0; this.lastWallJumpSide = 0;
     this.resetWorld();
   }
   togglePause() {
@@ -134,6 +146,7 @@ export class TowerEngine {
       else this.replay.push([1, mask]);
     }
     this.time += dt;
+    this.wallControlTime = Math.max(0, this.wallControlTime - dt);
     this.doubleJumpTime = Math.max(0, this.doubleJumpTime - dt);
     this.comboTime = Math.max(0, this.comboTime - dt);
     if (this.comboTime === 0) {
@@ -151,17 +164,27 @@ export class TowerEngine {
       p.x = clamp(p.origin + Math.sin(this.time * .7 + p.phase) * .65, -5.4 + p.width / 2, 5.4 - p.width / 2);
       if (this.grounded && this.standingId === p.id) this.x += p.x - old;
     }
-    const direction = Number(input.right) - Number(input.left);
+    // Preserve the push away even if the incoming direction is briefly held.
+    const requestedDirection = Number(input.right) - Number(input.left);
+    const direction = this.wallControlTime > 0 && requestedDirection === -Math.sign(this.vx) ? 0 : requestedDirection;
     if (direction) {
       this.vx += direction * (this.grounded ? 23 : 17) * dt;
       this.facing = direction;
-    } else this.vx *= Math.exp(-(this.grounded ? 4.5 : .8) * dt);
+    } else if (this.wallControlTime === 0) this.vx *= Math.exp(-(this.grounded ? 4.5 : .8) * dt);
     this.vx = clamp(this.vx, -8.4, 8.4);
     if (this.jumpBuffer > 0 && this.coyote > 0) {
       this.vy = 12.6 + Math.abs(this.vx) * .47;
       this.grounded = false; this.coyote = 0; this.jumpBuffer = 0; this.standingId = -1;
       this.walkedOff = null;
       this.emit('jump', this.vx);
+    } else if (this.rulesVersion >= 4 && this.jumpBuffer > 0 && !this.grounded && Math.abs(this.x) >= WALL - .28 - .2 && Math.sign(this.x) !== this.lastWallJumpSide) {
+      // One boost per wall until landing or jumping from the opposite wall.
+      this.lastWallJumpSide = Math.sign(this.x);
+      this.vx = -this.lastWallJumpSide * 7;
+      this.vy = 15.9; this.facing = -this.lastWallJumpSide;
+      this.coyote = this.jumpBuffer = 0; this.standingId = -1; this.wallControlTime = .18;
+      this.walkedOff = null;
+      this.wallJumps++; this.emit('wall'); this.emit('jump', this.vx);
     } else if (jumpPressed && !this.grounded && this.mode === 'party' && this.doubleJumpTime > 0 && !this.doubleJumpUsed) {
       this.vy = 12.6 + Math.abs(this.vx) * .47;
       this.doubleJumpUsed = true; this.jumpBuffer = 0;
@@ -197,6 +220,7 @@ export class TowerEngine {
           this.y = landing.y; this.vy = 0; this.grounded = true; this.standingId = landing.id;
           this.walkedOff = null;
           this.doubleJumpUsed = false;
+          this.lastWallJumpSide = 0; this.wallControlTime = 0;
           this.emit('land');
           const landedFloor = platformFloor(landing);
           if (landedFloor > this.lastFloor) {
@@ -226,7 +250,7 @@ export class TowerEngine {
     }
     this.maxY = Math.max(this.maxY, this.y);
     if (this.mode !== 'practice' && this.scrollStartedAt === null && this.maxY >= 5 * FLOOR_HEIGHT) this.scrollStartedAt = this.time;
-    const scrollStep = this.scrollStartedAt === null ? 0 : (.65 + Math.min(5, Math.floor((this.time - this.scrollStartedAt) / 30)) * .4) * dt;
+    const scrollStep = this.pace.speed * dt;
     const followY = Math.max(5.2, this.y + 2.2);
     // Let a fall reveal lower ledges, while standing still lets the tower scroll
     // past the player. The frost keeps advancing independently of camera recovery.
@@ -249,7 +273,7 @@ export class TowerEngine {
   getReplay(): RunReplay | null {
     if (this.status !== 'over' || this.mode === 'practice' || !this.replay || this.floor < 1) return null;
     const recording = { seed: this.seed, moves: this.replay.map(([frames, mask]): [number, number] => [frames, mask]) };
-    return this.rulesVersion === 3 || this.rulesVersion === 4 ? { ...recording, version: this.rulesVersion, mode: this.mode } : { ...recording, version: this.rulesVersion };
+    return this.rulesVersion === 3 || this.rulesVersion === 4 || this.rulesVersion === 5 ? { ...recording, version: this.rulesVersion, mode: this.mode } : { ...recording, version: this.rulesVersion };
   }
   snapshot() {
     const challenge = (id: QuickChallenge['id'], title: string, description: string, progress: number, target: number, failed = false): QuickChallenge => ({
@@ -259,9 +283,9 @@ export class TowerEngine {
     const challenges = [
       challenge('combo', 'Unbroken ascent', 'Reach floor 30 without breaking your combo. Keep the chain alive from your first higher-floor landing.', this.comboChallengeFloor, 30, this.comboChallengeBroken),
       challenge('crystals', 'Crystal collector', 'Collect 10 crystals in one run.', this.gems, 10),
-      challenge('walls', 'Wall jumper', 'Perform 5 wall jumps in one run. Hit a wall at speed while airborne to rebound.', this.wallJumps, 5),
+      challenge('walls', 'Wall jumper', 'Perform 5 wall jumps in one run. Hit a wall at speed or tap jump beside it while airborne.', this.wallJumps, 5),
     ];
-    return { status: this.status, mode: this.mode, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY, wallJumps: this.wallJumps, challenges, doubleJumpTime: this.doubleJumpTime, doubleJumpReady: this.doubleJumpTime > 0 && !this.doubleJumpUsed, failureEvidence: this.failureEvidence };
+    return { status: this.status, mode: this.mode, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, pace: this.pace, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY, wallJumps: this.wallJumps, challenges, doubleJumpTime: this.doubleJumpTime, doubleJumpReady: this.doubleJumpTime > 0 && !this.doubleJumpUsed, failureEvidence: this.failureEvidence };
   }
 }
 export type Snapshot = ReturnType<TowerEngine['snapshot']>;

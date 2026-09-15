@@ -349,3 +349,48 @@
   .run-summary-actions { margin-top: 4px; }
   .run-summary > .retry-hint { display: none; }
 }
+
+/* Keep run timing secondary to the score, without covering the play area. */
+.run-readout { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: #a8c7cf; font-size: 12px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.run-details-dialog > .run-detail-timing { font-size: 14px; color: #c7e0df; font-variant-numeric: tabular-nums; }
+
+/* The climber remains visible while the collection scrolls independently. */
+.wardrobe-card[data-slot=dialog-content] { max-width: min(1020px, calc(100vw - 32px - var(--safe-left) - var(--safe-right))); }
+.wardrobe-body { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1.7fr); gap: 24px; min-height: 0; margin-top: 18px; }
+.wardrobe-body .wardrobe-collection { margin: 0; padding: 0 5px 8px 0; overscroll-behavior: contain; }
+.wardrobe-collection section:first-child h3 { margin-top: 0; }
+.wardrobe-preview { display: flex; flex-direction: column; align-self: start; min-width: 0; margin: 0; border: 1px solid #83afbc33; border-radius: 6px; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #244b5b, #0b202c 75%); }
+.wardrobe-preview-stage { position: relative; height: min(360px, 40dvh); min-height: 130px; }
+.wardrobe-preview canvas { display: block; width: 100%; height: 100%; }
+.wardrobe-preview-stage output { position: absolute; inset: 0; display: grid; place-content: center; padding: 20px; margin: 0; text-align: center; font-size: 14px; color: #c3dce1; background: #0b202cee; }
+.wardrobe-preview figcaption { display: grid; gap: 6px; padding: 14px 16px; border-top: 1px solid #83afbc33; }
+.wardrobe-preview figcaption strong { font-size: 16px; font-weight: 500; }
+.wardrobe-preview figcaption span { font-size: 14px; line-height: 1.5; color: #b5cdd4; }
+@media (max-width: 700px) {
+  .wardrobe-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(80px, 1fr); gap: 14px; margin-top: 12px; }
+  .wardrobe-preview { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(0, 1fr); }
+  .wardrobe-preview-stage { height: 150px; min-height: 0; }
+  .wardrobe-preview figcaption { align-content: center; border-top: 0; border-left: 1px solid #83afbc33; padding: 12px; }
+  .wardrobe-card .wardrobe-note { margin-top: 12px; }
+}
+@media (max-height: 600px) {
+  .wardrobe-card[data-slot=dialog-content] { padding: 16px; }
+  .wardrobe-heading [data-slot=dialog-title] { margin: 4px 0; font-size: 26px; }
+  .wardrobe-heading .eyebrow { display: none; }
+  .wardrobe-equipped { padding: 8px 0; margin-top: 4px; }
+  .wardrobe-body { margin-top: 10px; }
+  .wardrobe-preview-stage { height: 150px; min-height: 0; }
+  .wardrobe-preview figcaption { padding: 8px 12px; }
+  .wardrobe-card .wardrobe-note { margin-top: 8px; font-size: 12px; }
+}
+@media (max-height: 600px) and (min-width: 540px) {
+  .wardrobe-body { grid-template-columns: 190px minmax(0, 1fr); grid-template-rows: minmax(80px, 1fr); gap: 16px; }
+  .wardrobe-preview { display: flex; }
+  .wardrobe-preview figcaption { border-left: 0; border-top: 1px solid #83afbc33; }
+}
+@media (max-height: 600px) and (max-width: 539px) {
+  .wardrobe-preview-stage { height: 100px; }
+}
+
+.wardrobe-preview .preview-playback { justify-self: start; width: fit-content; min-height: 32px; height: auto; padding: 5px 8px; margin-left: -8px; font-size: 14px; color: #c3dce1; }
+.wardrobe-preview .preview-playback:hover { color: #e5f0ed; background: #83afbc22; }

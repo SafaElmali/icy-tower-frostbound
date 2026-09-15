@@ -2,10 +2,10 @@ import type { TowerEngine } from './tower-engine.ts';
 
 // Daily rules are pinned independently of engine defaults. A future rules update
 // must keep decoding this version so archived links continue to play identically.
-export const DAILY_RULES_VERSION = 4;
+export const DAILY_RULES_VERSION = 5;
 export const DAILY_PROGRESS_STORAGE_KEY = 'frostbound-daily-progress-v1';
 export const MAX_DAILY_BESTS = 90;
-export type DailyTower = { date: string; version: 4; mode: 'arcade'; seed: number };
+export type DailyTower = { date: string; version: 5; mode: 'arcade'; seed: number };
 export type DailyBest = { floor: number; score: number };
 export type DailyProgress = { version: 1; bests: Record<string, DailyBest> };
 
@@ -26,7 +26,7 @@ export function dailyTowerToken(daily: DailyTower): string { return `${daily.ver
 
 export function decodeDailyTower(token: string | null): DailyTower | null {
   if (!token || token.length > 20) return null;
-  const match = /^(4)\.(\d{4}-\d{2}-\d{2})\.a$/.exec(token);
+  const match = /^(5)\.(\d{4}-\d{2}-\d{2})\.a$/.exec(token);
   return match ? dailyForDate(match[2], Number(match[1])) : null;
 }
 

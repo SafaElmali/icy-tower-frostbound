@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TowerEngine, freshControls, type Platform } from '../lib/tower-engine.ts';
+import { TowerEngine, WALL, freshControls, type Platform } from '../lib/tower-engine.ts';
 import { getRunFeedback } from '../lib/run-feedback.ts';
 
 const step = (engine: TowerEngine, count: number) => {
@@ -70,4 +70,15 @@ void test('missing evidence and legacy replay rules safely produce feedback', ()
   assert.equal(engine.status, 'over');
   assert.equal(engine.rulesVersion, 1);
   assert.equal(getRunFeedback(engine.snapshot())!.explanation, 'The frost reached your ledge.');
+});
+
+void test('a manual wall boost after walking off replaces the earlier walk-off explanation', () => {
+  const engine = ledgeRun(); step(engine, 20);
+  assert.equal(engine.grounded, false);
+  engine.x = WALL - .3;
+  engine.tick(1 / 120, { left: false, right: true, jump: true });
+  assert.equal(engine.wallJumps, 1);
+  assert.ok(engine.vy > 0);
+  engine.stormY = engine.y + 1; step(engine, 1);
+  assert.deepEqual(engine.failureEvidence, { kind: 'frost' });
 });

@@ -71,17 +71,19 @@ void test('a running jump skips the safe step and lands on the crystal shortcut 
 void test('legacy layouts retain their original geometry and routes return after leaving an old replay', () => {
   const old = new TowerEngine(42, true, 2); old.start();
   const v3 = new TowerEngine(42, true, 3); v3.start();
+  const v4 = new TowerEngine(42, true, 4); v4.start();
   assert.deepEqual(old.platforms, v3.platforms);
+  assert.deepEqual(old.platforms, v4.platforms);
   assert.equal(old.platforms.some(p => p.route), false);
   const original = structuredClone(old.platforms);
-  old.start('arcade', 42, 4);
+  old.start('arcade', 42, 5);
   assert.ok(old.platforms.some(p => p.route === 'shortcut'));
   old.start('arcade', 42, 2);
   assert.deepEqual(old.platforms, original);
 });
 
 void test('generation keeps its seeded anchor when old collision ledges are removed', () => {
-  for (const version of [2, 3, 4] as const) {
+  for (const version of [2, 3, 4, 5] as const) {
     const original = new TowerEngine(42, true, version), pruned = new TowerEngine(42, true, version);
     original.start('practice'); pruned.start('practice');
     const firstUngenerated = Math.max(...original.platforms.map(p => p.id)) + 1;

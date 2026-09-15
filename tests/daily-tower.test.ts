@@ -9,11 +9,11 @@ void test('daily dates use UTC and produce deterministic distinct tower seeds', 
   assert.deepEqual(a, dailyForDate('2026-09-14'));
   assert.notEqual(a.seed, dailyForDate('2026-09-15')!.seed);
   // A released daily token must continue to select this seed after refactors.
-  assert.equal(dailyForDate('2026-09-15')!.seed, 2631037716);
-  assert.equal(a.mode, 'arcade'); assert.equal(a.version, 4);
+  assert.equal(dailyForDate('2026-09-15')!.seed, 1850511635);
+  assert.equal(a.mode, 'arcade'); assert.equal(a.version, 5);
   assert.ok(dailyForDate('2024-02-29'));
   for (const invalid of ['2026-02-29', '2026-09-31', '2026-13-01', '26-09-15', '2026-9-15', '2026-09-15T00:00:00Z', '', 'garbage']) assert.equal(dailyForDate(invalid), null);
-  assert.equal(dailyForDate('2026-09-15', 5), null);
+  assert.equal(dailyForDate('2026-09-15', 6), null);
 });
 
 void test('past shared links pin their date and rules and discard competing challenge parameters', () => {
@@ -21,7 +21,7 @@ void test('past shared links pin their date and rules and discard competing chal
   const url = new URL(dailyTowerUrl('https://example.com/play?challenge=old&daily=old#old', daily));
   assert.equal(url.pathname, '/play'); assert.equal(url.hash, ''); assert.equal(url.searchParams.size, 1);
   assert.deepEqual(decodeDailyTower(url.searchParams.get('daily')), daily);
-  for (const invalid of [null, '', '5.2026-09-15.a', '3.2026-09-15.a', '4.2026-09-15.p', '4.2026-09-15.t', '04.2026-09-15.a', '4.2026-09-31.a', '4.2026-09-15.a.extra', 'x'.repeat(10000)]) assert.equal(decodeDailyTower(invalid), null);
+  for (const invalid of [null, '', '6.2026-09-15.a', '4.2026-09-15.a', '3.2026-09-15.a', '5.2026-09-15.p', '5.2026-09-15.t', '05.2026-09-15.a', '5.2026-09-31.a', '5.2026-09-15.a.extra', 'x'.repeat(10000)]) assert.equal(decodeDailyTower(invalid), null);
 });
 
 void test('unlimited retries and recipients always start the same Classic tower', () => {
@@ -33,7 +33,7 @@ void test('unlimited retries and recipients always start the same Classic tower'
   for (let attempt = 0; attempt < 20; attempt++) {
     engine.floor = 10; engine.score = 100; engine.status = 'over';
     startDailyRun(engine, daily);
-    assert.equal(engine.mode, 'arcade'); assert.equal(engine.rulesVersion, 4);
+    assert.equal(engine.mode, 'arcade'); assert.equal(engine.rulesVersion, 5);
     assert.equal(engine.floor, 0); assert.equal(engine.score, 0);
     assert.deepEqual(engine.platforms, platforms);
   }
@@ -73,7 +73,7 @@ void test('daily storage is bounded, tolerates corrupt data, and retains newly p
   }
   assert.equal(Object.keys(profile.bests).length, MAX_DAILY_BESTS);
   const archive = dailyForDate('2024-02-29')!;
-  profile = updateDailyProgress(profile, archive, {status:'over', seed:archive.seed, rulesVersion:4, mode:'arcade', floor:9, score:50});
+  profile = updateDailyProgress(profile, archive, {status:'over', seed:archive.seed, rulesVersion:archive.version, mode:'arcade', floor:9, score:50});
   assert.equal(Object.keys(profile.bests).length, MAX_DAILY_BESTS);
   assert.deepEqual(getDailyBest(readDailyProgress(JSON.stringify(profile)), archive), {floor:9,score:50});
 });

@@ -504,6 +504,8 @@ export default function Home() {
     } catch {
       /* Ghost racing still works for this session without storage. */
     }
+    if (ghostBest.current?.replay.version !== CURRENT_RULES_VERSION)
+      ghostBest.current = null;
     setGhostFloor(ghostBest.current?.floor ?? null);
     try {
       guidanceProfile.current = readGuidanceProfile(
@@ -678,7 +680,10 @@ export default function Home() {
                 setGhostUnavailable(
                   e.mode === 'arcade' && e.floor > 0 && !e.getReplay(),
                 );
-                const nextGhost = bestGhost(ghostBest.current, e);
+                const nextGhost =
+                  e.version === CURRENT_RULES_VERSION
+                    ? bestGhost(ghostBest.current, e)
+                    : ghostBest.current;
                 if (nextGhost && nextGhost !== ghostBest.current) {
                   ghostBest.current = nextGhost;
                   setGhostFloor(nextGhost.floor);
@@ -1053,9 +1058,14 @@ export default function Home() {
             <div className="score-number">
               {game.score.toLocaleString()} <small>PTS</small>
             </div>
+            <div className="run-readout" aria-label="Run time and tower pace">
+              <span aria-label="Elapsed time">{formatTime(game.time)}</span>
+              {game.mode !== 'practice' && game.pace.level > 0 && (
+                <span>· Pace {game.pace.level}</span>
+              )}
+            </div>
             <div className="height-readout">
-              <ArrowUp size={13} /> {game.height} m <span>·</span>{' '}
-              {formatTime(game.time)}
+              <ArrowUp size={13} /> {game.height} m
             </div>
             <div className="gem-count">
               <Diamond size={13} /> {game.gems}
@@ -1285,6 +1295,12 @@ export default function Home() {
             {MODE_LABELS[game.mode]} · Floor {game.floor} ·{' '}
             {game.score.toLocaleString()} points
           </DialogDescription>
+          <p className="run-detail-timing">
+            Time {formatTime(game.time)} ·{' '}
+            {game.mode === 'practice'
+              ? 'Practice pace off'
+              : `Pace ${game.pace.level}`}
+          </p>
           <div className="run-details-content">
             <RunFeedback snapshot={game} />
             <PersonalProgressResults baseline={runBaseline} run={game} />
@@ -1677,6 +1693,18 @@ export default function Home() {
             </div>
           </div>
           <div className="instruction">
+            <ArrowRight size={25} />
+            <div>
+              <strong>Jump from the walls</strong>
+              <p>
+                While airborne beside a wall, release and tap JUMP to push up
+                and away, even at low speed. Land or jump from the opposite wall
+                before boosting from that wall again. Fast automatic rebounds
+                still work. Older friend challenges use their original rules.
+              </p>
+            </div>
+          </div>
+          <div className="instruction">
             <Diamond size={25} />
             <div>
               <strong>Keep your chain alive</strong>
@@ -1692,9 +1720,10 @@ export default function Home() {
             <div>
               <strong>Stay above the frost</strong>
               <p>
-                The steps start scrolling down at floor 5 and speed up every 30
-                seconds. The camera follows your falls so you can recover, but
-                stay above the frost. Practice mode removes automatic scrolling.
+                The frost starts rising at floor 5 and gets faster every 30
+                seconds, with no speed cap. Time and pace appear below your
+                score. Pausing freezes both. Practice removes automatic
+                scrolling; older friend challenges keep their original pace.
               </p>
             </div>
           </div>

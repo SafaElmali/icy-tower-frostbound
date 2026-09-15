@@ -89,3 +89,28 @@ void test('automatic scrolling has the same speed at 60 and 120 Hz', () => {
   for (let i = 0; i < 600; i++) b.tick(1 / 120, freshControls());
   assert.ok(Math.abs(a.cameraY - b.cameraY) < .001); assert.ok(Math.abs(a.stormY - b.stormY) < .001);
 });
+
+void test('pace keeps increasing past the old cap while legacy recordings retain it', () => {
+  for (const version of [3, 4, 5] as const) {
+    const e = new TowerEngine(42, false, version); e.start(); stand(e, 5); step(e, 1 / 120);
+    for (const [seconds, level] of [[30, 2], [150, 6], [180, 7], [300, 11]]) {
+      // Move only the simulation clock to inspect each boundary without an artificial climb.
+      e.time = 1 / 120 + seconds;
+      assert.equal(e.pace.level, version === 3 ? Math.min(6, level) : level);
+      if (version >= 4) assert.ok(Math.abs(e.pace.nextIn! - 30) < .001);
+    }
+    assert.ok(Math.abs(e.pace.speed - (version >= 4 ? 4.65 : 2.65)) < .001);
+    e.togglePause(); const frozen = e.snapshot(); step(e, 40);
+    assert.deepEqual(e.snapshot(), frozen);
+    e.start(); assert.deepEqual(e.pace, { level: 0, speed: 0, nextIn: null });
+  }
+});
+
+void test('sustained ordinary climbing eventually loses to accelerating frost', () => {
+  const current = new TowerEngine(42, false); current.start();
+  climb(current, 600);
+  assert.equal(current.status, 'over');
+  assert.ok(current.floor > 90, `early death at floor ${current.floor}`);
+  assert.ok(current.floor < 950);
+  assert.ok(current.pace.level > 6);
+});
