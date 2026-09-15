@@ -1,0 +1,144 @@
+.hud {
+  display: none;
+}
+
+/* One compact status area leaves the tower and its warning lanes visible. */
+@media (max-width: 760px),
+  (any-pointer: coarse),
+  (max-height: 500px) and (orientation: landscape) {
+  .layout :global(.brand),
+  .layout :global(.edition),
+  .layout :global(.utility),
+  .layout :global(.menu-toggle) > span,
+  .layout :global(.score-hud),
+  .layout :global(.skill-hud),
+  .layout :global(.guidance-dock),
+  .layout :global(.desktop-action-hud),
+  .layout :global(.combo-hud),
+  .layout :global(.speed-meter),
+  .layout :global(.section-notice),
+  .layout :global(.storm-warning) {
+    display: none;
+  }
+
+  .layout :global(.topbar) {
+    justify-content: flex-end;
+    padding: calc(12px + var(--safe-top)) calc(16px + var(--safe-right)) 0
+      calc(16px + var(--safe-left));
+    pointer-events: none;
+  }
+  .layout :global(.menu-toggle) {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    pointer-events: auto;
+    background: #0a1c29d9;
+  }
+  .hud {
+    position: absolute;
+    top: calc(12px + var(--safe-top));
+    left: calc(16px + var(--safe-left));
+    right: calc(16px + var(--safe-right));
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .readout {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 44px;
+    max-width: calc(100% - 56px);
+    padding: 0 12px;
+    border: 1px solid #a2ccd22b;
+    border-radius: 22px;
+    background: #0a1c29d9;
+    white-space: nowrap;
+  }
+  .floor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #b9ced3;
+    font-size: 13px;
+  }
+  .floor strong {
+    color: #edf5ef;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .combo {
+    color: #ade8d4;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .combo small {
+    font-size: 11px;
+    font-weight: 400;
+  }
+  .cue {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    max-width: 100%;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: #0a1c29e8;
+    color: #c5e9de;
+    font-size: 13px;
+    line-height: 18px;
+  }
+  .cue:has(button) {
+    padding-block: 0;
+    padding-right: 0;
+  }
+  .cue output {
+    min-width: 0;
+  }
+  .danger {
+    color: #ffdda2;
+  }
+  .timer {
+    flex-shrink: 0;
+    font-size: 12px;
+  }
+  .cue button {
+    display: grid;
+    place-items: center;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: #b1c9cc;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: manipulation;
+  }
+  .cue button:focus-visible {
+    outline: 2px solid #c5e9de;
+    outline-offset: -4px;
+  }
+  .cue button:hover {
+    background: #b1c9cc1a;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .hud {
+    flex-direction: row;
+    align-items: center;
+    right: calc(72px + var(--safe-right));
+    gap: 10px;
+  }
+  .readout {
+    flex-shrink: 0;
+  }
+}

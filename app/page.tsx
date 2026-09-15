@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import menuStyles from './game-menu.module.css';
+import mobileHudStyles from '@/components/mobile-game-hud.module.css';
+import { MobileGameHud } from '@/components/mobile-game-hud';
 import { WardrobeDialog } from '@/components/wardrobe';
 import {
   COSMETICS,
@@ -924,7 +926,7 @@ export default function Home() {
 
   return (
     <main
-      className={`game-shell state-${game.status} mode-${game.mode} ${challenge ? 'friend-run' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}
+      className={`game-shell state-${game.status} mode-${game.mode} ${active ? mobileHudStyles.layout : ''} ${challenge ? 'friend-run' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}
     >
       <canvas
         className="world-canvas"
@@ -968,8 +970,11 @@ export default function Home() {
             }}
             aria-haspopup="dialog"
             aria-expanded={menuOpen}
+            aria-label={
+              game.status === 'playing' ? 'Pause and open menu' : 'Menu'
+            }
           >
-            <Menu size={18} /> Menu
+            <Menu size={18} /> <span>Menu</span>
           </Button>
         </div>
       </header>
@@ -1049,13 +1054,22 @@ export default function Home() {
       )}
       {active && (
         <>
+          {game.status === 'playing' && (
+            <MobileGameHud
+              game={game}
+              guidance={guidanceCue}
+              onSkip={() => saveGuidance(skipGuidance(guidanceProfile.current))}
+            />
+          )}
           {!actionNotice && (
             <aside className="skill-hud">
               <FeaturedSkillGoal profile={skills} snapshot={game} />
             </aside>
           )}
           {game.status === 'playing' && actionRules && (
-            <TowerActionHud action={game.action} />
+            <div className="desktop-action-hud">
+              <TowerActionHud action={game.action} />
+            </div>
           )}
           {game.status === 'playing' && guidanceCue && (
             <div className="guidance-dock">
@@ -1219,7 +1233,7 @@ export default function Home() {
                 {...touchEvents}
               >
                 <ArrowUp />
-                <span>JUMP</span>
+                <span>{game.doubleJumpReady ? 'DOUBLE' : 'JUMP'}</span>
               </Button>
             </fieldset>
           )}
