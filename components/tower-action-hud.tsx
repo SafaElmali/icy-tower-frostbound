@@ -26,7 +26,7 @@ export function TowerActionHud({ action }: { action: TowerActionState }) {
     (frenzy
       ? 'Boosted jumps. Follow the crystals!'
       : encounter?.kind === 'ice-shower'
-        ? 'Dodge the marked lanes.'
+        ? 'Dodge the falling ice.'
         : 'Cracked ledges break. Keep jumping!');
   const Icon =
     label === 'COMBO FRENZY'

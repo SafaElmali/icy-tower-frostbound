@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CRUMBLE_DELAY, ICICLE_WARNING_TIME, type TowerActionState, type CrumbleState } from './tower-action.ts';
 
-type ActionSceneState = { action: TowerActionState; x: number; y: number; time: number; cameraY: number; status: string };
+type ActionSceneState = { action: TowerActionState; x: number; y: number; time: number; cameraY: number; status: string; rulesVersion: number };
 type IceVisual = { group: THREE.Group; ice: THREE.Group; lane: THREE.Mesh; edges: THREE.Mesh[]; target: THREE.Group; timer: THREE.Mesh };
 type BatVisual = { group: THREE.Group; wings: THREE.Group[]; warning: THREE.Group };
 type TrailCrystal = { x: number; y: number; born: number; angle: number };
@@ -159,6 +159,7 @@ export class TowerActionWorld {
   update(state: ActionSceneState, reducedMotion: boolean) {
     if (this.disposed) return;
     const { action, time } = state, active = state.status !== 'ready';
+    const showWarnings = state.rulesVersion < 8;
     this.icicles.forEach((visual, index) => {
       const icicle = action.icicles[index]; visual.group.visible = active && !!icicle;
       if (!icicle) return;
@@ -166,10 +167,10 @@ export class TowerActionWorld {
       visual.group.position.set(icicle.x, icicle.targetY, 0);
       visual.ice.position.set(warning && !reducedMotion ? Math.sin(time * 37 + icicle.id) * .055 : 0, icicle.y - icicle.targetY, 0);
       visual.ice.rotation.z = warning && !reducedMotion ? Math.sin(time * 23 + icicle.id) * .035 : 0;
-      visual.lane.visible = warning; visual.lane.position.y = height / 2; visual.lane.scale.y = height;
-      for (const edge of visual.edges) { edge.visible = warning; edge.position.y = height / 2; edge.scale.y = height; }
-      visual.target.visible = warning || icicle.y >= icicle.targetY - .8;
-      visual.timer.visible = warning;
+      visual.lane.visible = showWarnings && warning; visual.lane.position.y = height / 2; visual.lane.scale.y = height;
+      for (const edge of visual.edges) { edge.visible = showWarnings && warning; edge.position.y = height / 2; edge.scale.y = height; }
+      visual.target.visible = showWarnings && (warning || icicle.y >= icicle.targetY - .8);
+      visual.timer.visible = showWarnings && warning;
       const progress = Math.max(.025, Math.min(1, icicle.warningTime / ICICLE_WARNING_TIME));
       visual.timer.scale.x = 1.16 * progress;
     });
@@ -179,7 +180,7 @@ export class TowerActionWorld {
       visual.group.position.set(bat.x, bat.y, .05);
       visual.group.rotation.z = reducedMotion ? 0 : Math.sin(time * 3 + bat.phase) * .065;
       visual.wings.forEach((wing, index) => { wing.rotation.y = reducedMotion ? .22 : .22 + Math.sin(time * 14 + bat.phase) * .7; wing.rotation.z = reducedMotion ? 0 : (index === 0 ? 1 : -1) * Math.sin(time * 14 + bat.phase) * .13; });
-      visual.warning.visible = bat.warningTime > 0;
+      visual.warning.visible = showWarnings && bat.warningTime > 0;
       // Bats prepare outside the walls; their advance notice belongs inside the playfield.
       visual.warning.position.x = THREE.MathUtils.clamp(bat.x, -5.5, 5.5) - bat.x;
       visual.warning.rotation.z = -visual.group.rotation.z;

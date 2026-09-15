@@ -17,12 +17,12 @@ export const FLOOR_HEIGHT = 2.35;
 export const WALL = 6.4;
 export const STAGE_WIDTH = 13.6;
 export const isStageFloor = (id: number) => id > 0 && id % 50 === 0;
-export const CURRENT_RULES_VERSION = 6;
+export const CURRENT_RULES_VERSION = 8;
 export const PACE_INTERVAL = 30;
 export const platformFloor = (platform: Platform) => platform.floor ?? platform.id;
 export const MAX_REPLAY_FRAMES = 216000;
 export const MAX_REPLAY_SEGMENTS = 12000;
-export type RunReplay = { seed: number; moves: [number, number][] } & ({ version: 1 | 2; mode?: never } | { version: 3 | 4 | 5 | 6; mode: RankedMode });
+export type RunReplay = { seed: number; moves: [number, number][] } & ({ version: 1 | 2; mode?: never } | { version: 3 | 4 | 5 | 6 | 7 | 8; mode: RankedMode });
 export const replayMode = (replay: RunReplay): RankedMode => replay.mode ?? 'arcade';
 export const freshControls = (): Controls => ({ left: false, right: false, jump: false });
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -77,10 +77,11 @@ export class TowerEngine {
   get pace() {
     const elapsed = this.scrollStartedAt === null ? 0 : Math.max(0, this.time - this.scrollStartedAt);
     const increases = Math.floor((elapsed + (this.rulesVersion >= 4 ? 1e-8 : 0)) / PACE_INTERVAL);
-    const level = this.scrollStartedAt === null ? 0 : 1 + (this.rulesVersion >= 4 ? increases : Math.min(5, increases));
+    const level = this.scrollStartedAt === null ? 0 : 1 + (this.rulesVersion >= 4 ? increases : Math.min(5, increases)) + this.difficultyTier(this.floor);
     return { level, speed: level === 0 ? 0 : .65 + (level - 1) * .4,
       nextIn: level === 0 || (this.rulesVersion < 4 && level === 6) ? null : clamp((increases + 1) * PACE_INTERVAL - elapsed, 0, PACE_INTERVAL) };
   }
+  private difficultyTier(floor: number) { return this.rulesVersion >= 7 ? Math.floor(floor / 50) : 0; }
   private random() { this.state = (Math.imul(1664525, this.state) + 1013904223) >>> 0; return this.state / 4294967296; }
   private resetWorld() {
     this.state = this.seed; this.nextId = 0; this.platforms = [];
@@ -95,7 +96,10 @@ export class TowerEngine {
       // Keep the generation anchor separate from active collision/render ledges.
       // Its live position preserves legacy behavior when the last ledge moves.
       const previous = this.lastPrimary;
-      const normalWidth = id < 8 ? 3.7 : Math.max(2.45, 3.7 - id * .007) + this.random() * .5;
+      const legacyWidth = id < 8 ? 3.7 : Math.max(2.45, 3.7 - id * .007) + this.random() * .5;
+      // Generate each band by its own floor, even when it is visible before the
+      // milestone landing. Keep enough width for ordinary momentum jumps.
+      const normalWidth = Math.max(2.1, legacyWidth - this.difficultyTier(id) * .25);
       // Version 1 retains the original layout for already-recorded leaderboard runs.
       const stage = this.rulesVersion >= 2 && isStageFloor(id);
       // Four-floor route sections leave the first eleven floors and rest stages alone.
@@ -305,9 +309,12 @@ export class TowerEngine {
             this.lastFloor = landedFloor;
             if (this.rulesVersion >= 6) this.chargeFrenzy(climbed);
           }
+          const previousTier = this.difficultyTier(this.floor);
           this.floor = Math.max(this.floor, landedFloor);
           if (!this.comboChallengeBroken) this.comboChallengeFloor = Math.min(30, this.floor);
           if (this.rulesVersion >= 6) this.armCrumble(landing);
+          const tier = this.difficultyTier(this.floor);
+          if (tier > previousTier) this.notice(`FLOOR ${tier * 50} · HARDER AHEAD`, this.mode === 'practice' ? 'Narrower ledges ahead. Line up your landings!' : 'Faster frost and narrower ledges. Keep climbing!', 4);
           if (landing.spring) {
             this.vy = (19 + Math.abs(this.vx) * .25) * this.jumpMultiplier;
             this.grounded = false; this.standingId = -1; this.coyote = 0; this.jumpBuffer = 0;
@@ -370,7 +377,7 @@ export class TowerEngine {
     this.emit('frenzy');
   }
   private endEncounter() {
-    this.action.encounter = null; this.breatherTime = 12;
+    this.action.encounter = null; this.breatherTime = this.rulesVersion >= 8 ? 6 : 12;
     this.action.icicles = []; this.action.bats = [];
     for (const p of this.platforms) {
       if (this.encounterCrumbles.has(p.id) && p.crumble?.remaining === null) delete p.crumble;
@@ -380,6 +387,8 @@ export class TowerEngine {
   }
   private advanceAction(dt: number) {
     const action = this.action;
+    const intense = this.rulesVersion >= 8;
+    const pressure = intense ? 1 + Math.min(5, this.difficultyTier(this.floor)) * .15 : 1;
     action.invulnerableTime = Math.max(0, action.invulnerableTime - dt);
     if (action.notice) {
       action.notice.timeLeft -= dt;
@@ -409,7 +418,7 @@ export class TowerEngine {
       this.nextEncounterFloor = this.floor + 24;
       action.icicles = []; action.bats = [];
       this.icicleCooldown = .65;
-      this.notice(kind === 'ice-shower' ? 'ICE SHOWER' : 'CRUMBLE RUSH', kind === 'ice-shower' ? 'Watch each marked lane. There is always room to dodge.' : 'Cracked stairs ahead. Land, then leap again!', 4);
+      this.notice(kind === 'ice-shower' ? 'ICE SHOWER' : 'CRUMBLE RUSH', kind === 'ice-shower' ? (intense ? 'Falling ice ahead. Keep moving!' : 'Watch each marked lane. There is always room to dodge.') : 'Cracked stairs ahead. Land, then leap again!', 4);
       this.emit('encounter', kind === 'ice-shower' ? 1 : 2);
     }
     if (action.encounter?.kind === 'crumble-rush') {
@@ -428,20 +437,20 @@ export class TowerEngine {
     if (this.floor >= 12) this.icicleCooldown = Math.max(0, this.icicleCooldown - dt);
     if (this.floor >= 20) this.batCooldown = Math.max(0, this.batCooldown - dt);
     const shower = action.encounter?.kind === 'ice-shower';
-    if (canThreaten && this.floor >= 12 && this.icicleCooldown === 0 && !action.bats.length && !action.icicles.length && action.encounter?.kind !== 'crumble-rush') {
-      // The x lane is captured once. Movement during the warning never moves
-      // the target, and the other side of every ledge remains an escape route.
+    if (canThreaten && this.floor >= 12 && this.icicleCooldown === 0 && (intense ? action.icicles.length < 2 : !action.bats.length && !action.icicles.length) && action.encounter?.kind !== 'crumble-rush') {
+      // Capture the lane once: falling shards never track the player's movement.
       const spawnY = Math.max(this.y + 7, this.cameraY + 5);
-      action.icicles.push({ id: this.nextActionId++, x: clamp(this.x, -5.6, 5.6), y: spawnY, spawnY, targetY: this.y, state: 'warning', warningTime: ICICLE_WARNING_TIME + dt, vy: 0, nearMiss: false });
-      this.icicleCooldown = shower ? 2.5 : 7;
-      this.events.push({ type: 'icicle-warning', x: action.icicles[0].x, y: spawnY });
-      this.introduce('icicle', 'LOOK UP!', 'The marked lane will fall. Move aside before it flashes.');
+      const x = clamp(this.x, -5.6, 5.6);
+      action.icicles.push({ id: this.nextActionId++, x, y: spawnY, spawnY, targetY: this.y, state: intense ? 'falling' : 'warning', warningTime: intense ? 0 : ICICLE_WARNING_TIME + dt, vy: intense ? -5 : 0, nearMiss: false });
+      this.icicleCooldown = intense ? (shower ? 1.5 : 3.5) / pressure : shower ? 2.5 : 7;
+      this.events.push({ type: 'icicle-warning', x, y: spawnY });
+      this.introduce('icicle', 'LOOK UP!', intense ? 'Dodge falling ice. Keep moving between landings.' : 'The marked lane will fall. Move aside before it flashes.');
     }
-    if (canThreaten && this.floor >= 20 && this.batCooldown === 0 && !action.icicles.length && !action.bats.length && !action.encounter) {
+    if (canThreaten && this.floor >= 20 && this.batCooldown === 0 && (intense ? action.bats.length < 2 : !action.icicles.length && !action.bats.length) && (!action.encounter || (intense && shower))) {
       const side = ((this.seed ^ this.nextActionId) & 1) ? 1 : -1;
       const originX = side * (WALL + .7), originY = this.y + 1.8;
-      action.bats.push({ id: this.nextActionId++, x: originX, y: originY, originX, originY, phase: 0, alive: true, warningTime: .85 + dt });
-      this.batCooldown = 11;
+      action.bats.push({ id: this.nextActionId++, x: originX, y: originY, originX, originY, phase: 0, alive: true, warningTime: intense ? 0 : .85 + dt });
+      this.batCooldown = intense ? 5.5 / pressure : 11;
       this.events.push({ type: 'bat-warning', x: side * 5.5, y: originY });
       this.introduce('bat', 'FROST BAT', 'Dodge its wings or land on top for a bonus bounce.');
     }
@@ -468,7 +477,7 @@ export class TowerEngine {
       }
     }
     action.icicles = action.icicles.filter(i => i.y > this.cameraY - 14 && i.y > i.targetY - 12).slice(-2);
-    action.bats = action.bats.filter(b => b.alive && b.phase < 5.5 && b.y > this.cameraY - 12 && b.y < this.cameraY + 14).slice(-1);
+    action.bats = action.bats.filter(b => b.alive && b.phase < 5.5 && b.y > this.cameraY - 12 && b.y < this.cameraY + 14).slice(intense ? -2 : -1);
     action.crystals = action.crystals.filter(c => !c.collected && c.y > this.cameraY - 12 && c.y < this.cameraY + 18).slice(-16);
   }
   private hurt(sourceX: number) {
@@ -521,7 +530,7 @@ export class TowerEngine {
   getRecording(): RunReplay | null {
     if (this.mode === 'practice' || !this.replay) return null;
     const recording = { seed: this.seed, moves: this.replay.map(([frames, mask]): [number, number] => [frames, mask]) };
-    return this.rulesVersion === 3 || this.rulesVersion === 4 || this.rulesVersion === 5 || this.rulesVersion === 6 ? { ...recording, version: this.rulesVersion, mode: this.mode } : { ...recording, version: this.rulesVersion };
+    return this.rulesVersion === 1 || this.rulesVersion === 2 ? { ...recording, version: this.rulesVersion } : { ...recording, version: this.rulesVersion, mode: this.mode };
   }
   snapshot() {
     const challenge = (id: QuickChallenge['id'], title: string, description: string, progress: number, target: number, failed = false): QuickChallenge => ({
