@@ -1,6 +1,6 @@
 /** Local-only, bounded playtest measurements. No identity, network requests or key logs. */
 export const PLAYTEST_STORAGE_KEY = 'frostbound:playtest:v1';
-export const PLAYTEST_FEATURE_VERSION = 'replay-features-v1';
+export const PLAYTEST_FEATURE_VERSION = 'tower-action-v1';
 export const MAX_PLAYTEST_RUNS = 300;
 const SESSION_GAP_MS = 30 * 60 * 1000;
 const DAY_MS = 86_400_000;

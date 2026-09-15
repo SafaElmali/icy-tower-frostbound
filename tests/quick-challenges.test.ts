@@ -59,9 +59,13 @@ void test('crystals count once each, complete at ten, and keep displayed progres
   for (let id = 1; id <= 11; id++) {
     land(engine, id);
     const platform = engine.platforms.find(platform => platform.id === id)!;
+    // Frenzy may have awarded a trail crystal during landing. The platform
+    // itself must still add exactly one crystal across repeated ticks.
+    const before = engine.gems;
     platform.gem = true;
     tick(engine, 2);
-    assert.equal(engine.gems, id);
+    assert.equal(engine.gems, before + 1);
+    assert.equal(platform.collected, true);
     assert.equal(challenge(engine, 'crystals').status, id < 10 ? 'active' : 'complete');
   }
   assert.equal(challenge(engine, 'crystals').progress, 10);

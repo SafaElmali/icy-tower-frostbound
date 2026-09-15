@@ -43,7 +43,7 @@ void test('ordinary standing jumps complete the safe route without taking its op
       assert.equal(engine.standingId, floor);
       engine.tick(1 / 120, freshControls());
     }
-    assert.equal(engine.gems, 0);
+    assert.equal(engine.platforms.find(p => p.route === 'shortcut')!.collected, false, 'the safe route never collects the optional shortcut crystal');
   }
 });
 

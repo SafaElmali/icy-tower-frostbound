@@ -146,7 +146,7 @@ void test('a controlled wall jump and subsequent climb replay to the same verifi
     wasJump = jump; engine.drainEvents();
   }
   assert.equal(engine.status, 'over');
-  const replay = engine.getReplay()!; assert.equal(replay.version, 5);
+  const replay = engine.getReplay()!; assert.equal(replay.version, 6);
   const verified = verifySubmission({ name: 'Wall climber', replay });
   assert.equal(verified.score, engine.score); assert.equal(verified.floor, engine.floor);
   assert.equal(verified.duration, Math.round(engine.time * 1000));
