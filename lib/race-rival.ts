@@ -8,7 +8,7 @@ const lerp = (a: number, b: number, amount: number) => a + (b - a) * amount;
 const clamp = (n: number, min: number, max: number) =>
   Math.max(min, Math.min(max, n));
 
-/** Buffered positions stay visible between packets, with a short delay to smooth jitter. */
+/** Buffer on receipt time: lobby waits and suspended simulation clocks cannot skew playback. */
 export class RaceRival {
   engine = {
     x: 0,
@@ -23,10 +23,8 @@ export class RaceRival {
   motion = new ClimberMotion();
   finished = true;
   private snapshots: Snapshot[] = [];
-  private offset = Infinity;
   private delay = 100;
   private lastSource: 'http' | 'peer' | null = null;
-  private renderedTime = -Infinity;
 
   receive(
     pose: RacePose | null,
@@ -39,72 +37,62 @@ export class RaceRival {
     const previous = this.snapshots.at(-1);
     if (previous && pose.time < previous.pose.time) return;
     if (previous && pose.time === previous.pose.time) {
-      // Settlement can rest a climber on a ledge without advancing its input clock.
+      // Settlement can rest a climber without advancing its input clock.
       previous.pose = { ...pose };
       return;
     }
     this.finished = hidden;
-    this.offset = Math.min(this.offset, now - pose.time * 1_000);
     const interval = previous ? now - previous.received : 0;
     if (source === 'peer') this.delay = 100;
-    else if (this.lastSource !== 'peer')
+    else if (this.lastSource !== 'peer' || interval > 500)
       this.delay = interval > 0 ? clamp(interval * 1.15, 500, 1_500) : 750;
-    else if (interval > 500) {
-      this.delay = clamp(interval * 1.15, 500, 1_500);
-      this.lastSource = 'http';
-    }
     this.lastSource = source;
-    if (!previous) {
-      Object.assign(this.engine, pose);
-      this.renderedTime = pose.time;
-    }
+    if (!previous) Object.assign(this.engine, pose);
     this.snapshots.push({ pose: { ...pose }, received: now });
     if (this.snapshots.length > 90) this.snapshots.shift();
   }
 
   advance(now: number, dt: number) {
     if (!this.snapshots.length || this.finished) return;
-    const newest = this.snapshots.at(-1)!.pose;
-    // Switching transports can increase the buffer. Hold time rather than rewind.
-    const at = Math.max(
-      this.renderedTime,
-      (now - this.offset - this.delay) / 1_000,
-    );
-    this.renderedTime = at;
-    while (this.snapshots.length > 2 && this.snapshots[1].pose.time <= at)
+    const newest = this.snapshots.at(-1)!;
+    const at = now - this.delay;
+    while (this.snapshots.length > 2 && this.snapshots[1].received <= at)
       this.snapshots.shift();
-    const a = this.snapshots[0].pose;
-    const b = this.snapshots.find((sample) => sample.pose.time >= at)?.pose;
-    let x: number,
-      y: number,
-      vx: number,
-      vy: number,
-      pose = newest;
-    if (b && b.time > a.time && at >= a.time) {
-      const mix = clamp((at - a.time) / (b.time - a.time), 0, 1);
-      const respawn = a.respawning !== b.respawning && Math.abs(b.y - a.y) > 1;
-      pose = mix < 1 ? a : b;
-      x = respawn ? pose.x : lerp(a.x, b.x, mix);
-      y = respawn ? pose.y : lerp(a.y, b.y, mix);
-      vx = lerp(a.vx, b.vx, mix);
-      vy = lerp(a.vy, b.vy, mix);
-    } else if (at <= a.time) {
-      pose = a;
-      ({ x, y, vx, vy } = a);
+    const a = this.snapshots[0];
+    const b = this.snapshots.find((sample) => sample.received >= at);
+    let x: number, y: number, vx: number, vy: number, time: number;
+    let pose = newest.pose;
+    if (b && b.received > a.received && at >= a.received) {
+      const mix = clamp((at - a.received) / (b.received - a.received), 0, 1);
+      const respawn =
+        a.pose.respawning &&
+        !b.pose.respawning &&
+        Math.abs(b.pose.y - a.pose.y) > 2;
+      pose = mix < 1 ? a.pose : b.pose;
+      x = respawn ? pose.x : lerp(a.pose.x, b.pose.x, mix);
+      y = respawn ? pose.y : lerp(a.pose.y, b.pose.y, mix);
+      vx = lerp(a.pose.vx, b.pose.vx, mix);
+      vy = lerp(a.pose.vy, b.pose.vy, mix);
+      time = lerp(a.pose.time, b.pose.time, mix);
+    } else if (at <= a.received) {
+      pose = a.pose;
+      ({ x, y, vx, vy, time } = pose);
     } else {
-      const ahead = clamp(at - newest.time, 0, 0.2);
-      x = newest.x + newest.vx * ahead;
+      const ahead = clamp((at - newest.received) / 1_000, 0, 0.2);
+      x = pose.x + pose.vx * ahead;
       y =
-        newest.y +
-        (newest.grounded || newest.respawning
+        pose.y +
+        (pose.grounded || pose.respawning
           ? 0
-          : newest.vy * ahead - 11.5 * ahead * ahead);
-      vx = newest.vx;
-      vy = newest.vy;
+          : pose.vy * ahead - 11.5 * ahead * ahead);
+      vx = pose.vx;
+      vy = pose.vy;
+      time = pose.time + ahead;
     }
     if (this.engine.grounded && !pose.grounded && !pose.respawning)
-      this.motion.jump(vx, at);
-    const teleport = pose.respawning && Math.abs(y - this.engine.y) > 2;
+      this.motion.jump(vx, time);
+    const teleport =
+      pose.protected && pose.grounded && Math.abs(y - this.engine.y) > 2;
     const mix = teleport
       ? 1
       : 1 - Math.exp(-24 * Math.min(0.1, Math.max(0, dt)));
@@ -114,6 +102,6 @@ export class RaceRival {
     this.engine.vy = vy;
     this.engine.grounded = pose.grounded;
     this.engine.facing = pose.facing;
-    this.engine.time = Math.min(at, newest.time + 0.2);
+    this.engine.time = time;
   }
 }

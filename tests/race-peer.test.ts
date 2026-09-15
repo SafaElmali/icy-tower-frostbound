@@ -275,3 +275,35 @@ void test('opponent stays visible and moves across buffered frames instead of fl
   );
   assert.equal(validPeerPose({ ...pose(), floor: 101 }), false);
 });
+
+void test('lobby waits and suspended clocks do not skip the interpolation buffer', () => {
+  const rival = new RaceRival();
+  rival.receive(pose(), 0, false, 'peer');
+  for (let now = 50; now <= 30_000; now += 50) {
+    rival.receive(pose(), now, false, 'peer');
+    rival.advance(now, 0.05);
+  }
+  for (let frame = 1; frame <= 20; frame++) {
+    const time = frame * 0.05;
+    rival.receive(
+      { ...pose(time), x: time * 2, vx: 2 },
+      30_000 + frame * 50,
+      false,
+      'peer',
+    );
+    rival.advance(30_000 + frame * 50, 0.05);
+  }
+  assert.ok(
+    rival.engine.time >= 0.85 && rival.engine.time <= 0.91,
+    'plays buffered samples, never predicts ahead after lobby',
+  );
+  assert.ok(rival.engine.x < 1.9 && rival.engine.x > 1.5);
+  rival.receive({ ...pose(1.05), x: 2.1, vx: 2 }, 60_000, false, 'peer');
+  rival.advance(60_000, 0.05);
+  rival.receive({ ...pose(1.1), x: 2.2, vx: 2 }, 60_050, false, 'peer');
+  rival.advance(60_050, 0.05);
+  assert.ok(
+    rival.engine.time < 1.1,
+    'a background gap cannot advance beyond the newest simulation',
+  );
+});
