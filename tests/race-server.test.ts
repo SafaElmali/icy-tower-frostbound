@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getStore, setEnvironmentContext } from '@netlify/blobs';
+import { setEnvironmentContext } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
 import {
   RaceService,
@@ -23,6 +23,7 @@ import {
   type RaceAction,
 } from '../lib/race-protocol.ts';
 import { freshControls } from '../lib/tower-engine.ts';
+import { raceBlobStore } from '../lib/race-store.ts';
 
 const room = 'a'.repeat(32),
   host = '1'.repeat(64),
@@ -322,7 +323,7 @@ void test('separate service instances share real Blob rooms and conditional join
       edgeURL: `http://localhost:${port}`,
       uncachedEdgeURL: `http://localhost:${port}`,
     });
-    const store = getStore({ name: 'frostbound-races', consistency: 'strong' });
+    const store = raceBlobStore();
     // The bundled Blobs emulator omits ETags on GET. Its list response exposes
     // the same real ETag that its conditional PUT implementation checks.
     const localStore: RaceStore = {
@@ -389,10 +390,16 @@ void test('storage HTTP failures cannot masquerade as successful conditional wri
     checkedBlobFetch('https://storage.example/key', { method: 'PUT' }),
     /HTTP 404/,
   );
-  assert.equal(
-    (await checkedBlobFetch('https://storage.example/key', { method: 'GET' }))
-      .status,
-    404,
+  for (const method of ['GET', 'get', 'HEAD', 'head']) {
+    assert.equal(
+      (await checkedBlobFetch('https://storage.example/key', { method }))
+        .status,
+      404,
+    );
+  }
+  await assert.rejects(
+    checkedBlobFetch('https://storage.example/key', { method: 'put' }),
+    /HTTP 404/,
   );
   status = 412;
   assert.equal(
