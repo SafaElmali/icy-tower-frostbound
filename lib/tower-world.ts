@@ -269,21 +269,10 @@ export class TowerWorld {
     let gem: THREE.Mesh | undefined;
     if (p.gem) { gem = this.mesh(new THREE.OctahedronGeometry(.21, 0), party ? this.partyGemMat : this.gemMat, group, 0, 1.05, 0); gem.scale.y = 1.55; }
     this.batchMeshes(group, gem);
-    const plaque = p.route === 'approach' ? this.makeRoutePlaque(p, group) : p.id > 0 && p.id % 10 === 0 ? this.makeFloorPlaque(p.id, group) : undefined;
+    const plaque = p.id > 0 && p.id % 10 === 0 ? this.makeFloorPlaque(p.id, group) : undefined;
     const crumble = p.crumble ? this.actionWorld.makeCrumble(p.width) : undefined;
     if (crumble) group.add(crumble.group);
     return { group, gem, plaque, crumble, platform: p, id: p.id };
-  }
-  private makeRoutePlaque(p: Platform, group: THREE.Group): FloorPlaque {
-    const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 128;
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#142733'; ctx.fillRect(0, 0, 640, 128);
-    ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillStyle = '#d9f2f3'; ctx.fillText('WIDE STEPS ↑', 320, 49);
-    ctx.fillStyle = '#f5d993'; ctx.fillText(`CRYSTAL SHORTCUT ${p.x > 0 ? '↖' : '↗'}`, 320, 98);
-    const map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
-    const plaque = new THREE.Mesh(new THREE.PlaneGeometry(3.2, .64), new THREE.MeshBasicMaterial({ map, toneMapped: false }));
-    plaque.position.set(0, -.64, .78); group.add(plaque); return plaque;
   }
   private removeLedge(ledge: Ledge) {
     this.root.remove(ledge.group);

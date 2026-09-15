@@ -20,7 +20,7 @@ export function verifySubmission(input: unknown): LeaderboardEntry & { mode: Ran
   const { name: rawName, replay, outfit } = input as { name?: unknown; replay?: RunReplay; outfit?: unknown };
   const name = typeof rawName === 'string' ? rawName.normalize('NFKC').trim().replace(/\s+/g, ' ') : '';
   if (!/^[\p{L}\p{N} ._'’-]{2,20}$/u.test(name)) throw new LeaderboardError('Use 2–20 letters, numbers, spaces, or simple punctuation for your name.');
-  if (!replay || (replay.version !== 1 && replay.version !== 2 && replay.version !== 3 && replay.version !== 4 && replay.version !== 5 && replay.version !== 6) || !Number.isInteger(replay.seed) || replay.seed < 0 || replay.seed > 0xffffffff || !Array.isArray(replay.moves) || !replay.moves.length || replay.moves.length > MAX_REPLAY_SEGMENTS) throw new LeaderboardError('This run cannot be verified. Start a new ranked run.');
+  if (!replay || (replay.version !== 1 && replay.version !== 2 && replay.version !== 3 && replay.version !== 4 && replay.version !== 5 && replay.version !== 6 && replay.version !== 7 && replay.version !== 8) || !Number.isInteger(replay.seed) || replay.seed < 0 || replay.seed > 0xffffffff || !Array.isArray(replay.moves) || !replay.moves.length || replay.moves.length > MAX_REPLAY_SEGMENTS) throw new LeaderboardError('This run cannot be verified. Start a new ranked run.');
   if (replay.version >= 3 ? replay.mode !== 'arcade' && replay.mode !== 'party' : replay.mode !== undefined) throw new LeaderboardError('Invalid ranked mode.');
   const mode = replayMode(replay);
   let totalFrames = 0;

@@ -1768,8 +1768,10 @@ export default function Home() {
               <strong>Stay above the frost</strong>
               <p>
                 The frost starts rising at floor 5 and gets faster every 30
-                seconds, with no speed cap. Time and pace appear below your
-                score. Pausing freezes both. Practice removes automatic
+                seconds, with an extra speed increase every 50 floors. Each
+                50-floor milestone also brings narrower regular ledges; the
+                full-width stages give you room to prepare. Time and pace appear
+                below your score. Pausing freezes both. Practice removes automatic
                 scrolling; older friend challenges keep their original pace.
               </p>
             </div>
@@ -1780,8 +1782,9 @@ export default function Home() {
               <strong>Read the danger</strong>
               <p>
                 Cracked ledges crumble about a second after landing — jump away.
-                Shaking icicles mark a lane before they fall; steer out of it.
-                Frost bats cross your route: land on one from above for a
+                Icicles drop without landing markers, and bats enter without
+                spawn warnings. Both appear more often as you climb and can
+                arrive together. Land on a bat from above for a
                 powerful bounce and bonus points. Side hits knock you back, with
                 a brief recovery window.
               </p>

@@ -35,7 +35,7 @@ void test('server verification reproduces real runs, including pauses and mixed 
 });
 
 void test('leaderboard verifies both legacy and new stage layouts beyond floor 50', () => {
-  for (const version of [1, 2, 3, 4, 5] as const) {
+  for (const version of [1, 2, 3, 4, 5, 6, 7, 8] as const) {
     const engine = completedRun(17, false, 53, version);
     assert.ok(engine.floor >= 53); assert.equal(engine.getReplay()!.version, version);
     const entry = verifySubmission({ name: 'Harold', replay: engine.getReplay() });
@@ -113,7 +113,7 @@ void test('leaderboard keeps catalog cosmetics without trusting client score fie
 });
 
 void test('party recordings reproduce power-ups and pauses, and reject missing or legacy mode tags', () => {
-  for (const version of [3, 4, 5] as const) for (const paused of [false, true]) {
+  for (const version of [3, 4, 5, 6, 7, 8] as const) for (const paused of [false, true]) {
     const engine = completedRun(17, paused, 12, version, 'party');
     const replay = engine.getReplay()!;
     assert.ok(engine.gems > 0);
@@ -146,7 +146,7 @@ void test('a controlled wall jump and subsequent climb replay to the same verifi
     wasJump = jump; engine.drainEvents();
   }
   assert.equal(engine.status, 'over');
-  const replay = engine.getReplay()!; assert.equal(replay.version, 6);
+  const replay = engine.getReplay()!; assert.equal(replay.version, 8);
   const verified = verifySubmission({ name: 'Wall climber', replay });
   assert.equal(verified.score, engine.score); assert.equal(verified.floor, engine.floor);
   assert.equal(verified.duration, Math.round(engine.time * 1000));

@@ -5,14 +5,14 @@ import { freshTowerAction, ICICLE_WARNING_TIME } from '../lib/tower-action.ts';
 import { TowerActionWorld } from '../lib/tower-action-world.ts';
 
 function sceneState() {
-  const state = { action: freshTowerAction(), x: 0, y: 10, time: 2, cameraY: 12, status: 'playing' };
+  const state = { action: freshTowerAction(), x: 0, y: 10, time: 2, cameraY: 12, status: 'playing', rulesVersion: 7 };
   state.action.icicles.push({ id: 1, x: 0, y: 18, spawnY: 18, targetY: 10, state: 'warning', warningTime: ICICLE_WARNING_TIME, vy: 0, nearMiss: false });
   state.action.bats.push({ id: 1, x: 7.1, y: 12, originX: 7.1, originY: 12, phase: 0, alive: true, warningTime: .8 });
   state.action.crystals.push({ id: 1, x: 1, y: 12, collected: false });
   return state;
 }
 
-void test('danger cues stay visible in reduced motion and offstage bats warn inside the walls', () => {
+void test('legacy danger cues stay visible in reduced motion and offstage bats warn inside the walls', () => {
   const world = new TowerActionWorld(), state = sceneState();
   world.update(state, true); world.group.updateMatrixWorld(true);
   const icicle = world.group.getObjectByName('Falling icicle')!;
@@ -48,6 +48,24 @@ void test('paused frenzy keeps its trail frozen and retry clears every stale act
   state.action = freshTowerAction(); state.time = 0; state.status = 'playing'; world.update(state, false);
   assert.equal(trail.count, 0);
   assert.equal(world.group.children.filter(child => child.visible && child !== trail).length, 0);
+  world.dispose();
+});
+
+void test('current runs render hazards without landing lanes, countdowns, or bat spawn circles', () => {
+  const world = new TowerActionWorld(), state = sceneState();
+  // Reuse a legacy scene first to catch stale warning visibility after a restart.
+  world.update(state, false);
+  state.rulesVersion = 8;
+  const icicle = world.group.getObjectByName('Falling icicle')!;
+  const bat = world.group.getObjectByName('Frost bat')!;
+  for (const reducedMotion of [false, true]) for (const phase of ['warning', 'falling'] as const) {
+    state.action.icicles[0].state = phase;
+    world.update(state, reducedMotion);
+    assert.ok(icicle.visible && icicle.children[0].visible && bat.visible);
+    assert.ok(icicle.children.slice(1).every(child => !child.visible), 'All lane, edge and target markers stay hidden');
+    assert.equal(icicle.getObjectByName('Icicle landing warning')!.children.at(-1)!.visible, false);
+    assert.equal(bat.getObjectByName('Bat approach warning')!.visible, false);
+  }
   world.dispose();
 });
 

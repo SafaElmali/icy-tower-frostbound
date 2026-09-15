@@ -5,7 +5,8 @@ import { verifySubmission } from '../lib/leaderboard.ts';
 import { bestGhost, readGhost, TowerGhost } from '../lib/tower-ghost.ts';
 
 function recordActionClimb(mode: RankedMode) {
-  const engine = new TowerEngine(17); engine.start(mode);
+  // These fixtures reach encounters in both modes while taking real hazard hits.
+  const engine = new TowerEngine(mode === 'party' ? 723 : 17); engine.start(mode);
   let target = engine.platforms[1], wasJump = false;
   const events = new Set<string>();
   const checkpoints: { time: number; x: number; y: number; score: number; action: TowerEngine['action'] }[] = [];
@@ -33,7 +34,7 @@ void test('action runs verify on the server with the same scores in Classic and 
   for (const mode of ['arcade', 'party'] as const) {
     const { engine } = recordActionClimb(mode);
     const replay = engine.getReplay()!;
-    assert.equal(replay.version, 6);
+    assert.equal(replay.version, 8);
     const verified = verifySubmission({ name: 'Action climber', replay });
     assert.equal(verified.mode, mode);
     assert.equal(verified.score, engine.score);

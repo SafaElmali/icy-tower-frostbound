@@ -61,8 +61,8 @@ void test('cracked ledges arm on landing, wait1.15 seconds, and stop catching fa
   assert.equal(engine.grounded, false); assert.ok(engine.y < p.y);
 });
 
-void test('icicles telegraph for a full1.1 seconds and lock the lane before the player moves', () => {
-  const engine = new TowerEngine(); engine.start('practice'); stand(engine, 12);
+void test('legacy icicles telegraph for a full1.1 seconds and lock the lane before the player moves', () => {
+  const engine = new TowerEngine(73091, true, 7); engine.start('practice'); stand(engine, 12);
   for (let i = 0; i < 180 && !engine.action.icicles.length; i++) step(engine, 1);
   const icicle = engine.action.icicles[0];
   assert.ok(icicle); assert.equal(icicle.state, 'warning');
@@ -88,6 +88,68 @@ void test('falling ice gives recoverable knockback and invulnerability; near mis
   const score = engine.score; step(engine, 1);
   assert.equal(engine.action.dodges, 1); assert.equal(engine.score, score + 75);
   step(engine, 12); assert.equal(engine.action.dodges, 1);
+});
+
+void test('current icicles fall immediately, keep a fixed lane, and can overlap incoming bats', () => {
+  const engine = new TowerEngine(); engine.start('practice'); stand(engine, 22);
+  for (let frame = 0; frame < 180 && !engine.action.icicles.length; frame++) step(engine, 1);
+  const icicle = engine.action.icicles[0];
+  assert.ok(icicle); assert.equal(icicle.state, 'falling');
+  assert.equal(icicle.warningTime, 0); assert.ok(icicle.vy < 0);
+  const x = icicle.x;
+  engine.x = 3;
+  for (let frame = 0; frame < 100 && !engine.action.bats.length; frame++) step(engine, 1);
+  assert.equal(icicle.x, x, 'The ice does not home in after spawning');
+  assert.ok(engine.action.icicles.length && engine.action.bats.length);
+  assert.equal(engine.action.bats[0].warningTime, 0);
+  assert.ok(engine.action.bats[0].phase > 0, 'The bat enters immediately');
+  assert.equal(engine.action.hits, 0);
+});
+
+void test('current hazards spawn twice as often and cadence increases with milestone difficulty', () => {
+  function spawns(version: 7 | 8, floor = 22) {
+    const engine = new TowerEngine(42, false, version); engine.start('practice'); stand(engine, floor);
+    const ice: number[] = [], bats: number[] = [];
+    if (floor >= 30) engine.action.encounter = { kind: 'ice-shower', duration: 60, timeLeft: 60 };
+    for (let frame = 0; frame < 28 * 120; frame++) {
+      engine.tick(1 / 120, freshControls());
+      for (const event of engine.drainEvents()) {
+        if (event.type === 'icicle-warning') ice.push(engine.time);
+        if (event.type === 'bat-warning') bats.push(engine.time);
+      }
+      // Isolate spawn cadence from player collisions and actor travel time.
+      engine.action.icicles = []; engine.action.bats = [];
+    }
+    return { ice, bats };
+  }
+  const legacy = spawns(7), current = spawns(8);
+  assert.ok(current.ice.length > legacy.ice.length);
+  assert.ok(current.bats.length > legacy.bats.length);
+  for (const key of ['ice', 'bats'] as const) {
+    const oldGap = legacy[key][1] - legacy[key][0];
+    const newGap = current[key][1] - current[key][0];
+    assert.ok(Math.abs(newGap * 2 - oldGap) < .03);
+  }
+  const first = spawns(8, 30), higher = spawns(8, 130);
+  assert.ok(higher.ice.length > first.ice.length);
+  assert.ok(higher.bats.length > first.bats.length);
+});
+
+void test('current encounters have six-second breathers and milestone stages clear overlapping hazards', () => {
+  const engine = new TowerEngine(); engine.start('practice'); stand(engine, 30);
+  step(engine, 1);
+  engine.action.encounter!.timeLeft = 1 / 120;
+  step(engine, 1);
+  assert.equal(engine.action.encounter, null);
+  stand(engine, 54); step(engine, 600);
+  assert.equal(engine.action.encounter, null);
+  step(engine, 121);
+  assert.equal(engine.snapshot().action.encounter?.kind, 'crumble-rush');
+  engine.action.icicles.push(falling(engine));
+  engine.action.bats.push({ id: 2, x: 3, y: engine.y, originX: 7.1, originY: engine.y, phase: 1, alive: true, warningTime: 0 });
+  stand(engine, 100); step(engine, 1);
+  assert.equal(engine.action.encounter, null);
+  assert.equal(engine.action.icicles.length, 0); assert.equal(engine.action.bats.length, 0);
 });
 
 void test('bat stomps bounce and award points while side contact causes a protected recovery', () => {
@@ -123,8 +185,8 @@ void test('frenzy needs earned charge, boosts jumps, leaves collectible crystals
   assert.equal(engine.action.frenzies, 2); assert.ok(engine.action.frenzyTime > 5.9);
 });
 
-void test('encounters alternate with twelve seconds of safe breathing room and keep rest stages clear', () => {
-  const engine = new TowerEngine(); engine.start('practice'); stand(engine, 30); step(engine, 1);
+void test('legacy encounters retain twelve seconds of breathing room and keep rest stages clear', () => {
+  const engine = new TowerEngine(73091, true, 7); engine.start('practice'); stand(engine, 30); step(engine, 1);
   assert.equal(engine.action.encounter?.kind, 'ice-shower');
   step(engine, 90); assert.ok(engine.action.icicles.length > 0); assert.equal(engine.action.bats.length, 0);
   step(engine, 631); assert.equal(engine.action.encounter, null);
@@ -159,6 +221,6 @@ void test('hazard and reward actor counts stay bounded across long simulation se
     // A broad stationary test ledge isolates the spawning budget from falls.
     if (frame % 120 === 0) { stand(engine, 30); engine.action.frenzyTime = 6; }
     step(engine, 1);
-    assert.ok(engine.action.icicles.length <= 2); assert.ok(engine.action.bats.length <= 1); assert.ok(engine.action.crystals.length <= 16);
+    assert.ok(engine.action.icicles.length <= 2); assert.ok(engine.action.bats.length <= 2); assert.ok(engine.action.crystals.length <= 16);
   }
 });

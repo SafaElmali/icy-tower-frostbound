@@ -73,11 +73,13 @@ void test('fixed-step simulation stays equivalent across display refresh rates',
   assert.ok(Math.abs(a.x-b.x)<.001);assert.ok(Math.abs(a.vx-b.vx)<.001);
 });
 
-void test('procedurally generated routes can be climbed using ordinary inputs', () => {
+void test('procedurally generated routes can be climbed using ordinary inputs independently of flying hazards', () => {
   for (const seed of [3,17,42,99,723]) {
     const e=new TowerEngine(seed);e.start('practice');
     let target=e.platforms[1], wasJump=false;
     for(let i=0;i<24000 && e.floor<105 && e.status==='playing';i++) {
+      // Isolate platform reachability from the separately tested hazard pressure.
+      e.action.invulnerableTime = 1;
       if(e.grounded) target=e.platforms.find(p=>p.id===e.standingId+1)!;
       const dx=target.x-e.x;
       const steering=dx*3.8-e.vx*1.1;
