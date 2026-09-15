@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import {
   ArrowLeft,
   ArrowRight,
@@ -1468,7 +1467,10 @@ export default function Home() {
               <Button
                 className={menuStyles.row}
                 variant="ghost"
-                render={<Link href="/race" aria-label="Race a friend" />}
+                render={
+                  // oxlint-disable-next-line next/no-html-link-for-pages -- Vinext's client router fails in the static Netlify export.
+                  <a href="/race" aria-label="Race a friend" />
+                }
                 nativeButton={false}
               >
                 <Users aria-hidden="true" />
