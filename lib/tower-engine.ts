@@ -8,16 +8,19 @@ export type QuickChallenge = {
   id: 'combo' | 'crystals' | 'walls'; title: string; description: string;
   progress: number; target: number; status: 'active' | 'complete' | 'failed' | 'missed';
 };
-export type Platform = { id: number; x: number; y: number; width: number; gem: boolean; collected: boolean; moving: boolean; spring: boolean; origin: number; phase: number };
+export type Platform = { floor?: number; route?: 'approach' | 'safe' | 'shortcut' | 'merge'; id: number; x: number; y: number; width: number; gem: boolean; collected: boolean; moving: boolean; spring: boolean; origin: number; phase: number };
 export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over'; x: number; y: number; value?: number };
+export type FailureEvidence = { kind: 'left-ledge'; floor: number } | { kind: 'frost-on-ledge' | 'fell' | 'frost' };
 export const FLOOR_HEIGHT = 2.35;
 export const WALL = 6.4;
 export const STAGE_WIDTH = 13.6;
 export const isStageFloor = (id: number) => id > 0 && id % 50 === 0;
+export const CURRENT_RULES_VERSION = 4;
+export const platformFloor = (platform: Platform) => platform.floor ?? platform.id;
 export const MAX_REPLAY_FRAMES = 216000;
 export const MAX_REPLAY_SEGMENTS = 12000;
-export type RunReplay = { seed: number; moves: [number, number][] } & ({ version: 1 | 2; mode?: never } | { version: 3; mode: RankedMode });
-export const replayMode = (replay: RunReplay): RankedMode => replay.version === 3 ? replay.mode : 'arcade';
+export type RunReplay = { seed: number; moves: [number, number][] } & ({ version: 1 | 2; mode?: never } | { version: 3 | 4; mode: RankedMode });
+export const replayMode = (replay: RunReplay): RankedMode => replay.version === 3 || replay.version === 4 ? replay.mode : 'arcade';
 export const freshControls = (): Controls => ({ left: false, right: false, jump: false });
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -30,6 +33,8 @@ export class TowerEngine {
   time = 0; maxY = 0; cameraY = 5.2; stormY = -8;
   floor = 0; score = 0; gems = 0; combo = 0; bestCombo = 0; comboTime = 0;
   wallJumps = 0;
+  failureEvidence: FailureEvidence | null = null;
+  private walkedOff: { floor: number; y: number } | null = null;
   private comboChallengeFloor = 0;
   private comboChallengeBroken = false;
   doubleJumpTime = 0;
@@ -39,6 +44,7 @@ export class TowerEngine {
   seed: number;
   private state = 1;
   private nextId = 0;
+  private lastPrimary!: Platform;
   private jumpBuffer = 0;
   private coyote = .12;
   private jumpWasDown = false;
@@ -48,36 +54,56 @@ export class TowerEngine {
   private replay: [number, number][] | null = [];
   private replayFrames = 0;
   private recordReplay: boolean;
-  private rulesVersion: RunReplay['version'];
-  constructor(seed = 73091, recordReplay = true, rulesVersion: RunReplay['version'] = 3) { this.seed = seed; this.recordReplay = recordReplay; this.rulesVersion = rulesVersion; this.resetWorld(); }
+  private _rulesVersion: RunReplay['version'];
+  get rulesVersion() { return this._rulesVersion; }
+  constructor(seed = 73091, recordReplay = true, rulesVersion: RunReplay['version'] = CURRENT_RULES_VERSION) { this.seed = seed; this.recordReplay = recordReplay; this._rulesVersion = rulesVersion; this.resetWorld(); }
   private random() { this.state = (Math.imul(1664525, this.state) + 1013904223) >>> 0; return this.state / 4294967296; }
   private resetWorld() {
     this.state = this.seed; this.nextId = 0; this.platforms = [];
     this.platforms.push({ id: 0, x: 0, y: 0, width: STAGE_WIDTH, gem: false, collected: false, moving: false, spring: false, origin: 0, phase: 0 });
+    this.lastPrimary = this.platforms[0];
     this.nextId = 1;
     this.generate(42);
   }
   private generate(top: number) {
     while (this.nextId * FLOOR_HEIGHT <= top) {
       const id = this.nextId++;
-      const previous = this.platforms[this.platforms.length - 1];
+      // Keep the generation anchor separate from active collision/render ledges.
+      // Its live position preserves legacy behavior when the last ledge moves.
+      const previous = this.lastPrimary;
       const normalWidth = id < 8 ? 3.7 : Math.max(2.45, 3.7 - id * .007) + this.random() * .5;
       // Version 1 retains the original layout for already-recorded leaderboard runs.
       const stage = this.rulesVersion >= 2 && isStageFloor(id);
-      const width = stage ? STAGE_WIDTH : normalWidth;
+      // Four-floor route sections leave the first eleven floors and rest stages alone.
+      const section = Math.floor(id / 12) * 12;
+      const routeStep = id - section;
+      const routeSection = this.rulesVersion >= 4 && section >= 12 && routeStep <= 3 &&
+        ![section, section + 1, section + 2, section + 3].some(isStageFloor);
+      const side = ((this.seed ^ (section / 12)) & 1) ? -1 : 1;
+      const width = stage ? STAGE_WIDTH : routeSection ? 3.7 : normalWidth;
       // Neighboring ledges always overlap the base jump's reachable horizontal range.
       const offset = (this.random() > .5 ? 1 : -1) * (1.5 + this.random() * 2.3);
-      const x = stage ? 0 : clamp(previous.x + offset, -5.9 + width / 2, 5.9 - width / 2);
-      this.platforms.push({ id, x, y: id * FLOOR_HEIGHT, width, gem: id % 3 === 0, collected: false, moving: !stage && id > 24 && id % 7 === 0, spring: this.mode === 'party' && !stage && id % 5 === 0, origin: x, phase: this.random() * Math.PI * 2 });
+      const x = stage ? 0 : routeSection ? (routeStep === 3 ? 0 : side * 2.35) : clamp(previous.x + offset, -5.9 + width / 2, 5.9 - width / 2);
+      this.platforms.push({ id, x, y: id * FLOOR_HEIGHT, width, gem: routeSection ? false : id % 3 === 0, collected: false, moving: !stage && !routeSection && id > 24 && id % 7 === 0, spring: this.mode === 'party' && !stage && !routeSection && id % 5 === 0, origin: x, phase: this.random() * Math.PI * 2,
+        ...(routeSection ? { route: routeStep === 0 ? 'approach' as const : routeStep === 3 ? 'merge' as const : 'safe' as const } : {}) });
+      this.lastPrimary = this.platforms[this.platforms.length - 1];
+      if (routeSection && routeStep === 2) {
+        // An optional narrow crystal ledge two floors above the takeoff rewards a
+        // running jump. Negative IDs are stable render identities, never scores.
+        const shortcutX = -side * 2.35;
+        this.platforms.push({ id: -id - 1, floor: id, route: 'shortcut', x: shortcutX, y: id * FLOOR_HEIGHT, width: 1.8, gem: true, collected: false, moving: false, spring: false, origin: shortcutX, phase: 0 });
+      }
     }
   }
-  start(mode: GameMode = 'arcade', seed = this.seed) {
+  start(mode: GameMode = 'arcade', seed = this.seed, rulesVersion: RunReplay['version'] = this.rulesVersion) {
+    this._rulesVersion = rulesVersion;
     if (mode === 'party' && this.rulesVersion < 3) throw new Error('Party mode requires current replay rules.');
     this.replay = []; this.replayFrames = 0;
     this.seed = seed; this.mode = mode; this.status = 'playing';
     this.x = this.y = this.vx = this.vy = this.time = this.maxY = this.floor = this.score = this.gems = this.combo = this.bestCombo = this.comboTime = this.lastFloor = 0;
     this.cameraY = 5.2; this.stormY = -8; this.facing = 1; this.grounded = true; this.standingId = 0;
     this.wallJumps = this.comboChallengeFloor = 0; this.comboChallengeBroken = false;
+    this.failureEvidence = null; this.walkedOff = null;
     this.accumulator = this.jumpBuffer = 0; this.coyote = .12; this.jumpWasDown = false; this.events = []; this.scrollStartedAt = null;
     this.doubleJumpTime = 0; this.doubleJumpUsed = false;
     this.resetWorld();
@@ -134,10 +160,12 @@ export class TowerEngine {
     if (this.jumpBuffer > 0 && this.coyote > 0) {
       this.vy = 12.6 + Math.abs(this.vx) * .47;
       this.grounded = false; this.coyote = 0; this.jumpBuffer = 0; this.standingId = -1;
+      this.walkedOff = null;
       this.emit('jump', this.vx);
     } else if (jumpPressed && !this.grounded && this.mode === 'party' && this.doubleJumpTime > 0 && !this.doubleJumpUsed) {
       this.vy = 12.6 + Math.abs(this.vx) * .47;
       this.doubleJumpUsed = true; this.jumpBuffer = 0;
+      this.walkedOff = null;
       this.emit('jump', this.vx);
     }
     const oldY = this.y;
@@ -152,7 +180,10 @@ export class TowerEngine {
     }
     if (this.grounded) {
       const p = this.platforms.find(p => p.id === this.standingId);
-      if (!p || Math.abs(this.x - p.x) > p.width / 2 + .15) { this.grounded = false; this.standingId = -1; }
+      if (!p || Math.abs(this.x - p.x) > p.width / 2 + .15) {
+        this.walkedOff = p ? { floor: platformFloor(p), y: p.y } : null;
+        this.grounded = false; this.standingId = -1;
+      }
     }
     if (!this.grounded) {
       this.vy -= (this.mode === 'party' ? 15 : 23) * dt;
@@ -164,18 +195,20 @@ export class TowerEngine {
         }
         if (landing) {
           this.y = landing.y; this.vy = 0; this.grounded = true; this.standingId = landing.id;
+          this.walkedOff = null;
           this.doubleJumpUsed = false;
           this.emit('land');
-          if (landing.id > this.lastFloor) {
-            const climbed = landing.id - this.lastFloor;
+          const landedFloor = platformFloor(landing);
+          if (landedFloor > this.lastFloor) {
+            const climbed = landedFloor - this.lastFloor;
             this.combo = this.comboTime > 0 ? this.combo + climbed : climbed;
             this.comboTime = 3.8;
             this.bestCombo = Math.max(this.bestCombo, this.combo);
             this.score += climbed * 100 * Math.max(1, Math.floor(this.combo / 5) + 1);
             if (this.combo >= 3) this.emit('combo', this.combo);
-            this.lastFloor = landing.id;
+            this.lastFloor = landedFloor;
           }
-          this.floor = Math.max(this.floor, landing.id);
+          this.floor = Math.max(this.floor, landedFloor);
           if (!this.comboChallengeBroken) this.comboChallengeFloor = Math.min(30, this.floor);
           if (landing.spring) {
             this.vy = 19 + Math.abs(this.vx) * .25;
@@ -203,13 +236,20 @@ export class TowerEngine {
     this.stormY = Math.max(this.stormY + scrollStep, this.cameraY - 12.5);
     this.generate(this.cameraY + 23);
     this.platforms = this.platforms.filter(p => p.y > this.cameraY - 22 || p.id === this.standingId);
-    if (this.y < this.stormY + .05) { this.status = 'over'; this.emit('over'); }
+    if (this.y < this.stormY + .05) {
+      // Observations only: do not infer intended targets or blame an ambiguous miss.
+      this.failureEvidence = this.grounded ? { kind: 'frost-on-ledge' }
+        : this.walkedOff && this.y < this.walkedOff.y - .1
+          ? { kind: 'left-ledge', floor: this.walkedOff.floor }
+          : this.vy < 0 ? { kind: 'fell' } : { kind: 'frost' };
+      this.status = 'over'; this.emit('over');
+    }
   }
   drainEvents() { const e = this.events; this.events = []; return e; }
   getReplay(): RunReplay | null {
     if (this.status !== 'over' || this.mode === 'practice' || !this.replay || this.floor < 1) return null;
     const recording = { seed: this.seed, moves: this.replay.map(([frames, mask]): [number, number] => [frames, mask]) };
-    return this.rulesVersion === 3 ? { ...recording, version: 3, mode: this.mode } : { ...recording, version: this.rulesVersion };
+    return this.rulesVersion === 3 || this.rulesVersion === 4 ? { ...recording, version: this.rulesVersion, mode: this.mode } : { ...recording, version: this.rulesVersion };
   }
   snapshot() {
     const challenge = (id: QuickChallenge['id'], title: string, description: string, progress: number, target: number, failed = false): QuickChallenge => ({
@@ -221,7 +261,7 @@ export class TowerEngine {
       challenge('crystals', 'Crystal collector', 'Collect 10 crystals in one run.', this.gems, 10),
       challenge('walls', 'Wall jumper', 'Perform 5 wall jumps in one run. Hit a wall at speed while airborne to rebound.', this.wallJumps, 5),
     ];
-    return { status: this.status, mode: this.mode, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY, wallJumps: this.wallJumps, challenges, doubleJumpTime: this.doubleJumpTime, doubleJumpReady: this.doubleJumpTime > 0 && !this.doubleJumpUsed };
+    return { status: this.status, mode: this.mode, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY, wallJumps: this.wallJumps, challenges, doubleJumpTime: this.doubleJumpTime, doubleJumpReady: this.doubleJumpTime > 0 && !this.doubleJumpUsed, failureEvidence: this.failureEvidence };
   }
 }
 export type Snapshot = ReturnType<TowerEngine['snapshot']>;

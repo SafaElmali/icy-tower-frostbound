@@ -248,6 +248,34 @@
 .title-screen.has-challenge>.friend-link-error{display:block}
 .friend-share-card[data-slot=dialog-content]{top:calc(var(--visible-top,0px) + var(--visible-height,100dvh)/2);max-height:calc(var(--visible-height,100dvh) - 32px - var(--safe-top) - var(--safe-bottom));max-width:min(480px,calc(100vw - 32px - var(--safe-left) - var(--safe-right)))}
 
+/* A single nearby objective leaves the center of the tower open. */
+.skill-hud { position: absolute; left: 42px; bottom: 124px; width: 245px; pointer-events: none; z-index: 3; }
+.guidance-dock { position: absolute; top: 128px; right: 32px; width: 270px; z-index: 4; }
+.section-notice { position: absolute; top: 92px; left: 50%; transform: translateX(-50%); padding: 9px 16px; border-radius: 4px; border: 1px solid #a0d9ca55; background: #102632e8; color: #d6eee5; font-size: 12px; letter-spacing: 1px; pointer-events: none; z-index: 4; }
+.daily-options { border: 0; padding: 0; margin: 0; min-width: 0; }
+.daily-share-url { width: 100%; min-height: 44px; padding: 10px; font-size: 14px; background: #091b26; color: #dcf1ec; border: 1px solid #8ab4c24d; border-radius: 4px; }
+.advanced-challenges { margin-top: 16px; text-align: left; }
+.advanced-challenges summary { cursor: pointer; color: #adc7ce; padding-block: 12px; font-size: 14px; }
+.extra-menu-actions { flex-wrap: wrap; gap: 8px 16px; }
+.game-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 16px 0; font-size: 13px; color: #bfd7dc; }
+.game-settings label { display: flex; gap: 8px; align-items: center; cursor: pointer; min-height: 44px; }
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+.result-card > .retry-hint { display: block; color: #a8c7cc; font-size: 12px; margin: 10px 0 16px; }
+.challenges-preview { max-height: calc(100dvh - 180px); overflow-y: auto; }
+@media (min-width: 761px) { .title-screen { top: 100px; bottom: 76px; transform: none; overflow-y: auto; scrollbar-width: thin; padding-right: 8px; } }
+@media (max-width: 760px), (any-pointer: coarse) {
+  .guidance-dock { top: calc(82px + var(--safe-top)); right: calc(12px + var(--safe-right)); width: min(208px, 57vw); }
+  .section-notice { top: auto; bottom: calc(230px + var(--safe-bottom)); max-width: calc(100% - 28px); font-size: 11px; text-align: center; }
+  .skill-hud { left: auto; right: calc(16px + var(--safe-right)); bottom: calc(132px + var(--safe-bottom)); width: min(220px, 62vw); }
+  .skill-hud section { padding: 8px 10px; }
+  .skill-hud section p { display: none; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .guidance-dock { top: calc(66px + var(--safe-top)); }
+  .skill-hud { right: calc(16px + var(--safe-right)); bottom: auto; top: calc(130px + var(--safe-top)); width: 210px; }
+  .skill-hud section p { display: none; }
+}
+
 /* Personal ghost race */
 .ghost-menu-note{display:flex;align-items:center;gap:9px;width:285px;margin-top:14px;color:#addbec;font-size:12px;line-height:1.5}.ghost-menu-note svg{flex-shrink:0}.ghost-race{margin-top:22px;padding:14px 16px;border-left:2px solid #91dfff99;background:linear-gradient(90deg,#173849c9,#10293644);border-radius:0 4px 4px 0;max-width:240px}.ghost-race>span{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.8px;color:#a7d8ef}.ghost-race>strong{display:block;margin-top:7px;font-size:18px;font-weight:500;color:#ddf3ff;font-variant-numeric:tabular-nums}.ghost-race>small{display:block;margin-top:5px;font-size:12px;line-height:1.5;color:#a5c2cf}.ghost-beaten{border-color:#b9efb5}.ghost-beaten>strong{color:#c6f3c3}.result-card>.ghost-result{display:flex;align-items:center;justify-content:center;gap:9px;color:#b8e5f7;font-size:14px;margin:0 0 20px;line-height:1.5}.ghost-result svg{flex-shrink:0}@media(max-width:760px){.ghost-race{margin-top:16px;padding:10px 12px;max-width:205px}.ghost-race>strong{font-size:16px}.ghost-race>small{display:none}.ghost-menu-note{width:265px}.result-card>.ghost-result{font-size:13px}}@media(max-height:700px){.ghost-menu-note{margin-top:8px}.ghost-race{margin-top:12px;padding:8px 12px}.ghost-race>small{display:none}}
 
@@ -258,4 +286,66 @@
   .ghost-race { margin-top: 6px; padding: 6px 10px; }
   .ghost-race > span, .ghost-race > small { display: none; }
   .ghost-race > strong { margin: 0; font-size: 14px; }
+}
+
+/* Keep the title focused on starting a climb. Secondary actions live in Menu. */
+.state-ready .brand > span { display: none; }
+.menu-toggle { min-height: 44px; padding: 0 14px; gap: 9px; color: #d5e5e3; font-size: 13px; border: 1px solid #a2ccd22b; background: #09192366; border-radius: 24px; }
+.state-ready .title-screen {
+  top: 50%; bottom: auto; left: 9%; right: auto; width: 470px;
+  max-width: calc(100% - 48px); max-height: calc(100dvh - 160px);
+  transform: translateY(-50%); padding: 4px; overflow-y: auto;
+}
+.state-ready .title-screen h1 { margin: 0 0 28px; font-size: clamp(88px, min(9.5vw, 20dvh), 142px); }
+.state-ready .title-screen .subtitle { margin-bottom: 0; }
+.title-play { width: 285px; max-width: 100%; margin-top: 38px; }
+.title-play .start-button { width: 100%; }
+.title-play .enter-hint { width: 100%; margin: 12px 0 0; }
+.title-record { color: #abc3c7; font-size: 12px; text-align: center; margin: 20px 0 0; font-variant-numeric: tabular-nums; }
+.state-ready .title-screen.has-challenge h1 { font-size: clamp(64px, 12dvh, 94px); }
+.state-ready .title-screen.has-challenge .title-play { margin-top: 24px; }
+@media (max-width: 760px), (any-pointer: coarse) {
+  .state-ready .title-screen { left: 7%; right: 7%; width: auto; max-width: none; max-height: calc(100dvh - 140px); }
+  .state-ready .title-screen h1 { font-size: clamp(84px, min(25vw, 18dvh), 120px); }
+  .title-play { width: min(100%, 320px); margin-top: 30px; }
+  .state-ready .title-screen .start-button { max-width: none; }
+  .title-record { margin-top: 16px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .state-ready .title-screen { top: calc(66px + var(--safe-top)); bottom: calc(16px + var(--safe-bottom)); left: 7%; right: 7%; width: auto; max-height: none; transform: none; align-content: center; }
+  .state-ready .title-screen h1 { font-size: clamp(64px, 21dvh, 94px); margin: 0; grid-row: 1 / 4; }
+  .state-ready .title-screen .title-play { margin-top: 0; align-self: center; }
+  .state-ready .title-screen.has-challenge .title-play { margin-top: 8px; }
+  .state-ready .title-screen.has-challenge h1 { font-size: 64px; }
+}
+
+/* A finished run offers one clear next action; the report is optional. */
+.overlay .run-summary { width: 420px; padding: 34px 32px 20px; border-radius: 8px; }
+.run-context { color: #96b8c0; font-size: 11px; letter-spacing: 1.5px; }
+.run-summary h2 { font-size: clamp(40px, 7vw, 58px); margin: 20px 0 12px; line-height: 1.1; letter-spacing: -1.5px; }
+.run-summary > .run-metrics { font-size: 14px; color: #c1d7da; margin: 0; font-variant-numeric: tabular-nums; }
+.run-summary > .run-highlight { font-size: 12px; margin: 12px 0 0; color: #91b0b9; }
+.run-summary > .run-highlight.is-record { color: #c2e9b3; }
+.overlay .run-summary > .start-button { margin-top: 28px; font-size: 12px; }
+.run-summary > .retry-hint { margin: 10px 0 0; font-size: 11px; color: #8eabb6; }
+.run-summary-actions { display: flex; justify-content: center; gap: 12px; margin-top: 12px; }
+.run-summary-actions > button { min-height: 44px; font-size: 13px; padding: 0 8px; font-weight: 400; color: #b1cbd0; gap: 4px; }
+.run-details-dialog [data-slot=dialog-title] { margin-bottom: 10px; }
+.run-details-content { display: grid; gap: 16px; margin: 24px 0; }
+.run-details-content > section { margin: 0; }
+.run-details-note { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 14px; line-height: 1.6; color: #b7d5df; }
+.run-details-note svg { flex-shrink: 0; }
+.run-details-actions { display: grid; gap: 10px; }
+.run-details-actions button { min-height: 44px; font-size: 14px; gap: 8px; }
+@media (max-width: 760px), (any-pointer: coarse) {
+  .overlay .run-summary { padding: 28px 24px 16px; }
+  .run-summary > .retry-hint { display: none; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .overlay .run-summary { padding: 20px 28px 10px; }
+  .run-summary h2 { margin: 10px 0 8px; font-size: 36px; }
+  .run-summary > .run-highlight { margin-top: 8px; }
+  .overlay .run-summary > .start-button { margin-top: 16px; }
+  .run-summary-actions { margin-top: 4px; }
+  .run-summary > .retry-hint { display: none; }
 }

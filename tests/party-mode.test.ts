@@ -13,13 +13,17 @@ function collectCrystal(engine: TowerEngine, id = 3) {
   step(engine, 1);
 }
 
-void test('party lowers gravity while classic physics and seeded layouts retain version 2 behavior', () => {
-  const classic = new TowerEngine(17), legacy = new TowerEngine(17, true, 2), festive = party();
-  classic.start(); legacy.start();
-  assert.deepEqual(classic.platforms, legacy.platforms);
+void test('party lowers gravity while versions 2, 3, and 4 keep Classic movement physics', () => {
+  const legacy = new TowerEngine(17, true, 2), v3 = new TowerEngine(17, true, 3);
+  const classic = new TowerEngine(17), festive = party();
+  for (const engine of [legacy, v3, classic]) engine.start();
+  assert.deepEqual(v3.platforms, legacy.platforms, 'version 3 retains version 2 layout');
+  assert.ok(classic.platforms.some(p => p.route === 'shortcut'), 'current layout adds optional routes');
   assert.deepEqual(festive.platforms.map(({ spring: _spring, ...p }) => p), classic.platforms.map(({ spring: _spring, ...p }) => p));
-  for (const engine of [classic, legacy, festive]) step(engine, 60, jump);
-  assert.equal(classic.y, legacy.y); assert.equal(classic.vy, legacy.vy);
+  for (const engine of [classic, v3, legacy, festive]) step(engine, 60, jump);
+  for (const engine of [classic, v3]) {
+    assert.equal(engine.y, legacy.y); assert.equal(engine.vy, legacy.vy);
+  }
   assert.ok(festive.y > classic.y + .9); assert.ok(festive.vy > classic.vy + 3.9);
   assert.ok(classic.platforms.every(p => !p.spring));
 });

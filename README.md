@@ -16,15 +16,29 @@ Run to jump higher. At high speed, Harold spreads his arms and legs into a star-
 
 Every 10th floor has a wooden number plaque on its front edge. Every 50th floor is a full-width landing stage, providing room to land and build momentum before the next climb. Stages still scroll toward the frost like other floors.
 
-The layout supports portrait and landscape, device safe areas, and scrolling menus on short screens. Rotating the device or leaving the game pauses the run and clears held controls. Touch devices start in Performance quality; change quality from the main menu. Leaderboard dialogs adjust to the visible screen when the on-screen keyboard opens.
+The layout supports portrait and landscape, device safe areas, and scrolling menus on short screens. Rotating the device or leaving the game pauses the run and clears held controls. Touch devices start in Performance quality; change quality under **Menu → Settings**. Leaderboard dialogs adjust to the visible screen when the on-screen keyboard opens.
 
 ## Quick challenges
 
-Each climb starts three fresh challenges: reach floor 30 with an unbroken combo, collect 10 crystals, and perform 5 wall jumps. Track progress during play and see results when you pause or finish. The combo challenge starts with your first higher-floor landing; letting the 3.8-second timer expire before reaching floor 30 fails it for that run. Passing floor 30 in the air is not enough — land on floor 30 or higher. Wall jumps count fast airborne wall rebounds, not ground-level wall impacts. Completed challenges stay complete until you start again. Challenges work in Classic, Party, and Practice and do not change scoring.
+Each climb starts three fresh challenges: reach floor 30 with an unbroken combo, collect 10 crystals, and perform 5 wall jumps. Open **Skill goals → Expert challenges** to inspect these optional per-run challenges. The gameplay HUD features one progressive skill goal instead. The combo challenge starts with your first higher-floor landing; letting the 3.8-second timer expire before reaching floor 30 fails it for that run. Passing floor 30 in the air is not enough — land on floor 30 or higher. Wall jumps count fast airborne wall rebounds, not ground-level wall impacts. Completed challenges stay complete until you start again. Challenges work in Classic, Party, and Practice and do not change scoring.
+
+## Learning and replayability
+
+The title screen keeps **Play** as its primary action. **Menu** holds modes, daily towers, guided practice, skill goals, outfits, and the leaderboard; audio, visual quality, and reduced motion sit under its collapsed **Settings** section. The featured skill goal appears during a climb and under **Run details** after finishing. The compact end screen shows the floor, score, combo, and retry action; the detailed report and sharing actions stay one click away.
+
+- **Guided practice** starts an unranked climb with contextual movement, jump, and momentum tips. Ordinary climbs also teach first-time players. Completed steps and Skip tips persist locally; **Menu → How to play → Replay guidance in Practice** starts the lessons again. Ranked physics remain consistent. A four-second cue announces automatic frost scrolling at floor five.
+- **Skill goals** feature one achievable target during a climb. Eleven milestones progress from floor five, one crystal, and one airborne wall rebound to combined skills and longer climbs. Completed goals persist across runs; partial counters belong to the current attempt. Select any unlocked goal in the progression dialog. All three modes can teach these skills.
+- **Run details** explains a recorded walk off a ledge, a fall into the frost, or frost reaching a ledge, with a practical next-run tip. Ambiguous endings receive general advice. The retry button appears immediately after the headline stats, and Enter retries without another menu.
+- **Personal progress** keeps independent highest-floor, combo, and wall-rebound records for each mode. **Run details** compares with the records from before the run. A small wall plaque marks the previous highest floor and briefly celebrates passing it.
+- **Route choices** begin at floor 12 and recur every 12 floors, excluding sections that overlap full-width stages. Wide pale steps offer a forgiving climb; a running jump can reach a narrow gold-topped crystal shortcut. Signs on takeoff platforms show both choices. Rules version 4 pins the new layouts; earlier leaderboard recordings, ghost races, and friend links retain their original layouts and physics.
+- **Daily tower** gives everyone one Classic tower per UTC date with unlimited retries. Daily links pin their date and rules, so old links remain playable after midnight. The best completed attempt is saved per tower, with up to 90 daily records stored in this browser. Daily runs can also be submitted to the existing Classic board; there is no separate online daily ranking.
+- **Tower sections** change architecture, windows, and lighting at floors 25, 50, and 75, progressing from warm stone to icy blue, violet, and aurora. Existing geometry is reused without loading new areas or changing collisions.
+- **Combo feedback** adds distinct musical phrases and captions at 3, 5, 10, and 15. Each milestone sounds once per chain; large jumps announce the highest crossing. Muted play retains captions. **Menu → Settings → Reduce motion** suppresses shake, spins, particles, and trails; the system preference applies until explicitly overridden.
+- **Playtest measurements**, under **Menu → How to play**, records starts, completed goals, finishes, and abandoned climbs on this browser only. The report separates modes, device categories, and feature versions; includes session replay and next-day return; and exports JSON. Records are capped at 300 runs. There is no automatic upload or population dashboard. See [the playtest protocol](docs/playtesting.md) for recruitment, predefined evaluation criteria, and combining participant exports. Human participant sessions remain to be conducted.
 
 ## Unlockable outfits
 
-Open **Outfits** from the title screen, shirt button, or pause/results menu. Equip a hat, sweater, and star-trail palette independently; colors update on the climber immediately. The original blue beanie, green knit, and rainbow stars are always available.
+Open **Menu → Outfits** to change your look. Equip a hat, sweater, and star-trail palette independently; colors update on the climber immediately. The original blue beanie, green knit, and rainbow stars are always available.
 
 | Achievement | Reward |
 | --- | --- |
@@ -86,7 +100,7 @@ This is an independent Icy Tower-inspired browser prototype, with no original ga
 
 ## Validation notes
 
-The gameplay simulation is covered by automated tests. The GLB is checked for a valid upright model and named animation pivots, and its Blender render is inspected. Motion checks cover full loops in both directions, extended limbs on the real model, takeoff speed, landing recovery, and paused animation. Trail checks cover emission, positioning behind the player, lifetime, pause, and reset. Interior checks cover bounded shared geometry and stable architecture through climbs, falls, and long runs. Browser visual and interactive QA have not been performed. Optional WebMCP actions are feature-detected; no supported WebMCP runtime was available to verify registration here.
+The gameplay simulation is covered by automated tests. The GLB is checked for a valid upright model and named animation pivots, and its Blender render is inspected. Motion checks cover full loops in both directions, extended limbs on the real model, takeoff speed, landing recovery, and paused animation. Trail checks cover emission, positioning behind the player, lifetime, pause, and reset. Interior checks cover bounded shared geometry and stable architecture through climbs, falls, and long runs. The replayability update was checked in a browser at desktop and phone viewport sizes for guided practice, pause/resume, daily selection and links, reload persistence, and the local measurements dialog. Gameplay mechanics and archived replay compatibility have automated coverage; real human playtesting remains pending. Optional WebMCP actions are feature-detected.
 
 ## Netlify
 

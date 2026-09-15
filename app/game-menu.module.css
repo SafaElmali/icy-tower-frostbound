@@ -1,0 +1,241 @@
+.dialog[data-slot='dialog-content'] {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: calc(100vw - 32px);
+  max-width: 432px;
+  max-height: calc(
+    var(--visible-height, 100dvh) - 32px - var(--safe-top, 0px) -
+      var(--safe-bottom, 0px)
+  );
+  top: calc(var(--visible-top, 0px) + var(--visible-height, 100dvh) / 2);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #91b7bf33;
+  border-radius: 14px;
+  background: linear-gradient(150deg, #172e39, #0c202b);
+  color: #e4efec;
+  box-shadow: 0 28px 90px #0006;
+}
+
+.header {
+  flex: 0 0 auto;
+  padding: 28px 60px 22px 28px;
+}
+
+.title[data-slot='dialog-title'] {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 27px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.5px;
+}
+
+.dialog [data-slot='dialog-close'] {
+  top: 16px;
+  right: 14px;
+  width: 44px;
+  height: 44px;
+  color: #aac5cd;
+  border-radius: 50%;
+}
+
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #7399a14d transparent;
+  padding: 0 18px 18px;
+}
+
+.mode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 10px 22px;
+  padding: 10px 12px 10px 16px;
+  min-height: 60px;
+  background: #86b4c00d;
+  border: 1px solid #91b7bf26;
+  border-radius: 8px;
+}
+
+.mode > label {
+  color: #afc7ce;
+  font-size: 13px;
+}
+
+.modeSelect {
+  flex-shrink: 0;
+}
+.modeSelect select {
+  min-height: 40px;
+  padding: 8px 32px 8px 12px;
+  background: #102732;
+  color: #e5efeb;
+  border: 1px solid #91b7bf40;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+.group {
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #91b7bf26;
+}
+
+.group > h3 {
+  margin: 0 10px 6px;
+  color: #819fa9;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1.6px;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.row[data-slot='button'],
+.settings > summary {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  height: auto;
+  padding: 10px;
+  margin: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #d9e8e5;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.row[data-slot='button']:hover,
+.settings > summary:hover {
+  background: #9cc9cf10;
+}
+
+.row > svg:first-child,
+.settings > summary > svg:first-child {
+  color: #9cc2c7;
+  width: 18px;
+  height: 18px;
+}
+
+.row > svg:last-child:not(:first-child),
+.disclosure {
+  width: 15px;
+  height: 15px;
+  color: #789ba6;
+  justify-self: end;
+}
+
+.note {
+  margin: -12px 10px 20px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #91adb6;
+}
+
+.ghost {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 10px 0;
+  min-height: 32px;
+  color: #819fa9;
+  font-size: 12px;
+}
+
+.ghost > svg {
+  width: 15px;
+  height: 15px;
+}
+.ghost strong {
+  color: #a8c4ca;
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.settings > summary {
+  list-style: none;
+}
+.settings > summary::-webkit-details-marker {
+  display: none;
+}
+.settings > summary::marker {
+  content: '';
+}
+.settings > summary:focus-visible {
+  outline: 2px solid #b5ded6;
+  outline-offset: -2px;
+}
+.settings[open] .disclosure {
+  transform: rotate(90deg);
+}
+.settingsContent {
+  padding: 4px 10px 0 42px;
+}
+.settingsContent > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  color: #b5cdd3;
+  font-size: 13px;
+  cursor: pointer;
+}
+.settingsContent input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: #bfdfd3;
+}
+.settingsContent > .row {
+  grid-template-columns: 18px minmax(0, 1fr);
+  padding-inline: 0;
+  font-size: 13px;
+  color: #b5cdd3;
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 24px 56px 20px 24px;
+  }
+  .title[data-slot='dialog-title'] {
+    font-size: 25px;
+  }
+  .body {
+    padding-inline: 14px;
+  }
+  .mode {
+    gap: 10px;
+    padding-left: 12px;
+  }
+}
+
+@media (max-height: 600px) {
+  .header {
+    padding-block: 20px 16px;
+  }
+  .dialog [data-slot='dialog-close'] {
+    top: 10px;
+  }
+  .mode {
+    margin-bottom: 18px;
+  }
+}

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DataTexture, Group, Mesh, PerspectiveCamera, Vector3 } from 'three';
+import { Color, DataTexture, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, ShaderMaterial, Vector3 } from 'three';
 import { TowerInterior } from '../lib/tower-interior.ts';
+import { TOWER_SECTIONS } from '../lib/tower-sections.ts';
 
 void test('climbing recycles only distant architecture and falling restores the same world positions', () => {
   const interior = new TowerInterior(new DataTexture());
@@ -18,6 +19,33 @@ void test('climbing recycles only distant architecture and falling restores the 
     for (let i = 1; i < positions.length; i++) assert.equal(positions[i] - positions[i - 1], 18);
   }
   assert.deepEqual(bays.map(bay => bay.position.y), initial);
+});
+
+void test('section transitions smoothly recolor the same pooled architecture and shader resources', () => {
+  const interior = new TowerInterior(new DataTexture());
+  const meshes: Mesh[] = [];
+  interior.group.traverse(object => { if (object instanceof Mesh) meshes.push(object); });
+  const geometries = meshes.map(mesh => mesh.geometry);
+  const materials = meshes.map(mesh => mesh.material);
+  const stone = materials.find(material => material instanceof MeshStandardMaterial && material.color.getHex() === TOWER_SECTIONS[0].palette.stone) as MeshStandardMaterial;
+  const window = materials.find(material => material instanceof ShaderMaterial && material.uniforms.aurora) as ShaderMaterial;
+  assert.ok(stone); assert.ok(window);
+  const warm = stone.color.clone();
+  interior.update(80, 3, true, TOWER_SECTIONS[1], 1 / 60);
+  assert.notDeepEqual(stone.color, warm);
+  assert.notEqual(stone.color.getHex(), TOWER_SECTIONS[1].palette.stone, 'A milestone blends instead of flashing to a new palette');
+  for (const section of TOWER_SECTIONS) {
+    interior.update(section.startsAtFloor * 2, 4, true, section, 10);
+    assert.equal(stone.color.getHex(), section.palette.stone);
+    assert.ok(Math.abs(window.uniforms.aurora.value - section.auroraStrength) < 1e-10);
+    assert.ok(window.uniforms.highColor.value instanceof Color);
+    assert.equal(window.uniforms.highColor.value.getHex(), section.palette.windowHigh);
+    assert.deepEqual(meshes.map(mesh => mesh.geometry), geometries);
+    assert.deepEqual(meshes.map(mesh => mesh.material), materials);
+  }
+  const currentMeshes: Mesh[] = [];
+  interior.group.traverse(object => { if (object instanceof Mesh) currentMeshes.push(object); });
+  assert.deepEqual(currentMeshes, meshes, 'No section loads or allocates additional scenery');
 });
 
 void test('the interior uses shared 3D geometry without loading a background image', () => {

@@ -1,3 +1,12 @@
+import type { ComboMilestone } from './combo-feedback';
+
+const COMBO_MELODIES: Record<ComboMilestone, readonly number[]> = {
+  3: [293.66, 440],
+  5: [440, 587.33, 659.25],
+  10: [587.33, 739.99, 880],
+  15: [739.99, 880, 1108.73, 1174.66],
+};
+
 /** Quiet synthesized wind, resonant crystal notes, and tactile movement sounds. */
 export class TowerAudio {
   private context?: AudioContext;
@@ -34,7 +43,7 @@ export class TowerAudio {
   setPaused(paused: boolean) {
     if (this.context && this.ambience) this.ambience.gain.setTargetAtTime(paused ? .08 : .23, this.context.currentTime, .25);
   }
-  play(kind: string) {
+  play(kind: string, comboMilestone: ComboMilestone = 3) {
     if (!this.enabled) return;
     try {
       const ctx = this.init(); void ctx.resume().catch(() => {});
@@ -46,8 +55,16 @@ export class TowerAudio {
         osc.connect(gain); gain.connect(this.master!); gain.connect(this.reverb!); osc.start(time); osc.stop(time + duration + .03);
       };
       if (kind === 'gem') { note(1174, 1174, .65, .13); note(1760, 1760, .7, .065, .07); note(2349, 2349, .8, .035, .11); }
-      else if (kind === 'combo') { note(587, 587, .35, .035); note(880, 880, .45, .032, .06); }
-      else if (kind === 'land') { note(135, 43, .14, .2, 0, 'triangle'); note(680, 290, .07, .018); }
+      else if (kind === 'combo') {
+        const melody = COMBO_MELODIES[comboMilestone];
+        melody.forEach((frequency, index) => note(frequency, frequency, .24, .055, index * .055));
+        if (comboMilestone >= 10) note(melody[0] / 2, melody[0] / 2, .36, .025);
+      }
+      else if (kind === 'land') {
+        // A short heel impact followed by a quieter ice tap; no sustained landing drone.
+        note(125, 48, .11, .14, 0, 'triangle');
+        note(820, 390, .045, .025, .015);
+      }
       else if (kind === 'jump') { note(185, 570, .2, .065); note(100, 250, .15, .035, 0, 'triangle'); }
       else if (kind === 'wall') { note(250, 70, .17, .09, 0, 'triangle'); }
       else if (kind === 'over') { note(293.66, 146.83, 1.4, .11); note(220, 110, 1.6, .07, .12); }

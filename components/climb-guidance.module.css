@@ -1,0 +1,13 @@
+.guide { display: flex; align-items: center; gap: 12px; padding: 12px 15px; border: 1px solid #517c88; border-radius: 12px; background: rgba(15, 30, 48, .96); color: #e7f5fc; text-align: left; }
+.copy { flex: 1; min-width: 0; }
+.copy strong { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #a5ead8; }
+.copy p { margin: 5px 0 0; font-size: 12px; line-height: 1.5; color: #c2d7e3; }
+.guide button { flex-shrink: 0; min-width: 56px; min-height: 44px; border-radius: 7px; border: 1px solid #517c88; padding: 5px 8px; color: #c2d7e3; background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+.guide button:hover { background: #294353; }
+.guide button:focus-visible { outline: 2px solid #a5ead8; outline-offset: 3px; }
+.frost { border-color: #9acbfc; }
+.frost .copy strong { color: #b4dcff; }
+@media (max-width: 760px), (any-pointer: coarse) {
+  .guide { flex-direction: column; align-items: stretch; gap: 5px; padding: 10px 12px; }
+  .guide button { align-self: flex-end; min-height: 44px; padding: 4px 8px; }
+}

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { TOWER_SECTIONS, type TowerSection } from './tower-sections.ts';
 
 const BAY_HEIGHT = 18;
 const BAY_COUNT = 7;
@@ -11,6 +12,9 @@ export class TowerInterior {
   private lamps: THREE.PointLight[] = [];
   private shafts: THREE.Mesh[] = [];
   private glass: THREE.ShaderMaterial;
+  private shaftMaterial: THREE.ShaderMaterial;
+  private themeColors: { current: THREE.Color; target: THREE.Color; key: keyof TowerSection['palette']; strength: number }[] = [];
+  private sectionId = '';
 
   constructor(stoneTexture: THREE.Texture) {
     this.group.name = 'Frozen cathedral interior';
@@ -22,13 +26,15 @@ export class TowerInterior {
     const flame = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffad54).multiplyScalar(2.5), toneMapped: false });
     this.glass = new THREE.ShaderMaterial({
       side: THREE.DoubleSide,
-      uniforms: { time: { value: 0 } },
+      uniforms: { time: { value: 0 }, lowColor: { value: new THREE.Color() }, highColor: { value: new THREE.Color() }, aurora: { value: 0 } },
       vertexShader: 'varying vec3 point; void main(){point=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-      fragmentShader: `varying vec3 point; uniform float time;
+      fragmentShader: `varying vec3 point; uniform float time; uniform vec3 lowColor; uniform vec3 highColor; uniform float aurora;
         void main(){
           float clouds=sin(point.x*1.8+time*.11+sin(point.y*.6-time*.08))*sin(point.y*.8+time*.07);
           float glow=pow(max(0.,1.-abs(point.x)/2.5),2.);
-          vec3 color=mix(vec3(.025,.09,.15),vec3(.13,.37,.49),.45+clouds*.16+glow*.32);
+          float curtain=pow(.5+.5*sin(point.x*2.4+sin(point.y*.35+time*.12)*2.),3.);
+          vec3 color=mix(lowColor,highColor,.45+clouds*.16+glow*.32);
+          color=mix(color,highColor,curtain*aurora*.45);
           gl_FragColor=vec4(color,1.);
         }`,
     });
@@ -124,22 +130,40 @@ export class TowerInterior {
     for (const side of [-1, 1]) {
       const lamp = new THREE.PointLight(0xffad61, 12, 12, 2); lamp.position.set(side * 8.6, 6.65, -7.1); this.lamps.push(lamp); this.group.add(lamp);
     }
-    const shaftMaterial = new THREE.ShaderMaterial({
+    this.shaftMaterial = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
-      uniforms: { time: this.glass.uniforms.time },
+      uniforms: { time: this.glass.uniforms.time, color: { value: new THREE.Color() } },
       vertexShader: 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-      fragmentShader: 'varying vec2 vUv; uniform float time; void main(){float edge=pow(sin(vUv.x*3.14159),4.);float falloff=sin(vUv.y*3.14159);float drift=.7+.3*sin(time*.35+vUv.y*8.);gl_FragColor=vec4(.22,.55,.7,edge*falloff*drift*.045);}',
+      fragmentShader: 'varying vec2 vUv; uniform float time; uniform vec3 color; void main(){float edge=pow(sin(vUv.x*3.14159),4.);float falloff=sin(vUv.y*3.14159);float drift=.7+.3*sin(time*.35+vUv.y*8.);gl_FragColor=vec4(color,edge*falloff*drift*.045);}',
     });
     const shaftGeometry = new THREE.ConeGeometry(3.8, 18, 20, 1, true);
     for (const bay of this.bays) for (const side of [-1, 1]) {
-      const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial);
+      const shaft = new THREE.Mesh(shaftGeometry, this.shaftMaterial);
       shaft.position.set(side * 4.2, 7, -5); shaft.rotation.set(-.55, 0, side * -.32);
       this.shafts.push(shaft); bay.add(shaft);
     }
+    const trackColor = (current: THREE.Color, key: keyof TowerSection['palette'], strength = 1) => {
+      this.themeColors.push({ current, target: new THREE.Color(), key, strength });
+    };
+    trackColor(stone.color, 'stone'); trackColor(trim.color, 'trim'); trackColor(dark.color, 'dark');
+    trackColor(brass.color, 'metal'); trackColor(ice.color, 'ice'); trackColor(flame.color, 'flame', 2.5);
+    trackColor(this.glass.uniforms.lowColor.value, 'windowLow');
+    trackColor(this.glass.uniforms.highColor.value, 'windowHigh');
+    trackColor(this.shaftMaterial.uniforms.color.value, 'shaft');
+    this.lamps.forEach(lamp => trackColor(lamp.color, 'flame'));
     this.update(5.2, 0, true);
   }
 
-  update(cameraY: number, time: number, high: boolean) {
+  update(cameraY: number, time: number, high: boolean, section: TowerSection = TOWER_SECTIONS[0], dt = 1 / 60) {
+    const firstTheme = !this.sectionId;
+    if (this.sectionId !== section.id) {
+      this.sectionId = section.id;
+      this.themeColors.forEach(color => color.target.setHex(section.palette[color.key]).multiplyScalar(color.strength));
+    }
+    // Only existing materials and uniforms change; no allocation, loading, or collision changes at milestones.
+    const blend = firstTheme ? 1 : 1 - Math.exp(-3 * Math.max(0, Number.isFinite(dt) ? dt : 0));
+    this.themeColors.forEach(color => color.current.lerp(color.target, blend));
+    this.glass.uniforms.aurora.value += (section.auroraStrength - this.glass.uniforms.aurora.value) * blend;
     const center = Math.floor(cameraY / BAY_HEIGHT);
     // Modulo selects a stable slot: crossing a bay boundary moves only the farthest bay.
     for (let index = center - 3; index <= center + 3; index++) {

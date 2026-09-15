@@ -1,0 +1,3 @@
+.feedback { margin: 14px 0; padding: 12px 14px; border: 1px solid rgba(139, 217, 236, .22); border-radius: 10px; background: rgba(15, 30, 48, .7); text-align: left; }
+.explanation { margin: 0; font-size: 12px; line-height: 1.5; color: #e7f5fc; }
+.suggestion { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: #b4cbdc; }
