@@ -1,3 +1,5 @@
+import { CRUMBLE_DELAY, FRENZY_COMBO_TARGET, FRENZY_DURATION, ICICLE_WARNING_TIME, freshTowerAction, type CrumbleState, type TowerActionState } from './tower-action.ts';
+
 export type GameStatus = 'ready' | 'playing' | 'paused' | 'over';
 export type GameMode = 'arcade' | 'party' | 'practice';
 export type RankedMode = Exclude<GameMode, 'practice'>;
@@ -8,19 +10,19 @@ export type QuickChallenge = {
   id: 'combo' | 'crystals' | 'walls'; title: string; description: string;
   progress: number; target: number; status: 'active' | 'complete' | 'failed' | 'missed';
 };
-export type Platform = { floor?: number; route?: 'approach' | 'safe' | 'shortcut' | 'merge'; id: number; x: number; y: number; width: number; gem: boolean; collected: boolean; moving: boolean; spring: boolean; origin: number; phase: number };
-export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over'; x: number; y: number; value?: number };
+export type Platform = { floor?: number; route?: 'approach' | 'safe' | 'shortcut' | 'merge'; id: number; x: number; y: number; width: number; gem: boolean; collected: boolean; moving: boolean; spring: boolean; origin: number; phase: number; crumble?: CrumbleState };
+export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over' | 'icicle-warning' | 'bat-warning' | 'crumble' | 'collapse' | 'hurt' | 'stomp' | 'dodge' | 'frenzy' | 'frenzy-end' | 'encounter'; x: number; y: number; value?: number };
 export type FailureEvidence = { kind: 'left-ledge'; floor: number } | { kind: 'frost-on-ledge' | 'fell' | 'frost' };
 export const FLOOR_HEIGHT = 2.35;
 export const WALL = 6.4;
 export const STAGE_WIDTH = 13.6;
 export const isStageFloor = (id: number) => id > 0 && id % 50 === 0;
-export const CURRENT_RULES_VERSION = 5;
+export const CURRENT_RULES_VERSION = 6;
 export const PACE_INTERVAL = 30;
 export const platformFloor = (platform: Platform) => platform.floor ?? platform.id;
 export const MAX_REPLAY_FRAMES = 216000;
 export const MAX_REPLAY_SEGMENTS = 12000;
-export type RunReplay = { seed: number; moves: [number, number][] } & ({ version: 1 | 2; mode?: never } | { version: 3 | 4 | 5; mode: RankedMode });
+export type RunReplay = { seed: number; moves: [number, number][] } & ({ version: 1 | 2; mode?: never } | { version: 3 | 4 | 5 | 6; mode: RankedMode });
 export const replayMode = (replay: RunReplay): RankedMode => replay.mode ?? 'arcade';
 export const freshControls = (): Controls => ({ left: false, right: false, jump: false });
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -42,6 +44,16 @@ export class TowerEngine {
   private doubleJumpUsed = false;
   platforms: Platform[] = [];
   events: GameEvent[] = [];
+  action: TowerActionState = freshTowerAction();
+  private nextActionId = 1;
+  private icicleCooldown = 1.4;
+  private batCooldown = 2;
+  private crystalCooldown = 0;
+  private nextEncounterFloor = 30;
+  private encounterCount = 0;
+  private breatherTime = 0;
+  private introduced = new Set<string>();
+  private encounterCrumbles = new Set<number>();
   seed: number;
   private state = 1;
   private nextId = 0;
@@ -98,6 +110,9 @@ export class TowerEngine {
       this.platforms.push({ id, x, y: id * FLOOR_HEIGHT, width, gem: routeSection ? false : id % 3 === 0, collected: false, moving: !stage && !routeSection && id > 24 && id % 7 === 0, spring: this.mode === 'party' && !stage && !routeSection && id % 5 === 0, origin: x, phase: this.random() * Math.PI * 2,
         ...(routeSection ? { route: routeStep === 0 ? 'approach' as const : routeStep === 3 ? 'merge' as const : 'safe' as const } : {}) });
       this.lastPrimary = this.platforms[this.platforms.length - 1];
+      if (this.rulesVersion >= 6 && id >= 8 && id % 8 === 0 && !stage && !routeSection && !this.lastPrimary.moving && !this.lastPrimary.spring && !this.restFloor(id)) {
+        this.lastPrimary.crumble = { remaining: null, broken: false };
+      }
       if (routeSection && routeStep === 2) {
         // An optional narrow crystal ledge two floors above the takeoff rewards a
         // running jump. Negative IDs are stable render identities, never scores.
@@ -118,6 +133,10 @@ export class TowerEngine {
     this.accumulator = this.jumpBuffer = 0; this.coyote = .12; this.jumpWasDown = false; this.events = []; this.scrollStartedAt = null;
     this.doubleJumpTime = 0; this.doubleJumpUsed = false;
     this.wallControlTime = 0; this.lastWallJumpSide = 0;
+    this.action = freshTowerAction(); this.nextActionId = 1;
+    this.icicleCooldown = 1.4; this.batCooldown = 2; this.crystalCooldown = 0;
+    this.nextEncounterFloor = 30; this.encounterCount = 0; this.breatherTime = 0;
+    this.introduced.clear(); this.encounterCrumbles.clear();
     this.resetWorld();
   }
   togglePause() {
@@ -152,7 +171,9 @@ export class TowerEngine {
     if (this.comboTime === 0) {
       if (this.combo > 0 && this.comboChallengeFloor < 30) this.comboChallengeBroken = true;
       this.combo = 0;
+      if (this.rulesVersion >= 6) this.action.frenzyCharge = 0;
     }
+    if (this.rulesVersion >= 6) this.advanceAction(dt);
     const jumpPressed = input.jump && !this.jumpWasDown;
     if (jumpPressed) this.jumpBuffer = .16;
     this.jumpWasDown = input.jump;
@@ -173,7 +194,7 @@ export class TowerEngine {
     } else if (this.wallControlTime === 0) this.vx *= Math.exp(-(this.grounded ? 4.5 : .8) * dt);
     this.vx = clamp(this.vx, -8.4, 8.4);
     if (this.jumpBuffer > 0 && this.coyote > 0) {
-      this.vy = 12.6 + Math.abs(this.vx) * .47;
+      this.vy = (12.6 + Math.abs(this.vx) * .47) * this.jumpMultiplier;
       this.grounded = false; this.coyote = 0; this.jumpBuffer = 0; this.standingId = -1;
       this.walkedOff = null;
       this.emit('jump', this.vx);
@@ -181,12 +202,12 @@ export class TowerEngine {
       // One boost per wall until landing or jumping from the opposite wall.
       this.lastWallJumpSide = Math.sign(this.x);
       this.vx = -this.lastWallJumpSide * 7;
-      this.vy = 15.9; this.facing = -this.lastWallJumpSide;
+      this.vy = 15.9 * this.jumpMultiplier; this.facing = -this.lastWallJumpSide;
       this.coyote = this.jumpBuffer = 0; this.standingId = -1; this.wallControlTime = .18;
       this.walkedOff = null;
       this.wallJumps++; this.emit('wall'); this.emit('jump', this.vx);
     } else if (jumpPressed && !this.grounded && this.mode === 'party' && this.doubleJumpTime > 0 && !this.doubleJumpUsed) {
-      this.vy = 12.6 + Math.abs(this.vx) * .47;
+      this.vy = (12.6 + Math.abs(this.vx) * .47) * this.jumpMultiplier;
       this.doubleJumpUsed = true; this.jumpBuffer = 0;
       this.walkedOff = null;
       this.emit('jump', this.vx);
@@ -203,7 +224,7 @@ export class TowerEngine {
     }
     if (this.grounded) {
       const p = this.platforms.find(p => p.id === this.standingId);
-      if (!p || Math.abs(this.x - p.x) > p.width / 2 + .15) {
+      if (!p || (this.rulesVersion >= 6 && p.crumble?.broken) || Math.abs(this.x - p.x) > p.width / 2 + .15) {
         this.walkedOff = p ? { floor: platformFloor(p), y: p.y } : null;
         this.grounded = false; this.standingId = -1;
       }
@@ -214,6 +235,7 @@ export class TowerEngine {
       if (this.vy <= 0) {
         let landing: Platform | undefined;
         for (const p of this.platforms) {
+          if (this.rulesVersion >= 6 && p.crumble?.broken) continue;
           if (oldY >= p.y - .015 && this.y <= p.y && Math.abs(this.x - p.x) < p.width / 2 + .2 && (!landing || p.y > landing.y)) landing = p;
         }
         if (landing) {
@@ -231,18 +253,22 @@ export class TowerEngine {
             this.score += climbed * 100 * Math.max(1, Math.floor(this.combo / 5) + 1);
             if (this.combo >= 3) this.emit('combo', this.combo);
             this.lastFloor = landedFloor;
+            if (this.rulesVersion >= 6) this.chargeFrenzy(climbed);
           }
           this.floor = Math.max(this.floor, landedFloor);
           if (!this.comboChallengeBroken) this.comboChallengeFloor = Math.min(30, this.floor);
+          if (this.rulesVersion >= 6) this.armCrumble(landing);
           if (landing.spring) {
-            this.vy = 19 + Math.abs(this.vx) * .25;
+            this.vy = (19 + Math.abs(this.vx) * .25) * this.jumpMultiplier;
             this.grounded = false; this.standingId = -1; this.coyote = 0; this.jumpBuffer = 0;
             this.emit('jump', this.vx);
           }
         }
       }
     }
+    if (this.rulesVersion >= 6) this.collideAction(oldY);
     for (const p of this.platforms) {
+      if (this.rulesVersion >= 6 && p.crumble?.broken) continue;
       if (p.gem && !p.collected && Math.abs(this.x - p.x) < .85 && Math.abs(this.y + .7 - (p.y + 1.05)) < 1) {
         p.collected = true; this.gems++; this.score += 250; this.emit('gem');
         if (this.mode === 'party') this.doubleJumpTime = DOUBLE_JUMP_DURATION;
@@ -269,11 +295,178 @@ export class TowerEngine {
       this.status = 'over'; this.emit('over');
     }
   }
+  private get jumpMultiplier() { return this.rulesVersion >= 6 && this.action.frenzyTime > 0 ? 1.14 : 1; }
+  private restFloor(floor: number) { return floor >= 48 && (floor % 50 <= 2 || floor % 50 >= 48); }
+  private notice(label: string, detail: string, timeLeft = 3) { this.action.notice = { label, detail, timeLeft }; }
+  private introduce(key: string, label: string, detail: string) {
+    if (this.introduced.has(key)) return;
+    this.introduced.add(key); this.notice(label, detail, 3.6);
+  }
+  private armCrumble(platform: Platform) {
+    if (!platform.crumble || platform.crumble.broken || platform.crumble.remaining !== null) return;
+    platform.crumble.remaining = CRUMBLE_DELAY;
+    this.events.push({ type: 'crumble', x: platform.x, y: platform.y });
+    this.introduce('crumble', 'CRACKED ICE', 'This ledge breaks in a second. Keep jumping!');
+  }
+  private chargeFrenzy(climbed: number) {
+    // A still-large combo cannot retrigger frenzy on every frame. Only fresh
+    // higher-floor landings after a frenzy have ended earn another charge.
+    if (this.action.frenzyTime > 0) return;
+    this.action.frenzyCharge = Math.min(1, this.action.frenzyCharge + climbed / FRENZY_COMBO_TARGET);
+    if (this.combo < FRENZY_COMBO_TARGET || this.action.frenzyCharge < 1 - 1e-8) return;
+    this.action.frenzyCharge = 0; this.action.frenzyTime = FRENZY_DURATION;
+    this.action.frenzies++; this.crystalCooldown = 0;
+    this.notice('COMBO FRENZY', 'Six seconds of boosted jumps. Follow the crystal trail!', FRENZY_DURATION);
+    this.emit('frenzy');
+  }
+  private endEncounter() {
+    this.action.encounter = null; this.breatherTime = 12;
+    this.action.icicles = []; this.action.bats = [];
+    for (const p of this.platforms) {
+      if (this.encounterCrumbles.has(p.id) && p.crumble?.remaining === null) delete p.crumble;
+    }
+    this.encounterCrumbles.clear();
+    this.notice('CATCH YOUR BREATH', 'Clear skies ahead. Build your next combo.');
+  }
+  private advanceAction(dt: number) {
+    const action = this.action;
+    action.invulnerableTime = Math.max(0, action.invulnerableTime - dt);
+    if (action.notice) {
+      action.notice.timeLeft -= dt;
+      if (action.notice.timeLeft <= 0) action.notice = null;
+    }
+    const wasFrenzy = action.frenzyTime > 0;
+    action.frenzyTime = Math.max(0, action.frenzyTime - dt);
+    if (wasFrenzy && action.frenzyTime === 0) this.emit('frenzy-end');
+    for (const p of this.platforms) {
+      if (this.grounded && this.standingId === p.id && p.crumble?.remaining === null) { this.armCrumble(p); continue; }
+      if (!p.crumble || p.crumble.broken || p.crumble.remaining === null) continue;
+      p.crumble.remaining = Math.max(0, p.crumble.remaining - dt);
+      if (p.crumble.remaining < 1e-8) {
+        p.crumble.remaining = 0; p.crumble.broken = true;
+        this.events.push({ type: 'collapse', x: p.x, y: p.y });
+      }
+    }
+    const inRest = this.restFloor(Math.floor(this.y / FLOOR_HEIGHT)) || this.restFloor(this.floor);
+    this.breatherTime = Math.max(0, this.breatherTime - dt);
+    if (action.encounter) {
+      action.encounter.timeLeft -= dt;
+      if (action.encounter.timeLeft <= 0 || inRest) this.endEncounter();
+    }
+    if (!inRest && !action.encounter && this.breatherTime === 0 && this.floor >= this.nextEncounterFloor) {
+      const kind = this.encounterCount++ % 2 === 0 ? 'ice-shower' : 'crumble-rush';
+      action.encounter = { kind, timeLeft: 6, duration: 6 };
+      this.nextEncounterFloor = this.floor + 24;
+      action.icicles = []; action.bats = [];
+      this.icicleCooldown = .65;
+      this.notice(kind === 'ice-shower' ? 'ICE SHOWER' : 'CRUMBLE RUSH', kind === 'ice-shower' ? 'Watch each marked lane. There is always room to dodge.' : 'Cracked stairs ahead. Land, then leap again!', 4);
+      this.emit('encounter', kind === 'ice-shower' ? 1 : 2);
+    }
+    if (action.encounter?.kind === 'crumble-rush') {
+      // Keep moving ledges, springboards, rest stages and the broad safe route
+      // intact. Only the next four ordinary ledges become temporary cracks.
+      for (const p of this.platforms) {
+        const floor = platformFloor(p);
+        if (this.encounterCrumbles.size >= 4) break;
+        if (floor <= this.floor || floor > this.floor + 6 || p.crumble || p.route || p.moving || p.spring || this.restFloor(floor)) continue;
+        p.crumble = { remaining: null, broken: false }; this.encounterCrumbles.add(p.id);
+      }
+    }
+    if (inRest) { action.icicles = []; action.bats = []; }
+    const standing = this.grounded ? this.platforms.find(p => p.id === this.standingId) : undefined;
+    const canThreaten = !inRest && this.breatherTime === 0 && !standing?.crumble && action.invulnerableTime === 0;
+    if (this.floor >= 12) this.icicleCooldown = Math.max(0, this.icicleCooldown - dt);
+    if (this.floor >= 20) this.batCooldown = Math.max(0, this.batCooldown - dt);
+    const shower = action.encounter?.kind === 'ice-shower';
+    if (canThreaten && this.floor >= 12 && this.icicleCooldown === 0 && !action.bats.length && !action.icicles.length && action.encounter?.kind !== 'crumble-rush') {
+      // The x lane is captured once. Movement during the warning never moves
+      // the target, and the other side of every ledge remains an escape route.
+      const spawnY = Math.max(this.y + 7, this.cameraY + 5);
+      action.icicles.push({ id: this.nextActionId++, x: clamp(this.x, -5.6, 5.6), y: spawnY, spawnY, targetY: this.y, state: 'warning', warningTime: ICICLE_WARNING_TIME + dt, vy: 0, nearMiss: false });
+      this.icicleCooldown = shower ? 2.5 : 7;
+      this.events.push({ type: 'icicle-warning', x: action.icicles[0].x, y: spawnY });
+      this.introduce('icicle', 'LOOK UP!', 'The marked lane will fall. Move aside before it flashes.');
+    }
+    if (canThreaten && this.floor >= 20 && this.batCooldown === 0 && !action.icicles.length && !action.bats.length && !action.encounter) {
+      const side = ((this.seed ^ this.nextActionId) & 1) ? 1 : -1;
+      const originX = side * (WALL + .7), originY = this.y + 1.8;
+      action.bats.push({ id: this.nextActionId++, x: originX, y: originY, originX, originY, phase: 0, alive: true, warningTime: .85 + dt });
+      this.batCooldown = 11;
+      this.events.push({ type: 'bat-warning', x: side * 5.5, y: originY });
+      this.introduce('bat', 'FROST BAT', 'Dodge its wings or land on top for a bonus bounce.');
+    }
+    for (const icicle of action.icicles) {
+      if (icicle.state === 'warning') {
+        icicle.warningTime = Math.max(0, icicle.warningTime - dt);
+        if (icicle.warningTime < 1e-8) { icicle.warningTime = 0; icicle.state = 'falling'; icicle.vy = -5; }
+      } else { icicle.vy -= 28 * dt; icicle.y += icicle.vy * dt; }
+    }
+    for (const bat of action.bats) {
+      if (bat.warningTime > 0) bat.warningTime = Math.max(0, bat.warningTime - dt);
+      else {
+        bat.phase += dt;
+        bat.x = bat.originX - Math.sign(bat.originX) * bat.phase * 2.8;
+        bat.y = bat.originY + Math.sin(bat.phase * 3) * .28;
+      }
+    }
+    if (action.frenzyTime > 0) {
+      this.crystalCooldown -= dt;
+      if (this.crystalCooldown <= 0 && action.crystals.length < 16) {
+        this.crystalCooldown = .6;
+        const x = clamp(this.x + Math.sin(this.time * 2.7) * 1.05, -5.6, 5.6);
+        action.crystals.push({ id: this.nextActionId++, x, y: this.y + 2.3, collected: false });
+      }
+    }
+    action.icicles = action.icicles.filter(i => i.y > this.cameraY - 14 && i.y > i.targetY - 12).slice(-2);
+    action.bats = action.bats.filter(b => b.alive && b.phase < 5.5 && b.y > this.cameraY - 12 && b.y < this.cameraY + 14).slice(-1);
+    action.crystals = action.crystals.filter(c => !c.collected && c.y > this.cameraY - 12 && c.y < this.cameraY + 18).slice(-16);
+  }
+  private hurt(sourceX: number) {
+    if (this.action.invulnerableTime > 0) return;
+    this.action.hits++; this.action.invulnerableTime = 1.65;
+    this.vx = (Math.sign(this.x - sourceX) || -this.facing) * 5;
+    this.vy = Math.max(9.2, this.vy);
+    this.grounded = false; this.standingId = -1; this.coyote = this.jumpBuffer = 0;
+    this.wallControlTime = .22; this.walkedOff = null;
+    this.combo = this.comboTime = this.action.frenzyCharge = 0;
+    if (this.comboChallengeFloor < 30) this.comboChallengeBroken = true;
+    this.emit('hurt');
+  }
+  private collideAction(oldY: number) {
+    const action = this.action;
+    for (const icicle of action.icicles) {
+      if (icicle.state !== 'falling') continue;
+      const dx = Math.abs(this.x - icicle.x);
+      // Include the previous tip position to avoid tunneling at high velocity.
+      const previousY = icicle.y - icicle.vy / 120;
+      if (dx < .6 && icicle.y <= this.y + 1.45 && previousY >= this.y) {
+        this.hurt(icicle.x); icicle.y = this.cameraY - 20;
+      } else if (!icicle.nearMiss && icicle.y < this.y && previousY >= this.y && dx >= .6 && dx < 2.2) {
+        icicle.nearMiss = true; action.dodges++; this.score += 75; this.emit('dodge', 75);
+      }
+    }
+    for (const bat of action.bats) {
+      if (!bat.alive || bat.warningTime > 0 || Math.abs(this.x - bat.x) >= .75) continue;
+      if (this.vy < 0 && oldY >= bat.y + .18 && this.y <= bat.y + .35) {
+        bat.alive = false; action.stomps++; this.score += 350;
+        this.y = bat.y + .35; this.vy = 17.6 * this.jumpMultiplier;
+        this.grounded = false; this.standingId = -1; this.coyote = this.jumpBuffer = 0;
+        this.doubleJumpUsed = false; this.lastWallJumpSide = 0; this.walkedOff = null;
+        this.comboTime = Math.max(this.comboTime, 2);
+        this.emit('stomp', 350); this.emit('jump', this.vx);
+      } else if (Math.abs(this.y + .7 - bat.y) < .85) this.hurt(bat.x);
+    }
+    for (const crystal of action.crystals) {
+      if (crystal.collected || Math.abs(this.x - crystal.x) >= .8 || Math.abs(this.y + .7 - crystal.y) >= .9) continue;
+      crystal.collected = true; this.gems++; this.score += 250; this.emit('gem', 250);
+      if (this.mode === 'party') this.doubleJumpTime = DOUBLE_JUMP_DURATION;
+    }
+  }
   drainEvents() { const e = this.events; this.events = []; return e; }
   getReplay(): RunReplay | null {
     if (this.status !== 'over' || this.mode === 'practice' || !this.replay || this.floor < 1) return null;
     const recording = { seed: this.seed, moves: this.replay.map(([frames, mask]): [number, number] => [frames, mask]) };
-    return this.rulesVersion === 3 || this.rulesVersion === 4 || this.rulesVersion === 5 ? { ...recording, version: this.rulesVersion, mode: this.mode } : { ...recording, version: this.rulesVersion };
+    return this.rulesVersion === 3 || this.rulesVersion === 4 || this.rulesVersion === 5 || this.rulesVersion === 6 ? { ...recording, version: this.rulesVersion, mode: this.mode } : { ...recording, version: this.rulesVersion };
   }
   snapshot() {
     const challenge = (id: QuickChallenge['id'], title: string, description: string, progress: number, target: number, failed = false): QuickChallenge => ({
@@ -285,7 +478,7 @@ export class TowerEngine {
       challenge('crystals', 'Crystal collector', 'Collect 10 crystals in one run.', this.gems, 10),
       challenge('walls', 'Wall jumper', 'Perform 5 wall jumps in one run. Hit a wall at speed or tap jump beside it while airborne.', this.wallJumps, 5),
     ];
-    return { status: this.status, mode: this.mode, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, pace: this.pace, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY, wallJumps: this.wallJumps, challenges, doubleJumpTime: this.doubleJumpTime, doubleJumpReady: this.doubleJumpTime > 0 && !this.doubleJumpUsed, failureEvidence: this.failureEvidence };
+    return { status: this.status, mode: this.mode, rulesVersion: this.rulesVersion, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, pace: this.pace, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY, wallJumps: this.wallJumps, challenges, doubleJumpTime: this.doubleJumpTime, doubleJumpReady: this.doubleJumpTime > 0 && !this.doubleJumpUsed, failureEvidence: this.failureEvidence, action: { ...this.action, icicles: this.action.icicles.map(i => ({ ...i })), bats: this.action.bats.map(b => ({ ...b })), crystals: this.action.crystals.map(c => ({ ...c })), encounter: this.action.encounter ? { ...this.action.encounter } : null, notice: this.action.notice ? { ...this.action.notice } : null } };
   }
 }
 export type Snapshot = ReturnType<TowerEngine['snapshot']>;

@@ -2,15 +2,15 @@ import type { TowerEngine } from './tower-engine.ts';
 
 // Daily rules are pinned independently of engine defaults. A future rules update
 // must keep decoding this version so archived links continue to play identically.
-export const DAILY_RULES_VERSION = 5;
+export const DAILY_RULES_VERSION = 6;
 export const DAILY_PROGRESS_STORAGE_KEY = 'frostbound-daily-progress-v1';
 export const MAX_DAILY_BESTS = 90;
-export type DailyTower = { date: string; version: 5; mode: 'arcade'; seed: number };
+export type DailyTower = { date: string; version: 5 | 6; mode: 'arcade'; seed: number };
 export type DailyBest = { floor: number; score: number };
 export type DailyProgress = { version: 1; bests: Record<string, DailyBest> };
 
 export function dailyForDate(date: string, version: number = DAILY_RULES_VERSION): DailyTower | null {
-  if (version !== DAILY_RULES_VERSION || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  if ((version !== 5 && version !== 6) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   const parsed = new Date(`${date}T00:00:00.000Z`);
   if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) return null;
   let seed = 2166136261;
@@ -26,7 +26,7 @@ export function dailyTowerToken(daily: DailyTower): string { return `${daily.ver
 
 export function decodeDailyTower(token: string | null): DailyTower | null {
   if (!token || token.length > 20) return null;
-  const match = /^(5)\.(\d{4}-\d{2}-\d{2})\.a$/.exec(token);
+  const match = /^([56])\.(\d{4}-\d{2}-\d{2})\.a$/.exec(token);
   return match ? dailyForDate(match[2], Number(match[1])) : null;
 }
 
@@ -41,6 +41,8 @@ export function startDailyRun(engine: TowerEngine, daily: DailyTower) {
   engine.start(daily.mode, daily.seed, daily.version);
 }
 
+// Sort by date before rules version so older archived towers cannot evict newer days.
+const newestDailyFirst = ([a]: [string, unknown], [b]: [string, unknown]) => b.slice(2, 12).localeCompare(a.slice(2, 12)) || b.localeCompare(a);
 const validCount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
 export function readDailyProgress(raw: string | null): DailyProgress {
@@ -49,7 +51,7 @@ export function readDailyProgress(raw: string | null): DailyProgress {
   try {
     const value: unknown = JSON.parse(raw);
     if (!value || typeof value !== 'object' || !('version' in value) || value.version !== 1 || !('bests' in value) || !value.bests || typeof value.bests !== 'object' || Array.isArray(value.bests)) return empty;
-    for (const [key, best] of Object.entries(value.bests).sort(([a], [b]) => b.localeCompare(a))) {
+    for (const [key, best] of Object.entries(value.bests).sort(newestDailyFirst)) {
       if (Object.keys(empty.bests).length >= MAX_DAILY_BESTS) break;
       if (!decodeDailyTower(key) || !best || typeof best !== 'object' || !('floor' in best) || !('score' in best) || !validCount(best.floor) || !validCount(best.score)) continue;
       empty.bests[key] = { floor: best.floor, score: best.score };
@@ -70,6 +72,6 @@ export function updateDailyProgress(progress: DailyProgress, daily: DailyTower, 
   const key = dailyTowerToken(daily);
   // Keep the tower just played, including an old shared link, plus the most recent
   // other dates. This avoids losing an archived result immediately after a run.
-  const entries = Object.entries(progress.bests).filter(([id]) => id !== key).sort(([a], [b]) => b.localeCompare(a)).slice(0, MAX_DAILY_BESTS - 1);
+  const entries = Object.entries(progress.bests).filter(([id]) => id !== key).sort(newestDailyFirst).slice(0, MAX_DAILY_BESTS - 1);
   return { version: 1, bests: { ...Object.fromEntries(entries), [key]: { floor: engine.floor, score: engine.score } } };
 }

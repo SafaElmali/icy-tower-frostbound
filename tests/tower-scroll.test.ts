@@ -77,7 +77,7 @@ void test('pausing freezes automatic scroll and restart resets its activation', 
 });
 
 void test('practice disables automatic step motion but still limits fatal falls', () => {
-  const e = new TowerEngine(); e.start('practice'); stand(e, 8); step(e, 1);
+  const e = new TowerEngine(); e.start('practice'); stand(e, 7); step(e, 1); // Use a stable ledge below hazard introductions.
   const camera = e.cameraY, frost = e.stormY; step(e, 70);
   assert.equal(e.cameraY, camera); assert.equal(e.stormY, frost); assert.equal(e.status, 'playing');
   e.y = frost - 1; e.grounded = false; e.standingId = -1; e.vy = -1; step(e, .1); assert.equal(e.status, 'over');

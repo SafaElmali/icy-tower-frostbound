@@ -16,9 +16,10 @@ import { PersonalBestMarker } from './personal-best-marker';
 import { getTowerSection } from './tower-sections';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 import type { TowerGhost } from './tower-ghost';
+import { TowerActionWorld, type CrumbleVisual } from './tower-action-world';
 
 type FloorPlaque = THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-type Ledge = { group: THREE.Group; gem?: THREE.Mesh; plaque?: FloorPlaque; platform: Platform; id: number };
+type Ledge = { group: THREE.Group; gem?: THREE.Mesh; plaque?: FloorPlaque; crumble?: CrumbleVisual; platform: Platform; id: number };
 type Fleck = { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; duration: number };
 const damp = (a: number, b: number, rate: number, dt: number) => THREE.MathUtils.lerp(a, b, 1 - Math.exp(-rate * dt));
 
@@ -47,6 +48,8 @@ export class TowerWorld {
   private ghostArms: THREE.Object3D[] = [];
   private ghostLegs: THREE.Object3D[] = [];
   private starTrail = new ComboStarTrail();
+  private actionWorld = new TowerActionWorld();
+  private lastEngineTime = 0;
   private interior: TowerInterior;
   private bestMarker = new PersonalBestMarker();
   private sectionColor = new THREE.Color();
@@ -65,6 +68,7 @@ export class TowerWorld {
   private env: THREE.WebGLRenderTarget;
   private stone: THREE.MeshStandardMaterial;
   private snowMat = new THREE.MeshStandardMaterial({ color: 0xc2dfdf, roughness: .79, metalness: .03 });
+  private crackedIceMat = new THREE.MeshPhysicalMaterial({ color: 0xd6b779, roughness: .35, metalness: .12, clearcoat: .8, emissive: 0x765020, emissiveIntensity: .32 });
   private iceMat: THREE.MeshPhysicalMaterial;
   private gold = new THREE.MeshStandardMaterial({ color: 0x9a7350, metalness: .8, roughness: .38 });
   private springMat = new THREE.MeshStandardMaterial({ color: 0xff70bf, emissive: 0xb02677, emissiveIntensity: .55, metalness: .4, roughness: .3 });
@@ -72,6 +76,8 @@ export class TowerWorld {
   private gemMat = new THREE.MeshPhysicalMaterial({ color: 0x69e6ed, emissive: 0x58b9cd, emissiveIntensity: 1.5, metalness: .35, roughness: .05, clearcoat: 1 });
   private fleckGeometry = new THREE.IcosahedronGeometry(.04, 0);
   private fleckMat = new THREE.MeshBasicMaterial({ color: 0xadeaff, transparent: true });
+  private impactFleckMat = new THREE.MeshBasicMaterial({ color: 0xffc477, transparent: true, toneMapped: false });
+  private frenzyFleckMat = new THREE.MeshBasicMaterial({ color: 0x8affd5, transparent: true, toneMapped: false });
   private groundShadow: THREE.Mesh;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -96,7 +102,7 @@ export class TowerWorld {
     this.scene.add(this.key, this.key.target);
     this.rim = new THREE.DirectionalLight(0x58cfff, 3.5); this.rim.position.set(6, 8, -6); this.scene.add(this.rim);
     this.glow = new THREE.PointLight(0xffc692, 5, 8, 1.3); this.scene.add(this.glow);
-    this.scene.add(this.root); this.root.add(this.tumble, this.columns, this.starTrail.mesh, this.bestMarker.group); this.tumble.add(this.character);
+    this.scene.add(this.root); this.root.add(this.tumble, this.columns, this.starTrail.mesh, this.bestMarker.group, this.actionWorld.group); this.tumble.add(this.character);
     this.camera.position.set(0, 5.2, 26); this.camera.lookAt(0, 5.2, 0);
     const stoneNoise = this.makeNoiseTexture();
     this.stone = new THREE.MeshStandardMaterial({ color: 0x405a65, roughness: .89, metalness: .08, bumpMap: stoneNoise, bumpScale: .12, roughnessMap: stoneNoise });
@@ -238,7 +244,7 @@ export class TowerWorld {
   private makeLedge(p: Platform, party: boolean): Ledge {
     const group = new THREE.Group(); group.position.set(p.x, p.y, 0); this.root.add(group);
     this.mesh(new RoundedBoxGeometry(p.width, .35, 1.7, 2, .07), this.stone, group, 0, -.23, -.35);
-    this.mesh(new RoundedBoxGeometry(p.width + .06, .13, 1.76, 3, .055), p.spring ? this.springMat : p.route === 'shortcut' ? this.routeMat : this.snowMat, group, 0, -.065, -.35);
+    this.mesh(new RoundedBoxGeometry(p.width + .06, .13, 1.76, 3, .055), p.crumble ? this.crackedIceMat : p.spring ? this.springMat : p.route === 'shortcut' ? this.routeMat : this.snowMat, group, 0, -.065, -.35);
     this.mesh(new THREE.BoxGeometry(p.width - .12, .05, .05), this.iceMat, group, 0, -.12, .53);
     this.mesh(new THREE.BoxGeometry(p.width - .15, .055, 1.6), this.gold, group, 0, -.4, -.35);
     for (let i = 0; i < Math.ceil(p.width * 2.8); i++) {
@@ -260,7 +266,9 @@ export class TowerWorld {
     if (p.gem) { gem = this.mesh(new THREE.OctahedronGeometry(.21, 0), party ? this.partyGemMat : this.gemMat, group, 0, 1.05, 0); gem.scale.y = 1.55; }
     this.batchMeshes(group, gem);
     const plaque = p.route === 'approach' ? this.makeRoutePlaque(p, group) : p.id > 0 && p.id % 10 === 0 ? this.makeFloorPlaque(p.id, group) : undefined;
-    return { group, gem, plaque, platform: p, id: p.id };
+    const crumble = p.crumble ? this.actionWorld.makeCrumble(p.width) : undefined;
+    if (crumble) group.add(crumble.group);
+    return { group, gem, plaque, crumble, platform: p, id: p.id };
   }
   private makeRoutePlaque(p: Platform, group: THREE.Group): FloorPlaque {
     const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 128;
@@ -275,6 +283,8 @@ export class TowerWorld {
   }
   private removeLedge(ledge: Ledge) {
     this.root.remove(ledge.group);
+    // The action renderer owns shared crack/chip resources across all ledges.
+    ledge.crumble?.group.removeFromParent();
     ledge.group.traverse(o => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
     ledge.plaque?.material.map?.dispose(); ledge.plaque?.material.dispose();
     this.ledges.delete(ledge.id);
@@ -285,6 +295,7 @@ export class TowerWorld {
     this.reducedMotion = reduced;
     if (reduced) { this.shake = 0; this.squish = 0; }
     this.starTrail.mesh.visible = !reduced;
+    if (reduced) { for (const fleck of this.flecks) this.root.remove(fleck.mesh); this.flecks.length = 0; }
   }
   private resize() {
     const { width, height } = this.renderer.domElement.getBoundingClientRect();
@@ -299,10 +310,14 @@ export class TowerWorld {
     if (e.type === 'land' && !this.reducedMotion) this.squish = .22;
     if (e.type === 'over' && !this.reducedMotion) this.shake = .24;
     if (e.type === 'wall' && !this.reducedMotion) this.shake = .055;
-    if (!this.reducedMotion && ['jump', 'land', 'gem', 'wall', 'combo'].includes(e.type)) {
-      const count = e.type === 'gem' ? 22 : e.type === 'combo' ? 9 : 12;
+    if (e.type === 'hurt' && !this.reducedMotion) this.shake = .11;
+    if (e.type === 'stomp' && !this.reducedMotion) { this.shake = .05; this.squish = .13; }
+    if (!this.reducedMotion && ['jump', 'land', 'gem', 'wall', 'combo', 'collapse', 'hurt', 'stomp', 'dodge', 'frenzy'].includes(e.type)) {
+      const count = e.type === 'gem' || e.type === 'frenzy' ? 22 : e.type === 'combo' || e.type === 'dodge' ? 9 : 12;
+      const material = ['hurt', 'collapse'].includes(e.type) ? this.impactFleckMat : ['frenzy', 'stomp', 'dodge'].includes(e.type) ? this.frenzyFleckMat : this.fleckMat;
       for (let i = 0; i < count; i++) {
-        const mesh = new THREE.Mesh(this.fleckGeometry, this.fleckMat); mesh.position.set(e.x + (Math.random() - .5) * .5, e.y + .08, .2); this.root.add(mesh);
+        if (this.flecks.length >= 240) this.root.remove(this.flecks.shift()!.mesh);
+        const mesh = new THREE.Mesh(this.fleckGeometry, material); mesh.position.set(e.x + (Math.random() - .5) * .5, e.y + .08, .2); this.root.add(mesh);
         const duration = .35 + Math.random() * .5;
         this.flecks.push({ mesh, velocity: new THREE.Vector3((Math.random() - .5) * 4, Math.random() * 3, (Math.random() - .5) * 3), life: duration, duration });
       }
@@ -310,11 +325,15 @@ export class TowerWorld {
   }
   render(e: TowerEngine, dt: number, t: number, ghost: TowerGhost | null = null) {
     const menu = e.status === 'ready';
+    const simulationDt = e.status === 'playing' ? dt : 0;
+    if (menu || e.time < this.lastEngineTime) { for (const fleck of this.flecks) this.root.remove(fleck.mesh); this.flecks.length = 0; this.shake = this.squish = 0; }
+    this.lastEngineTime = e.time;
+    const actionTime = menu ? t : e.time;
     const aspect = this.renderer.domElement.clientWidth / this.renderer.domElement.clientHeight;
     this.cameraY = damp(this.cameraY, e.cameraY, e.cameraY < this.cameraY ? 10 : 6, dt);
-    this.shake *= Math.exp(-12 * dt); this.squish *= Math.exp(-12 * dt);
+    this.shake *= Math.exp(-12 * simulationDt); this.squish *= Math.exp(-12 * simulationDt);
     this.cameraX = damp(this.cameraX, menu ? -.45 : e.x * .16, 2.5, dt);
-    this.camera.position.set(this.cameraX + Math.sin(t * 63) * this.shake, this.cameraY + 3.8 + Math.cos(t * 58) * this.shake, 26);
+    this.camera.position.set(this.cameraX + Math.sin(actionTime * 63) * this.shake, this.cameraY + 3.8 + Math.cos(actionTime * 58) * this.shake, 26);
     this.camera.lookAt(0, this.cameraY, 0);
     this.root.position.x = damp(this.root.position.x, menu && aspect > 1 ? 3.7 : 0, 4, dt);
     this.columns.position.y = Math.floor(this.cameraY / 20) * 20;
@@ -330,10 +349,16 @@ export class TowerWorld {
     for (const p of e.platforms) {
       if (p.y < this.cameraY - 15 || p.y > this.cameraY + 18) continue;
       keep.add(p.id); let ledge = this.ledges.get(p.id);
-      if (ledge && ledge.platform !== p) { this.removeLedge(ledge); ledge = undefined; }
+      // Encounters can mark or restore an already-visible platform in place.
+      if (ledge && (ledge.platform !== p || !!ledge.crumble !== !!p.crumble)) { this.removeLedge(ledge); ledge = undefined; }
       if (!ledge) { ledge = this.makeLedge(p, e.mode === 'party'); this.ledges.set(p.id, ledge); }
       ledge.group.position.set(p.x, p.y, 0);
-      if (ledge.gem) { ledge.gem.visible = !p.collected; ledge.gem.rotation.y = t * 1.8; ledge.gem.position.y = 1.05 + Math.sin(t * 2.4 + p.id) * .14; }
+      ledge.group.visible = !p.crumble?.broken;
+      if (p.crumble && ledge.crumble) {
+        this.actionWorld.updateCrumble(ledge.crumble, p.crumble, p.width, e.time, this.reducedMotion);
+        if (!this.reducedMotion && p.crumble.remaining !== null && !p.crumble.broken) ledge.group.position.x += Math.sin(e.time * 39 + p.id) * .018;
+      }
+      if (ledge.gem) { ledge.gem.visible = !p.collected && !p.crumble?.broken; ledge.gem.rotation.y = this.reducedMotion ? .5 : actionTime * 1.8; ledge.gem.position.y = 1.05 + (this.reducedMotion ? 0 : Math.sin(actionTime * 2.4 + p.id) * .14); }
     }
     for (const [id, ledge] of this.ledges) if (!keep.has(id)) {
       this.removeLedge(ledge);
@@ -356,9 +381,12 @@ export class TowerWorld {
       ghost.motion.applyLimbs(g, ghostPose.spread, this.ghostArms, this.ghostLegs);
     }
     this.starTrail.update(e);
+    this.actionWorld.update(e, this.reducedMotion);
     this.glow.position.set(e.x + this.root.position.x, e.y + 1.5, 2.8);
+    this.glow.color.setHex(e.action.frenzyTime > 0 ? 0x78ffd1 : 0xffc692);
+    this.glow.intensity = e.action.frenzyTime > 0 ? 6 : 5;
     this.key.position.y = this.cameraY + 9; this.key.target.position.set(0, this.cameraY, 0); this.key.target.updateMatrixWorld();
-    const below = e.platforms.filter(p => p.y <= e.y + .02 && Math.abs(e.x - p.x) < p.width / 2).sort((a, b) => b.y - a.y)[0];
+    const below = e.platforms.filter(p => !p.crumble?.broken && p.y <= e.y + .02 && Math.abs(e.x - p.x) < p.width / 2).sort((a, b) => b.y - a.y)[0];
     this.groundShadow.visible = !!below;
     if (below) { this.groundShadow.position.set(e.x, below.y + .008, 0); const scale = 1 + Math.min(3, e.y - below.y) * .25; this.groundShadow.scale.setScalar(scale); (this.groundShadow.material as THREE.MeshBasicMaterial).opacity = .48 / scale; }
     for (let i = 0; i < this.snowSeeds.length / 3; i++) {
@@ -368,9 +396,9 @@ export class TowerWorld {
     }
     this.snow.geometry.attributes.position.needsUpdate = true;
     for (let i = this.flecks.length - 1; i >= 0; i--) {
-      const f = this.flecks[i]; f.life -= dt;
+      const f = this.flecks[i]; f.life -= simulationDt;
       if (f.life <= 0) { this.root.remove(f.mesh); this.flecks.splice(i, 1); continue; }
-      f.velocity.y -= 6 * dt; f.mesh.position.addScaledVector(f.velocity, dt); f.mesh.scale.setScalar(f.life / f.duration);
+      f.velocity.y -= 6 * simulationDt; f.mesh.position.addScaledVector(f.velocity, simulationDt); f.mesh.scale.setScalar(f.life / f.duration);
     }
     this.frost.position.y = e.stormY - 8.5; (this.frost.material as THREE.ShaderMaterial).uniforms.time.value = t;
     if (this.high) this.composer.render(dt); else this.renderer.render(this.scene, this.camera);
@@ -378,8 +406,11 @@ export class TowerWorld {
   dispose() {
     if (this.disposed) return; this.disposed = true; this.observer.disconnect();
     this.root.remove(this.starTrail.mesh); this.starTrail.dispose();
+    this.root.remove(this.actionWorld.group);
+    for (const ledge of this.ledges.values()) ledge.crumble?.group.removeFromParent();
+    this.actionWorld.dispose();
     this.bestMarker.dispose();
-    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>([this.springMat, this.partyGemMat, this.gemMat, this.routeMat]), textures = new Set<THREE.Texture>();
+    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>([this.springMat, this.partyGemMat, this.gemMat, this.routeMat, this.crackedIceMat, this.impactFleckMat, this.frenzyFleckMat]), textures = new Set<THREE.Texture>();
     this.scene.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Points) { geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m); } });
     for (const m of materials) { for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value); m.dispose(); }
     geometries.forEach(g => g.dispose()); textures.forEach(t => t.dispose()); this.env.dispose(); this.fleckGeometry.dispose(); this.fleckMat.dispose(); this.composer.dispose(); this.bloom.dispose(); this.renderer.dispose();

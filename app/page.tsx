@@ -121,6 +121,12 @@ import {
 } from '@/lib/daily-tower';
 import { ClimbGuidance } from '@/components/climb-guidance';
 import {
+  hasActionNotice,
+  TowerActionHud,
+  TowerActionResults,
+  TowerFrenzyMeter,
+} from '@/components/tower-action-hud';
+import {
   readGuidanceProfile,
   freshGuidanceRun,
   advanceGuidance,
@@ -587,6 +593,11 @@ export default function Home() {
             const dt = Math.min((now - (last || now)) / 1000, 0.1);
             last = now;
             e.tick(dt, input.current.controls);
+            audio.current?.updateAction(
+              e.time,
+              e.rulesVersion >= 6 ? e.action.frenzyTime : 0,
+              e.status === 'playing',
+            );
             ghost.current?.advanceTo(e.time);
             const events = e.drainEvents();
             const milestone = comboFeedback.current.observe(
@@ -595,7 +606,8 @@ export default function Home() {
             );
             if (milestone !== null) {
               setComboMilestone(milestone);
-              tone('combo', milestone);
+              if (!events.some((event) => event.type === 'frenzy'))
+                tone('combo', milestone);
             } else if (e.combo === 0)
               setComboMilestone((previous) =>
                 previous === null ? previous : null,
@@ -905,6 +917,8 @@ export default function Home() {
   };
   const active = game.status === 'playing' || game.status === 'paused';
   const zone = getTowerSection(game.floor).name;
+  const actionRules = game.rulesVersion >= 6;
+  const actionNotice = actionRules && hasActionNotice(game.action);
 
   return (
     <main
@@ -957,7 +971,7 @@ export default function Home() {
           </Button>
         </div>
       </header>
-      {game.status === 'playing' && sectionNotice && (
+      {game.status === 'playing' && sectionNotice && !actionNotice && (
         <output className="section-notice" aria-live="polite">
           {sectionNotice}
         </output>
@@ -1033,9 +1047,14 @@ export default function Home() {
       )}
       {active && (
         <>
-          <aside className="skill-hud">
-            <FeaturedSkillGoal profile={skills} snapshot={game} />
-          </aside>
+          {!actionNotice && (
+            <aside className="skill-hud">
+              <FeaturedSkillGoal profile={skills} snapshot={game} />
+            </aside>
+          )}
+          {game.status === 'playing' && actionRules && (
+            <TowerActionHud action={game.action} />
+          )}
           {game.status === 'playing' && guidanceCue && (
             <div className="guidance-dock">
               <ClimbGuidance
@@ -1130,7 +1149,7 @@ export default function Home() {
             )}
           </section>
           <div
-            className={`combo-hud ${game.combo >= 3 && !guidanceCue ? 'visible' : ''}`}
+            className={`combo-hud ${(game.combo >= 3 || (actionRules && game.action.frenzyTime > 0)) && !guidanceCue ? 'visible' : ''}`}
           >
             <span>
               {comboMilestone
@@ -1144,6 +1163,7 @@ export default function Home() {
             <div className="combo-track">
               <i style={{ transform: `scaleX(${game.comboTime / 3.8})` }} />
             </div>
+            {actionRules && <TowerFrenzyMeter action={game.action} />}
           </div>
           <div className="speed-meter">
             <span>MOMENTUM</span>
@@ -1303,6 +1323,7 @@ export default function Home() {
           </p>
           <div className="run-details-content">
             <RunFeedback snapshot={game} />
+            {actionRules && <TowerActionResults action={game.action} />}
             <PersonalProgressResults baseline={runBaseline} run={game} />
             <FeaturedSkillGoal profile={skills} snapshot={game} />
             {daily && (
@@ -1724,6 +1745,34 @@ export default function Home() {
                 seconds, with no speed cap. Time and pace appear below your
                 score. Pausing freezes both. Practice removes automatic
                 scrolling; older friend challenges keep their original pace.
+              </p>
+            </div>
+          </div>
+          <div className="instruction">
+            <Snowflake size={25} />
+            <div>
+              <strong>Read the danger</strong>
+              <p>
+                Cracked ledges crumble about a second after landing — jump away.
+                Shaking icicles mark a lane before they fall; steer out of it.
+                Frost bats cross your route: land on one from above for a
+                powerful bounce and bonus points. Side hits knock you back, with
+                a brief recovery window.
+              </p>
+            </div>
+          </div>
+          <div className="instruction">
+            <Diamond size={25} />
+            <div>
+              <strong>Earn a frenzy. Ride out the rush.</strong>
+              <p>
+                Chain 10 new floors to earn six seconds of boosted jumps and
+                bonus crystal trails. Keep your combo alive to recharge after it
+                ends. Higher up, brief ice showers and collapsing stair
+                sequences test your reflexes, followed by breathing room. These
+                mechanics arrive gradually in new climbs; older friend
+                challenges and dated towers keep their original rules. Your move
+                and jump controls stay the same.
               </p>
             </div>
           </div>

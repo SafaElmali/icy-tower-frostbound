@@ -2,7 +2,7 @@
 
 # Icy Tower — Frostbound
 
-A playable 2.5D arcade tower climber. Three.js renders the scene; a fixed-step simulation owns movement, one-way ledges, momentum jumps, wall rebounds, full somersaults on fast jumps, crystals, combo chains, and the rising storm.
+A playable 2.5D arcade tower climber. Three.js renders the scene; a fixed-step simulation owns movement, momentum jumps, wall rebounds, crystals, combo chains, collapsing ledges, falling icicles, frost bats, frenzy boosts, tower encounters, and the rising storm.
 
 ## Play
 
@@ -19,6 +19,20 @@ While airborne beside a wall, release and tap JUMP to launch up and away, even w
 Every 10th floor has a wooden number plaque on its front edge. Every 50th floor is a full-width landing stage, providing room to land and build momentum before the next climb. Stages still scroll toward the frost like other floors.
 
 The layout supports portrait and landscape, device safe areas, and scrolling menus on short screens. Rotating the device or leaving the game pauses the run and clears held controls. Touch devices start in Performance quality; change quality under **Menu → Settings**. Leaderboard dialogs adjust to the visible screen when the on-screen keyboard opens.
+
+## Tower action
+
+Current runs add five action mechanics using the existing move and jump controls:
+
+- **Crumbling ice:** cracked amber ledges begin appearing at floor 8 and break 1.15 seconds after landing. Jump away while the warning bar drains; broken ledges cannot catch a fall.
+- **Falling icicles:** from floor 12, a marked lane warns for 1.1 seconds before ice drops. The lane locks when the warning appears, leaving time to move aside. Close dodges award 75 points.
+- **Frost bats:** from floor 20, a winged enemy warns at the edge before crossing the tower. Landing on top bounces you upward and awards 350 points. Side hits and icicles give a short upward recovery impulse and 1.65 seconds of protection, and break the combo.
+- **Combo frenzy:** earning a 10-floor combo charge activates six seconds of stronger jumps, bonus crystal trails, and a rhythmic sound cue. Further frenzy charges require new higher-floor landings after the burst ends; breaking the combo clears the charge.
+- **Tower encounters:** starting at floor 30, short ice showers and collapsing-stair sections alternate, with a calm interval afterward. Milestone stage neighborhoods stay clear of flying hazards. The encounter timer, warning captions, and frenzy meter remain readable with sound off; reduced motion preserves danger markers while suppressing decorative motion.
+
+Action appears in Classic, Party, Practice, and new daily towers. Practice removes the automatic frost chase while retaining hazards. **Run details → Reflex highlights** shows close dodges, bat stomps, frenzies, and hits taken.
+
+Rules version 6 pins hazards, bonuses, and encounter timing to the fixed-step simulation. Old version 1–5 recordings, friend links, and version 5 daily links retain their exact original rules. New ghosts and score submissions replay the full action simulation. Existing records remain saved.
 
 ## Quick challenges
 
@@ -69,7 +83,7 @@ Your highest completed arcade climb under the current rules becomes the next gho
 
 ## Leaderboard
 
-Open **Menu → Leaderboard** to see the all-time top 50 runs on the **Classic** or **Party** tab. After a completed Classic or Party run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, combos, and mode-specific physics are replayed and calculated on the server. The verified recording selects the board; Party scores cannot be submitted to Classic rankings. Legacy recordings remain valid under their original rules; version 4 recordings use uncapped pace and controlled wall jumps; version 5 also adds route choices. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.
+Open **Menu → Leaderboard** to see the all-time top 50 runs on the **Classic** or **Party** tab. After a completed Classic or Party run, choose **Submit score & leaderboard**, enter a public display name, and submit. Scores, floors, combos, and mode-specific physics are replayed and calculated on the server. The verified recording selects the board; Party scores cannot be submitted to Classic rankings. Legacy recordings remain valid under their original rules; version 4 recordings use uncapped pace and controlled wall jumps; version 5 adds route choices; version 6 adds hazards, frenzy, and tower encounters. Practice runs do not qualify; ranked recordings support up to 30 minutes and 12,000 input changes. Ties favor the higher floor, then the faster run.
 
 The leaderboard uses a Netlify Function and site-wide Netlify Blobs storage, so scores persist across deployments and are shared across devices. Conditional writes protect concurrent submissions, and identical recordings cannot be added twice while on the board. Replay validation prevents fabricated score totals; it is not a guarantee against automated play. No login is required, and display names are not reserved identities. The name field is remembered only on the player's device.
 
