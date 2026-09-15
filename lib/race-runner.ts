@@ -1,28 +1,68 @@
-import { ClimberMotion } from './climber-motion.ts';
+import { type Controls } from './tower-engine.ts';
 import {
-  type Controls,
-  type GameStatus,
-  type RunReplay,
-} from './tower-engine.ts';
-import {
-  createRaceEngine,
-  RACE_DURATION_MS,
-  RACE_TARGET,
-  type RacePose,
+  DEFAULT_RACE_SETTINGS,
+  type RaceBumpEvent,
+  type RaceRecording,
+  type RaceSettings,
+  type RaceSlot,
 } from './race-protocol.ts';
+import { RaceSimulation, RACE_STEP } from './race-simulation.ts';
 
-/** Fixed-step input recording starts on the shared clock and stops on the exact goal frame. */
+/** Fixed-step input recording starts on the shared clock and survives checkpoint recovery. */
 export class RaceRunner {
-  engine: ReturnType<typeof createRaceEngine>;
-  recording: RunReplay | null = null;
+  readonly simulation: RaceSimulation;
+  recording: RaceRecording | null = null;
   started = false;
   private last: number | null = null;
   private accumulator = 0;
   readonly round: number;
-  constructor(round: number, seed: number) {
+
+  constructor(
+    round: number,
+    seed: number,
+    settings: RaceSettings = DEFAULT_RACE_SETTINGS,
+  ) {
     this.round = round;
-    this.engine = createRaceEngine(seed);
+    this.simulation = new RaceSimulation(seed, settings);
   }
+  get engine() {
+    return this.simulation.engine;
+  }
+  get frame() {
+    return this.simulation.frame;
+  }
+  get pose() {
+    return this.simulation.pose;
+  }
+  get respawning() {
+    return this.simulation.respawning;
+  }
+  get checkpointFloor() {
+    return this.simulation.checkpointFloor;
+  }
+  get protected() {
+    return this.simulation.protected;
+  }
+  get finished() {
+    return this.simulation.finished;
+  }
+
+  applyBumps(events: readonly RaceBumpEvent[], you: RaceSlot) {
+    for (const event of events) {
+      if (event.to === you) this.simulation.applyBump(event);
+    }
+  }
+
+  /** Snapshot the current climb when the server ends the round for both players. */
+  finish() {
+    if (!this.recording) {
+      this.simulation.finishTime();
+      this.recording = this.simulation.getRecording();
+      this.accumulator = 0;
+    }
+    return this.recording;
+  }
+
   advance(
     now: number,
     startAt: number | null,
@@ -33,70 +73,19 @@ export class RaceRunner {
     this.last = now;
     if (startAt === null || now < startAt || finished || this.recording) return;
     this.started = true;
+    // Brief frame stalls recover, while background tabs cannot replay minutes of held input.
+    const deadline = startAt + this.simulation.settings.durationMs;
     this.accumulator +=
-      Math.min(100, Math.max(0, now - Math.max(previous, startAt))) / 1000;
-    while (
-      this.accumulator + 1e-9 >= 1 / 120 &&
-      this.engine.time < RACE_DURATION_MS / 1000 - 1e-8
-    ) {
-      this.accumulator -= 1 / 120;
-      this.engine.tick(1 / 120, controls);
-      if (this.engine.status === 'over' || this.engine.floor >= RACE_TARGET)
-        break;
+      Math.min(
+        100,
+        Math.max(0, Math.min(now, deadline) - Math.max(previous, startAt)),
+      ) / 1000;
+    while (this.accumulator + 1e-9 >= RACE_STEP && !this.simulation.finished) {
+      this.accumulator -= RACE_STEP;
+      this.simulation.step(controls);
     }
-    if (
-      this.engine.status === 'over' ||
-      this.engine.floor >= RACE_TARGET ||
-      now >= startAt + RACE_DURATION_MS ||
-      this.engine.time >= RACE_DURATION_MS / 1000 - 1e-8
-    ) {
-      this.recording = this.engine.getRecording();
-    }
+    if (now >= deadline || this.simulation.finished) this.finish();
   }
 }
 
-/** A visual rival never participates in the local player's collisions or scoring. */
-export class RaceRival {
-  engine = {
-    x: 0,
-    y: 0,
-    vx: 0,
-    vy: 0,
-    time: 0,
-    facing: 1,
-    grounded: true,
-    status: 'playing' as GameStatus,
-  };
-  motion = new ClimberMotion();
-  finished = true;
-  private target: RacePose | null = null;
-  private received = 0;
-  receive(pose: RacePose | null, now: number, finished: boolean) {
-    this.finished = finished || pose === null;
-    if (!pose || pose.time === this.target?.time) return;
-    if (this.target?.grounded && !pose.grounded)
-      this.motion.jump(pose.vx, pose.time);
-    if (!this.target) Object.assign(this.engine, pose);
-    this.target = pose;
-    this.received = now;
-  }
-  advance(now: number, dt: number) {
-    if (!this.target || this.finished) return;
-    const p = this.target,
-      ahead = Math.min(0.15, Math.max(0, (now - this.received) / 1000));
-    const mix = 1 - Math.exp(-14 * dt);
-    this.engine.x +=
-      (Math.max(-6.12, Math.min(6.12, p.x + p.vx * ahead)) - this.engine.x) *
-      mix;
-    this.engine.y +=
-      (p.y +
-        (p.grounded ? 0 : p.vy * ahead - 11.5 * ahead * ahead) -
-        this.engine.y) *
-      mix;
-    this.engine.vx = p.vx;
-    this.engine.vy = p.vy;
-    this.engine.grounded = p.grounded;
-    this.engine.facing = p.facing;
-    this.engine.time = p.time + ahead;
-  }
-}
+export { RaceRival } from './race-rival.ts';

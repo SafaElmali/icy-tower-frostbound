@@ -53,7 +53,8 @@
   cursor: default;
 }
 .screen button:focus-visible,
-.screen input:focus-visible {
+.screen input:focus-visible,
+.screen select:focus-visible {
   outline: 2px solid #b6dedf;
   outline-offset: 4px;
 }
@@ -133,8 +134,124 @@
   margin: 6px auto 0;
   font-size: 12px;
 }
+.rules {
+  display: grid;
+  gap: 14px;
+  text-align: left;
+  margin: 22px 0 0;
+}
+.ruleFields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.ruleFields label {
+  display: grid;
+  gap: 7px;
+  color: #b3c8cd;
+  font-size: 11px;
+}
+.ruleFields input,
+.ruleFields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: #081b24;
+  border: 1px solid #b8d8e02a;
+  border-radius: 6px;
+  color: #e0ebe7;
+  font: inherit;
+  font-size: 13px;
+  color-scheme: dark;
+}
+.bumpRule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 0;
+  color: #d1dfdc;
+  cursor: pointer;
+  font-size: 12px;
+}
+.bumpRule > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+.bumpRule small {
+  width: 100%;
+  margin-left: 22px;
+  color: #91acb5;
+  font-size: 10px;
+}
+.bumpRule input {
+  appearance: none;
+  flex-shrink: 0;
+  width: 34px;
+  height: 20px;
+  border-radius: 20px;
+  border: 1px solid #a6c6d040;
+  background: #091a24;
+  position: relative;
+  cursor: pointer;
+}
+.bumpRule input::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  top: 3px;
+  left: 3px;
+  background: #8ba7b2;
+  border-radius: 50%;
+}
+.bumpRule input:checked {
+  background: #526e5e;
+  border-color: #b1d3b669;
+}
+.bumpRule input:checked::before {
+  left: 17px;
+  background: #e1efd3;
+}
+.rules > small {
+  color: #91acb5;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.saveRules {
+  min-height: 40px;
+  border: 1px solid #b3d2da40;
+  border-radius: 6px;
+  background: #2c4850;
+  color: #e0eae4;
+  font-size: 12px;
+}
+.agreedRules {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 16px;
+  margin: 20px 0;
+  font-size: 12px;
+  color: #c3d8db;
+}
+.agreedRules > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.agreedRules small {
+  flex-basis: 100%;
+  font-size: 10px;
+  color: #91acb5;
+}
 .players {
-  margin: 26px 0;
+  margin: 20px 0;
   text-align: left;
 }
 .players > div {
@@ -317,6 +434,27 @@
   text-shadow: 0 1px 8px #001016;
   pointer-events: none;
 }
+.raceStatus output {
+  display: block;
+  min-height: 20px;
+}
+.linkState {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #a9c4ca;
+  font-size: 9px;
+}
+.linkState::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #c4c7b0;
+}
+.linkState[data-live='true']::before {
+  background: #b2db9c;
+}
 .controlsHint {
   position: absolute;
   bottom: 24px;
@@ -363,6 +501,15 @@
   border: 1px solid #b5d4df55;
   touch-action: none;
   user-select: none;
+}
+.touchControls .shoveButton {
+  align-content: center;
+  gap: 4px;
+  border-color: #cddcad55;
+  background: #2b3d37e0;
+}
+.shoveButton small {
+  font-size: 9px;
 }
 .touchControls button[aria-pressed='true'] {
   background: #416978ee;
@@ -444,7 +591,7 @@
     padding: 8px;
   }
   .card {
-    padding: 26px;
+    padding: 24px;
     max-height: calc(100dvh - 110px);
   }
   .hud {
@@ -456,6 +603,19 @@
   }
   .error {
     top: 68px;
+  }
+}
+@media (max-width: 360px) {
+  .touchControls {
+    inset-inline: 16px;
+    gap: 12px;
+  }
+  .touchControls > div {
+    gap: 8px;
+  }
+  .touchControls button {
+    width: 58px;
+    height: 58px;
   }
 }
 @media (max-height: 560px) {

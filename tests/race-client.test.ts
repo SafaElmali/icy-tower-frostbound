@@ -85,7 +85,7 @@ void test('a background delay does not replay held controls for elapsed wall tim
   assert.ok(runner.engine.time < 1);
 });
 
-void test('remote interpolation is bounded, freezes stale packets and does not alter the player', () => {
+void test('remote interpolation stays visible across missing packets and does not alter the player', () => {
   const player = new RaceRunner(1, 17),
     before = player.engine.snapshot(),
     rival = new RaceRival();
@@ -105,10 +105,10 @@ void test('remote interpolation is bounded, freezes stale packets and does not a
   rival.advance(60000, 1);
   assert.ok(rival.engine.x <= 6.12);
   assert.ok(rival.engine.y < 10);
-  const point = { ...rival.engine };
   rival.receive(null, 60010, true);
   rival.advance(70000, 1);
-  assert.deepEqual(rival.engine, point);
+  assert.equal(rival.finished, false);
+  assert.ok(rival.engine.x <= 6.12 && rival.engine.y < 10);
   assert.deepEqual(player.engine.snapshot(), before);
 });
 
@@ -191,6 +191,7 @@ void test('two independent clients share a countdown, stream real positions and 
   ) {
     now = startAt + (frame * 1000) / 120;
     for (const [index, r] of runners.entries()) {
+      if ([host, guest][index].view?.phase === 'finishing') r.finish();
       const e = r.engine;
       if (e.grounded)
         targets[index] = e.platforms.find((p) => p.id === e.floor + 1)!;
@@ -211,12 +212,18 @@ void test('two independent clients share a countdown, stream real positions and 
           me = client.view!.players.find((p) => p.slot === client.view!.you)!;
         await client.send(
           r.recording && !me.result && client.view!.phase !== 'finished'
-            ? { action: 'finish', round: 1, replay: r.recording }
+            ? {
+                action: 'finish',
+                round: 1,
+                replay: r.recording,
+                pose: r.pose,
+                seq: frame,
+              }
             : {
                 action: 'poll',
                 round: 1,
                 seq: frame,
-                pose: racePose(r.engine),
+                pose: r.pose,
               },
         );
       }
@@ -227,6 +234,11 @@ void test('two independent clients share a countdown, stream real positions and 
   assert.equal(guest.view!.phase, 'finished');
   assert.equal(host.view!.winner, 'host');
   assert.equal(guest.view!.winner, 'host');
+  assert.ok(host.view!.players.every((p) => p.result));
+  assert.equal(
+    host.view!.players[0].pose!.floor,
+    host.view!.players[0].result!.floor,
+  );
   assert.ok(
     views.some((v) => v.players.some((p) => p.pose && p.pose.floor > 5)),
   );

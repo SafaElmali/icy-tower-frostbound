@@ -1,12 +1,26 @@
-import { TowerEngine, type RunReplay } from './tower-engine.ts';
+import { TowerEngine } from './tower-engine.ts';
 
 export const RACE_RULES_VERSION = 5;
-export const RACE_TARGET = 20;
-export const RACE_DURATION_MS = 90_000;
+export const RACE_PROTOCOL_VERSION = 2;
+export type RaceSettings = {
+  targetFloor: number;
+  durationMs: number;
+  bumping: boolean;
+};
+export const RACE_DURATIONS = [60_000, 120_000, 180_000, 300_000] as const;
+export const DEFAULT_RACE_SETTINGS: RaceSettings = {
+  targetFloor: 30,
+  durationMs: 180_000,
+  bumping: false,
+};
+/** Defaults retained for callers that do not yet have a room. */
+export const RACE_TARGET = DEFAULT_RACE_SETTINGS.targetFloor;
+export const RACE_DURATION_MS = DEFAULT_RACE_SETTINGS.durationMs;
 export const RACE_COUNTDOWN_MS = 4_000;
 export const RACE_DISCONNECT_MS = 15_000;
 export const RACE_ROOM_TTL_MS = 60 * 60_000;
 export const RACE_POLL_MS = 500;
+export const RACE_BUMP_COOLDOWN_MS = 1_500;
 export const RACE_API = '/.netlify/functions/race';
 export type RaceSlot = 'host' | 'guest';
 export type RacePhase =
@@ -24,9 +38,13 @@ export type RacePose = {
   grounded: boolean;
   time: number;
   floor: number;
+  frame: number;
+  checkpointFloor: number;
+  respawning: boolean;
+  protected: boolean;
 };
 export type RaceResult = {
-  kind: 'goal' | 'fell' | 'time' | 'forfeit';
+  kind: 'goal' | 'time' | 'forfeit';
   floor: number;
   duration: number;
 };
@@ -38,12 +56,35 @@ export type RacePlayer = {
   result: RaceResult | null;
   rematch: boolean;
 };
+export type RaceSignal = {
+  type: 'offer' | 'answer';
+  sdp: string;
+  generation: string;
+};
+export type RaceBumpEvent = {
+  id: string;
+  from: RaceSlot;
+  to: RaceSlot;
+  at: number;
+  direction: -1 | 1;
+  targetFrame: number;
+};
+export type RaceRecording = {
+  version: 1;
+  rulesVersion: typeof RACE_RULES_VERSION;
+  seed: number;
+  moves: [number, number][];
+  bumps: { id: string; frame: number }[];
+};
 export type RaceView = {
   id: string;
   revision: number;
   round: number;
   seed: number;
   rulesVersion: typeof RACE_RULES_VERSION;
+  settings: RaceSettings;
+  signals: Partial<Record<RaceSlot, RaceSignal>>;
+  bumps: RaceBumpEvent[];
   phase: RacePhase;
   startAt: number | null;
   deadline: number | null;
@@ -56,26 +97,53 @@ export type RaceView = {
 };
 export type RaceSession = { room: string; token: string };
 export type RaceAction = {
-  action: 'create' | 'join' | 'poll' | 'ready' | 'finish' | 'rematch' | 'leave';
+  action:
+    | 'create'
+    | 'join'
+    | 'poll'
+    | 'ready'
+    | 'configure'
+    | 'signal'
+    | 'bump'
+    | 'finish'
+    | 'rematch'
+    | 'leave';
   room: string;
   round?: number;
   ready?: boolean;
   seq?: number;
   pose?: RacePose;
-  replay?: RunReplay;
+  replay?: RaceRecording;
+  settings?: RaceSettings;
+  signal?: RaceSignal;
+  direction?: -1 | 1;
 };
 export const validRaceId = (value: unknown): value is string =>
   typeof value === 'string' && /^[a-f0-9]{32}$/.test(value);
 export const otherSlot = (slot: RaceSlot): RaceSlot =>
   slot === 'host' ? 'guest' : 'host';
 export function createRaceEngine(seed: number) {
-  const engine = new TowerEngine(seed, true, RACE_RULES_VERSION);
+  const engine = new TowerEngine(seed, false, RACE_RULES_VERSION);
   engine.start('arcade');
+  engine.useStaticRacePlatforms();
   return engine;
 }
 export function racePose(engine: TowerEngine): RacePose {
   const { x, y, vx, vy, facing, grounded, time, floor } = engine;
-  return { x, y, vx, vy, facing, grounded, time, floor };
+  return {
+    x,
+    y,
+    vx,
+    vy,
+    facing,
+    grounded,
+    time,
+    floor,
+    frame: Math.round(time * 120),
+    checkpointFloor: Math.floor(floor / 5) * 5,
+    respawning: false,
+    protected: false,
+  };
 }
 export function raceInvite(base: string, room: string) {
   const url = new URL('/race', base);

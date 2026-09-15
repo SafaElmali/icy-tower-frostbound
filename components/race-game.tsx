@@ -8,6 +8,7 @@ import {
   Check,
   Copy,
   Flag,
+  Hand,
   RotateCcw,
   Users,
   Volume2,
@@ -20,16 +21,18 @@ import {
   readRaceSession,
 } from '@/lib/race-client';
 import { RaceRival, RaceRunner } from '@/lib/race-runner';
+import { RacePeer } from '@/lib/race-peer';
 import {
+  DEFAULT_RACE_SETTINGS,
   RACE_API,
   RACE_DISCONNECT_MS,
   RACE_POLL_MS,
-  RACE_TARGET,
   otherSlot,
   raceInvite,
-  racePose,
   validRaceId,
+  type RacePose,
   type RaceSession,
+  type RaceSettings,
   type RaceView,
 } from '@/lib/race-protocol';
 import { TowerEngine, type Controls } from '@/lib/tower-engine';
@@ -44,12 +47,22 @@ const seconds = (value: number) =>
   `${Math.floor(value / 60)}:${Math.floor(value % 60)
     .toString()
     .padStart(2, '0')}`;
+const sameSettings = (a: RaceSettings, b: RaceSettings) =>
+  a.targetFloor === b.targetFloor &&
+  a.durationMs === b.durationMs &&
+  a.bumping === b.bumping;
 
 export function RaceGame() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const world = useRef<TowerWorld | null>(null);
   const connection = useRef<RaceConnection | null>(null);
   const runner = useRef<RaceRunner | null>(null);
+  const peer = useRef<RacePeer | null>(null);
+  const friendPoseRef = useRef<RacePose | null>(null);
+  const shovePending = useRef(false);
+  const nextShoveAt = useRef(0);
+  const sendSequence = useRef(0);
+  const wakePoll = useRef<(() => void) | null>(null);
   const rival = useRef(new RaceRival());
   const input = useRef(new TowerInput());
   const audio = useRef<TowerAudio | null>(null);
@@ -69,6 +82,16 @@ export function RaceGame() {
   const [clock, setClock] = useState(0);
   const [floor, setFloor] = useState(0);
   const [climbEnded, setClimbEnded] = useState(false);
+  const [finishKind, setFinishKind] = useState<'goal' | 'time' | null>(null);
+  const [respawnFloor, setRespawnFloor] = useState<number | null>(null);
+  const [friendPose, setFriendPose] = useState<RacePose | null>(null);
+  const [peerState, setPeerState] = useState<
+    'connecting' | 'live' | 'fallback'
+  >('connecting');
+  const [shoveReady, setShoveReady] = useState(true);
+  const [draftSettings, setDraftSettings] = useState<RaceSettings>({
+    ...DEFAULT_RACE_SETTINGS,
+  });
   const [pressed, setPressed] = useState<Controls>({
     left: false,
     right: false,
@@ -79,22 +102,75 @@ export function RaceGame() {
     input.current.reset();
     setPressed({ ...input.current.controls });
   };
+  function closePeer() {
+    peer.current?.close();
+    peer.current = null;
+  }
+
+  function receivePose(pose: RacePose, round: number, source: 'peer' | 'http') {
+    if (round !== roomRef.current?.round) return;
+    if (friendPoseRef.current && pose.time < friendPoseRef.current.time) return;
+    friendPoseRef.current = pose;
+    rival.current.receive(pose, performance.now(), false, source);
+  }
+
   function receive(next: RaceView) {
-    if (runner.current?.round !== next.round) {
-      runner.current = new RaceRunner(next.round, next.seed);
+    const previous = roomRef.current;
+    if (
+      runner.current?.round !== next.round ||
+      previous?.id !== next.id ||
+      (previous && !sameSettings(previous.settings, next.settings))
+    ) {
+      runner.current = new RaceRunner(next.round, next.seed, next.settings);
       rival.current = new RaceRival();
+      friendPoseRef.current = null;
+      nextShoveAt.current = 0;
+      sendSequence.current = 0;
       resetInput();
       setFloor(0);
+      setFriendPose(null);
       setClimbEnded(false);
+      setFinishKind(null);
+      setRespawnFloor(null);
+      setDraftSettings({ ...next.settings });
     }
     roomRef.current = next;
     setRoom(next);
+    runner.current?.applyBumps(next.bumps, next.you);
     const friend = next.players.find((p) => p.slot !== next.you);
-    rival.current.receive(
-      friend?.pose ?? null,
-      performance.now(),
-      !!friend?.result,
-    );
+    if (friend?.pose) receivePose(friend.pose, next.round, 'http');
+    const client = connection.current;
+    if (!peer.current && client) {
+      const stream = new RacePeer({
+        roomId: next.id,
+        slot: next.you,
+        onPose: (pose, round) => {
+          if (connection.current === client) receivePose(pose, round, 'peer');
+        },
+        onState: (state) => {
+          if (connection.current === client) setPeerState(state);
+        },
+        onRoomUpdate: () => {
+          if (connection.current === client) wakePoll.current?.();
+        },
+        onSignal: async (signal) => {
+          const current = roomRef.current;
+          if (connection.current !== client || !current) return;
+          await client.send({ action: 'signal', round: current.round, signal });
+        },
+      });
+      peer.current = stream;
+    }
+    peer.current?.sync(next);
+    peer.current?.notifyBumps(next.bumps);
+    if (
+      (next.phase === 'finishing' || next.phase === 'finished') &&
+      runner.current &&
+      !runner.current.recording
+    ) {
+      runner.current.finish();
+      if (next.phase === 'finishing') wakePoll.current?.();
+    }
   }
 
   async function connect(join: boolean, restored?: RaceSession | null) {
@@ -106,6 +182,8 @@ export function RaceGame() {
     setCopied(false);
     const next =
       restored ?? newRaceSession(join && inviteRoom ? inviteRoom : undefined);
+    closePeer();
+    setPeerState('connecting');
     const previous = connection.current;
     if (previous?.view && previous.view.phase !== 'finished') {
       try {
@@ -115,6 +193,7 @@ export function RaceGame() {
       }
     }
     previous?.close();
+    closePeer();
     const client = new RaceConnection(next, receive);
     connection.current = client;
     runner.current = null;
@@ -141,6 +220,7 @@ export function RaceGame() {
         error instanceof Error ? error.message : 'Could not open the race.',
       );
       client.close();
+      closePeer();
       connection.current = null;
       roomRef.current = null;
       setRoom(null);
@@ -173,6 +253,78 @@ export function RaceGame() {
     }
   }
 
+  async function configure() {
+    const client = connection.current,
+      current = roomRef.current;
+    if (
+      !client ||
+      !current ||
+      current.you !== 'host' ||
+      current.phase !== 'waiting' ||
+      current.players.find((player) => player.slot === current.you)?.ready ||
+      busy
+    )
+      return;
+    setBusy(true);
+    setNetworkError('');
+    try {
+      await client.send({
+        action: 'configure',
+        round: current.round,
+        settings: draftSettings,
+      });
+    } catch (error) {
+      setNetworkError(
+        error instanceof Error ? error.message : 'Could not save race rules.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function shove() {
+    const client = connection.current,
+      current = roomRef.current,
+      local = runner.current;
+    if (
+      !client ||
+      !current?.settings.bumping ||
+      !local?.started ||
+      local.recording ||
+      local.respawning ||
+      local.protected ||
+      current.phase !== 'racing' ||
+      shovePending.current ||
+      client.now() < nextShoveAt.current
+    )
+      return;
+    shovePending.current = true;
+    nextShoveAt.current = client.now() + 1_500;
+    setShoveReady(false);
+    try {
+      await client.send({
+        action: 'bump',
+        round: current.round,
+        direction: local.engine.facing < 0 ? -1 : 1,
+        pose: local.pose,
+        seq: sendSequence.current++,
+      });
+    } catch (error) {
+      if (
+        connection.current === client &&
+        !(error instanceof RaceRequestError && error.status === 409)
+      ) {
+        setNetworkError(
+          error instanceof Error
+            ? error.message
+            : 'Could not shove. Try again.',
+        );
+      }
+    } finally {
+      shovePending.current = false;
+    }
+  }
+
   async function leave() {
     resetInput();
     setBusy(true);
@@ -183,6 +335,7 @@ export function RaceGame() {
     } catch {
       /* The server also detects missing heartbeats. */
     }
+    peer.current?.close();
     client?.close();
     window.location.assign('/');
   }
@@ -210,17 +363,28 @@ export function RaceGame() {
     if (!session) return;
     const client = connection.current!;
     let stopped = false,
-      timer: ReturnType<typeof setTimeout>,
-      seq = 0;
+      inFlight = false,
+      wakeRequested = false,
+      timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       if (stopped) return;
+      if (inFlight) {
+        wakeRequested = true;
+        return;
+      }
       const current = client.view,
         local = runner.current;
       if (!current || !local) return;
+      inFlight = true;
       let delay =
-        current.phase === 'waiting' || current.phase === 'finished'
-          ? 1_000
-          : RACE_POLL_MS;
+        current.phase === 'finishing'
+          ? 100
+          : current.phase === 'waiting' ||
+              current.phase === 'finished' ||
+              peer.current?.connected
+            ? 1_000
+            : RACE_POLL_MS;
+      let fatal = false;
       try {
         const me = current.players.find((p) => p.slot === current.you)!;
         await client.send(
@@ -229,20 +393,21 @@ export function RaceGame() {
                 action: 'finish',
                 round: current.round,
                 replay: local.recording,
+                pose: local.pose,
+                seq: sendSequence.current++,
               }
             : {
                 action: 'poll',
                 round: current.round,
-                seq: seq++,
-                ...(local.started && !local.recording
-                  ? { pose: racePose(local.engine) }
-                  : {}),
+                seq: sendSequence.current++,
+                ...(local.started ? { pose: local.pose } : {}),
               },
         );
         if (!stopped) setNetworkError('');
+        if (client.view?.phase === 'finishing') delay = 100;
       } catch (error) {
         if (stopped) return;
-        const fatal =
+        fatal =
           error instanceof RaceRequestError &&
           [400, 401, 403, 404, 410].includes(error.status);
         setNetworkError(
@@ -251,13 +416,28 @@ export function RaceGame() {
             : 'Connection interrupted. Reconnecting…',
         );
         if (fatal) {
+          stopped = true;
           setBlocked(true);
-          return;
         }
         delay = 1_000;
+      } finally {
+        inFlight = false;
+        if (!stopped && !fatal) {
+          timer = setTimeout(() => void poll(), wakeRequested ? 0 : delay);
+          wakeRequested = false;
+        }
       }
-      if (!stopped) timer = setTimeout(() => void poll(), delay);
     };
+    const wake = () => {
+      if (stopped) return;
+      if (inFlight) {
+        wakeRequested = true;
+        return;
+      }
+      clearTimeout(timer);
+      void poll();
+    };
+    wakePoll.current = wake;
     void poll();
     const onPageHide = () => {
       if (!client.view || client.view.phase === 'finished') return;
@@ -279,6 +459,7 @@ export function RaceGame() {
     return () => {
       stopped = true;
       clearTimeout(timer);
+      if (wakePoll.current === wake) wakePoll.current = null;
       window.removeEventListener('pagehide', onPageHide);
     };
   }, [session]);
@@ -310,6 +491,11 @@ export function RaceGame() {
         event.altKey
       )
         return;
+      if (event.key.toLowerCase() === 'e' && !event.repeat) {
+        event.preventDefault();
+        void shove();
+        return;
+      }
       const control = keyControl(event.key);
       if (!control) return;
       event.preventDefault();
@@ -365,17 +551,20 @@ export function RaceGame() {
           const serverNow = connection.current?.now() ?? Date.now();
           if (local && current) {
             const wasStarted = local.started;
+            const wasRecorded = !!local.recording;
             local.advance(
               serverNow,
               current.startAt,
               input.current.controls,
               current.phase === 'finished',
             );
+            if (!wasRecorded && local.recording) wakePoll.current?.();
             if (!wasStarted && local.started) {
               resetInput();
               canvas.current?.focus({ preventScroll: true });
               audio.current?.play('jump');
             }
+            peer.current?.sendPose(current.round, local.pose);
             for (const event of local.engine.drainEvents()) {
               scene.effect(event, local.engine.time);
               audio.current?.play(event.type);
@@ -386,15 +575,31 @@ export function RaceGame() {
             local?.engine ?? idle,
             dt,
             now / 1000,
-            current?.phase === 'racing' || current?.phase === 'finishing'
+            current?.phase === 'racing' ||
+              current?.phase === 'finishing' ||
+              current?.phase === 'finished'
               ? rival.current
               : null,
           );
           if (now - synced > 100) {
             synced = now;
             setClock(serverNow);
-            setFloor(local?.engine.floor ?? 0);
+            setFloor(
+              Math.min(
+                current?.settings.targetFloor ??
+                  DEFAULT_RACE_SETTINGS.targetFloor,
+                local?.engine.floor ?? 0,
+              ),
+            );
+            setFriendPose(friendPoseRef.current);
+            setRespawnFloor(local?.respawning ? local.checkpointFloor : null);
+            setShoveReady(
+              !shovePending.current &&
+                !local?.protected &&
+                serverNow >= nextShoveAt.current,
+            );
             setClimbEnded(!!local?.recording);
+            setFinishKind(local?.finished ?? null);
           }
           frame = requestAnimationFrame(animate);
         };
@@ -413,6 +618,7 @@ export function RaceGame() {
       cancelAnimationFrame(frame);
       world.current?.dispose();
       world.current = null;
+      peer.current?.close();
       connection.current?.close();
       audio.current?.dispose();
       controls.reset();
@@ -425,6 +631,15 @@ export function RaceGame() {
 
   const me = room?.players.find((p) => p.slot === room.you);
   const friend = room?.players.find((p) => p.slot === otherSlot(room.you));
+  const settings = room?.settings ?? DEFAULT_RACE_SETTINGS;
+  const settingsDirty = !sameSettings(draftSettings, settings);
+  const settingsValid =
+    Number.isInteger(draftSettings.targetFloor) &&
+    draftSettings.targetFloor >= 5 &&
+    draftSettings.targetFloor <= 100;
+  const friendFloor =
+    friend?.result?.floor ??
+    Math.min(settings.targetFloor, friendPose?.floor ?? 0);
   const countdown = room?.startAt
     ? Math.ceil(Math.max(0, room.startAt - clock) / 1000)
     : 0;
@@ -433,20 +648,33 @@ export function RaceGame() {
   const waiting = room?.phase === 'waiting';
   const finished = room?.phase === 'finished';
   const friendOnline = !!friend && clock - friend.lastSeen < RACE_DISCONNECT_MS;
-  const resultTitle =
-    room?.winner === room?.you
+  const verifiedDraw =
+    !!me?.result &&
+    !!friend?.result &&
+    me.result.kind !== 'forfeit' &&
+    friend.result.kind !== 'forfeit' &&
+    me.result.floor === friend.result.floor;
+  const missingResult = !me?.result || !friend?.result;
+  const resultTitle = verifiedDraw
+    ? 'A close draw.'
+    : room?.winner === room?.you
       ? 'You won.'
       : room?.winner
         ? 'Your friend won.'
-        : 'A close draw.';
-  const resultText =
-    room?.reason === 'goal'
-      ? `First to floor ${RACE_TARGET}.`
-      : room?.reason === 'forfeit'
-        ? 'A player left or lost connection.'
-        : room?.reason === 'height'
-          ? 'The higher climb takes it.'
-          : 'Same height. Another climb?';
+        : missingResult
+          ? 'Race complete.'
+          : 'A close draw.';
+  const resultText = verifiedDraw
+    ? 'Same height. Another climb?'
+    : room?.reason === 'forfeit'
+      ? 'A player left or lost connection.'
+      : missingResult
+        ? 'Only verified climbs count. One result was not received.'
+        : room?.reason === 'goal'
+          ? `Floor ${settings.targetFloor} reached.`
+          : room?.reason === 'height'
+            ? 'Time’s up. The higher climb takes it.'
+            : 'Same height. Another climb?';
   const touch = (
     control: keyof Controls,
     label: string,
@@ -525,9 +753,9 @@ export function RaceGame() {
           <p className={styles.kicker}>ONE TOWER. TWO CLIMBERS.</p>
           <h1 id="race-heading">Race a friend.</h1>
           <p>
-            First to floor {RACE_TARGET} wins.
+            Choose the finish line. Climb together.
             <br />
-            If you both fall, the higher climb wins.
+            Fall? Return to a checkpoint and keep going.
           </p>
           <button
             className={styles.primary}
@@ -569,10 +797,106 @@ export function RaceGame() {
 
       {waiting && (
         <section className={styles.card} aria-labelledby="lobby-heading">
-          <p className={styles.kicker}>RACE TO FLOOR {RACE_TARGET}</p>
+          <p className={styles.kicker}>RACE TO FLOOR {settings.targetFloor}</p>
           <h1 id="lobby-heading">
             {friend ? 'Ready to climb?' : 'Bring a friend.'}
           </h1>
+          {room.you === 'host' ? (
+            <form
+              className={styles.rules}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void configure();
+              }}
+            >
+              <div className={styles.ruleFields}>
+                <label htmlFor="target-floor">
+                  Finish floor
+                  <input
+                    id="target-floor"
+                    type="number"
+                    min={5}
+                    max={100}
+                    step={1}
+                    inputMode="numeric"
+                    value={
+                      Number.isNaN(draftSettings.targetFloor)
+                        ? ''
+                        : draftSettings.targetFloor
+                    }
+                    disabled={busy || me?.ready}
+                    onChange={(event) =>
+                      setDraftSettings({
+                        ...draftSettings,
+                        targetFloor: event.target.valueAsNumber,
+                      })
+                    }
+                  />
+                </label>
+                <label htmlFor="race-duration">
+                  Time limit
+                  <select
+                    id="race-duration"
+                    value={draftSettings.durationMs}
+                    disabled={busy || me?.ready}
+                    onChange={(event) =>
+                      setDraftSettings({
+                        ...draftSettings,
+                        durationMs: Number(event.target.value),
+                      })
+                    }
+                  >
+                    <option value={60_000}>1 minute</option>
+                    <option value={120_000}>2 minutes</option>
+                    <option value={180_000}>3 minutes</option>
+                    <option value={300_000}>5 minutes</option>
+                  </select>
+                </label>
+              </div>
+              <label className={styles.bumpRule}>
+                <span>
+                  <Hand size={15} /> Allow shoves{' '}
+                  <small>Push a nearby friend · E</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={draftSettings.bumping}
+                  disabled={busy || me?.ready}
+                  onChange={(event) =>
+                    setDraftSettings({
+                      ...draftSettings,
+                      bumping: event.target.checked,
+                    })
+                  }
+                />
+              </label>
+              {settingsDirty && (
+                <button
+                  className={styles.saveRules}
+                  disabled={busy || me?.ready || !settingsValid}
+                  type="submit"
+                >
+                  {busy ? 'Saving…' : 'Save rules'}
+                </button>
+              )}
+              <small>
+                {me?.ready
+                  ? 'Choose Not ready to edit the rules.'
+                  : 'Checkpoints every 5 floors. Equal heights draw.'}
+              </small>
+            </form>
+          ) : (
+            <div className={styles.agreedRules}>
+              <span>
+                <Flag size={14} /> Floor {settings.targetFloor}
+              </span>
+              <span>{settings.durationMs / 60_000} min</span>
+              <span>{settings.bumping ? 'Shoves on' : 'Shoves off'}</span>
+              <small>
+                Your host sets the rules. Checkpoints every 5 floors.
+              </small>
+            </div>
+          )}
           <div className={styles.players}>
             <div>
               <i className={styles.youDot} />
@@ -631,7 +955,13 @@ export function RaceGame() {
           )}
           <button
             className={styles.primary}
-            disabled={busy || !friendOnline || !loaded || blocked}
+            disabled={
+              busy ||
+              (!friendOnline && !me?.ready) ||
+              !loaded ||
+              blocked ||
+              (room.you === 'host' && settingsDirty && !me?.ready)
+            }
             onClick={() => void act('ready')}
           >
             {me?.ready ? 'Not ready' : 'I’m ready'}
@@ -640,7 +970,9 @@ export function RaceGame() {
           <small>
             {me?.ready
               ? 'Waiting for your friend to ready up.'
-              : 'Both players start together. You can’t pause a live race.'}
+              : settingsDirty && room.you === 'host'
+                ? 'Save your rules before getting ready.'
+                : 'Both players start together.'}
           </small>
         </section>
       )}
@@ -651,9 +983,13 @@ export function RaceGame() {
           aria-live="polite"
           aria-atomic="true"
         >
-          <span>RACE TO FLOOR {RACE_TARGET}</span>
+          <span>RACE TO FLOOR {settings.targetFloor}</span>
           <strong>{countdown}</strong>
-          <p>Same tower. Your own climb.</p>
+          <p>
+            {settings.bumping
+              ? 'Jump, dodge, and shove.'
+              : 'Fall. Respawn. Keep climbing.'}
+          </p>
         </section>
       )}
       {active && (
@@ -665,12 +1001,12 @@ export function RaceGame() {
               </span>
               <strong>
                 {me?.result?.floor ?? floor}
-                <small> / {RACE_TARGET}</small>
+                <small> / {settings.targetFloor}</small>
               </strong>
               <progress
                 aria-label="Your progress"
                 value={me?.result?.floor ?? floor}
-                max={RACE_TARGET}
+                max={settings.targetFloor}
               />
             </div>
             <span className={styles.goal}>
@@ -686,39 +1022,75 @@ export function RaceGame() {
                 <i className={styles.friendDot} /> FRIEND
               </span>
               <strong>
-                {friend?.result?.floor ?? friend?.pose?.floor ?? 0}
-                <small> / {RACE_TARGET}</small>
+                {friendFloor}
+                <small> / {settings.targetFloor}</small>
               </strong>
               <progress
                 aria-label="Friend progress"
-                value={friend?.result?.floor ?? friend?.pose?.floor ?? 0}
-                max={RACE_TARGET}
+                value={friendFloor}
+                max={settings.targetFloor}
               />
             </div>
           </section>
-          <output className={styles.raceStatus}>
-            {room.phase === 'finishing'
-              ? 'Checking the finish…'
-              : climbEnded
-                ? 'Your climb is over. Waiting for your friend…'
-                : friend?.result
-                  ? 'Your friend finished. Keep climbing.'
-                  : friend && clock - friend.lastSeen > 3_000
-                    ? 'Friend reconnecting…'
-                    : ''}
-          </output>
+          <div className={styles.raceStatus}>
+            <output aria-live="polite">
+              {respawnFloor !== null
+                ? `Back to floor ${respawnFloor}…`
+                : room.phase === 'finishing'
+                  ? 'Checking the finish…'
+                  : climbEnded
+                    ? finishKind === 'goal'
+                      ? 'Finish reached. Checking the result…'
+                      : 'Time’s up. Checking the result…'
+                    : friendPose?.respawning
+                      ? 'Your friend is returning to a checkpoint.'
+                      : friend?.result?.kind === 'goal'
+                        ? 'Your friend reached the finish.'
+                        : friend &&
+                            clock - friend.lastSeen > 3_000 &&
+                            peerState !== 'live'
+                          ? 'Friend reconnecting…'
+                          : ''}
+            </output>
+            <span className={styles.linkState} data-live={peerState === 'live'}>
+              {peerState === 'live' ? 'Live' : 'Connecting'}
+            </span>
+          </div>
           {!climbEnded && (
             <>
               <p className={styles.controlsHint}>
                 <kbd>A</kbd>
                 <kbd>D</kbd> move <span>·</span> <kbd>SPACE</kbd> jump
+                {settings.bumping && (
+                  <>
+                    <span>·</span>
+                    <kbd>E</kbd> shove
+                  </>
+                )}
               </p>
               <div className={styles.touchControls} aria-label="Race controls">
                 <div>
                   {touch('left', 'Move left', <ArrowLeft />)}
                   {touch('right', 'Move right', <ArrowRight />)}
                 </div>
-                {touch('jump', 'Jump', <ArrowUp />)}
+                <div>
+                  {settings.bumping && (
+                    <button
+                      type="button"
+                      className={styles.shoveButton}
+                      aria-label="Shove your friend"
+                      disabled={!shoveReady || respawnFloor !== null}
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        void shove();
+                      }}
+                    >
+                      <Hand size={22} />
+                      <small>{shoveReady ? 'Shove' : 'Wait'}</small>
+                    </button>
+                  )}
+                  {touch('jump', 'Jump', <ArrowUp />)}
+                </div>
               </div>
             </>
           )}
@@ -736,10 +1108,14 @@ export function RaceGame() {
               <strong>
                 {me?.result?.kind === 'forfeit'
                   ? 'Left'
-                  : (me?.result?.floor ?? floor)}
+                  : (me?.result?.floor ?? '—')}
               </strong>
               <small>
-                {me?.result?.kind === 'forfeit' ? 'the race' : 'floors'}
+                {me?.result?.kind === 'forfeit'
+                  ? 'the race'
+                  : me?.result
+                    ? 'floors'
+                    : 'No result'}
               </small>
             </div>
             <span>—</span>
@@ -748,10 +1124,14 @@ export function RaceGame() {
               <strong>
                 {friend?.result?.kind === 'forfeit'
                   ? 'Left'
-                  : (friend?.result?.floor ?? friend?.pose?.floor ?? 0)}
+                  : (friend?.result?.floor ?? '—')}
               </strong>
               <small>
-                {friend?.result?.kind === 'forfeit' ? 'the race' : 'floors'}
+                {friend?.result?.kind === 'forfeit'
+                  ? 'the race'
+                  : friend?.result
+                    ? 'floors'
+                    : 'No result'}
               </small>
             </div>
           </div>

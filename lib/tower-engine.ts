@@ -70,6 +70,7 @@ export class TowerEngine {
   private replayFrames = 0;
   private recordReplay: boolean;
   private _rulesVersion: RunReplay['version'];
+  private raceStaticPlatforms = false;
   get rulesVersion() { return this._rulesVersion; }
   constructor(seed = 73091, recordReplay = true, rulesVersion: RunReplay['version'] = CURRENT_RULES_VERSION) { this.seed = seed; this.recordReplay = recordReplay; this._rulesVersion = rulesVersion; this.resetWorld(); }
   get version() { return this.rulesVersion; }
@@ -107,7 +108,7 @@ export class TowerEngine {
       // Neighboring ledges always overlap the base jump's reachable horizontal range.
       const offset = (this.random() > .5 ? 1 : -1) * (1.5 + this.random() * 2.3);
       const x = stage ? 0 : routeSection ? (routeStep === 3 ? 0 : side * 2.35) : clamp(previous.x + offset, -5.9 + width / 2, 5.9 - width / 2);
-      this.platforms.push({ id, x, y: id * FLOOR_HEIGHT, width, gem: routeSection ? false : id % 3 === 0, collected: false, moving: !stage && !routeSection && id > 24 && id % 7 === 0, spring: this.mode === 'party' && !stage && !routeSection && id % 5 === 0, origin: x, phase: this.random() * Math.PI * 2,
+      this.platforms.push({ id, x, y: id * FLOOR_HEIGHT, width, gem: routeSection ? false : id % 3 === 0, collected: false, moving: !this.raceStaticPlatforms && !stage && !routeSection && id > 24 && id % 7 === 0, spring: this.mode === 'party' && !stage && !routeSection && id % 5 === 0, origin: x, phase: this.random() * Math.PI * 2,
         ...(routeSection ? { route: routeStep === 0 ? 'approach' as const : routeStep === 3 ? 'merge' as const : 'safe' as const } : {}) });
       this.lastPrimary = this.platforms[this.platforms.length - 1];
       if (this.rulesVersion >= 6 && id >= 8 && id % 8 === 0 && !stage && !routeSection && !this.lastPrimary.moving && !this.lastPrimary.spring && !this.restFloor(id)) {
@@ -147,6 +148,55 @@ export class TowerEngine {
     if (this.status === 'playing') this.status = 'paused';
     else if (this.status === 'paused') this.status = 'playing';
     this.jumpBuffer = this.accumulator = 0; this.jumpWasDown = false;
+  }
+  /** Opt-in race rules never change the motion of an existing solo replay. */
+  useStaticRacePlatforms() {
+    this.raceStaticPlatforms = true;
+    for (const platform of this.platforms) {
+      platform.moving = false;
+      platform.x = platform.origin;
+    }
+  }
+  /** The race owns checkpoint snapshots, including ledges already pruned by the camera. */
+  respawnRace(checkpoint: Platform, nearby: readonly Platform[]) {
+    const present = new Set(this.platforms.map(platform => platform.id));
+    for (const platform of [checkpoint, ...nearby]) {
+      if (present.has(platform.id)) continue;
+      this.platforms.push({ ...platform });
+      present.add(platform.id);
+    }
+    this.status = 'playing';
+    this.x = checkpoint.x;
+    this.settleRace(checkpoint);
+    this.cameraY = Math.max(5.2, checkpoint.y + 2.2);
+    this.stormY = checkpoint.y - 8;
+    this.scrollStartedAt = this.time;
+    this.failureEvidence = this.walkedOff = null;
+    this.combo = this.comboTime = this.doubleJumpTime = 0;
+    this.accumulator = this.jumpBuffer = this.wallControlTime = 0;
+    this.coyote = .12;
+    this.jumpWasDown = this.doubleJumpUsed = false;
+    this.lastWallJumpSide = 0;
+    this.events = [];
+  }
+  /** A fixed server-approved impulse; no client-selected strength is accepted. */
+  applyRacePush(direction: -1 | 1) {
+    this.vx = direction * 7.5;
+    this.vy = Math.max(this.vy, 2.6);
+    this.facing = direction;
+    this.grounded = false;
+    this.standingId = -1;
+    this.coyote = this.jumpBuffer = 0;
+    this.wallControlTime = .18;
+    this.walkedOff = null;
+  }
+  /** Keep a finished climber resting on a visible ledge, rather than suspended in a jump. */
+  settleRace(platform: Platform) {
+    this.x = clamp(this.x, platform.x - platform.width / 2 + .25, platform.x + platform.width / 2 - .25);
+    this.y = platform.y;
+    this.vx = this.vy = 0;
+    this.grounded = true;
+    this.standingId = platform.id;
   }
   menu() { this.status = 'ready'; this.start(this.mode); this.status = 'ready'; }
   tick(dt: number, input: Controls) {
