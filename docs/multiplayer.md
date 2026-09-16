@@ -1,8 +1,23 @@
 # Two-player race
 
-Create a private lobby, choose the finish floor and time limit, and share its invite. The default race is to floor 30 with a three-minute clock. Both players use the same static course and begin on one shared countdown. Falling returns a player to their last five-floor checkpoint after a short recovery; it does not end their race. The host can optionally enable shoving for an extra challenge.
+[← Back to README](../README.md)
 
-Reaching the goal ends the climb and opens a three-second result settlement window. The higher verified floor wins, and equal verified floors always draw, including when both players reach the goal. Goal scores stop at the selected finish floor. If the clock expires first, the same height comparison applies. Race mode does not change solo rankings, progression, or saved replays.
+- [How to race](#how-to-race)
+- [Acceptance criteria](#acceptance-criteria)
+- [Backend and deployment](#backend-and-deployment)
+- [Verification](#verification)
+
+## How to race
+
+Open **Menu → Race a friend**, create a private lobby, and share its invite. The host chooses a finish floor from 5–100, a one-, two-, three-, or five-minute limit, and optional shoving. Both players ready up on the same static tower. Falls return you to the last five-floor checkpoint so you can keep racing. The default is floor 30 with a three-minute clock.
+
+The goal or timer ends the race; higher verified floors win, and equal verified floors always draw. Goal scores stop at the selected finish floor. Results use verified final scores instead of stale rival positions, and finished climbers rest on a ledge. Both players can accept a rematch using the same lobby rules.
+
+Keyboard and touch controls work. With shoves enabled, press **E** or the shove button while facing a nearby friend. Shoves have a 1.5-second cooldown and respawn protection. A short connection interruption retries automatically; leaving, reloading during a race, or losing contact for 15 seconds forfeits. Race results stay separate from solo rankings and progression. Rooms expire after an hour.
+
+The rival uses buffered 20 Hz WebRTC position updates, with smooth HTTP fallback when a direct connection cannot be established. No TURN relay is configured, so restricted networks can have more visible delay. The server verifies controls, checkpoint recoveries, and accepted shove events.
+
+Both players begin on one shared countdown. Reaching the goal opens a three-second result settlement window; race mode leaves saved solo replays unchanged.
 
 ## Acceptance criteria
 
