@@ -889,6 +889,21 @@ export default function Home() {
   };
   const active = game.status === 'playing' || game.status === 'paused';
   const actionRules = game.rulesVersion >= 6;
+  const menuButton = (
+    <Button
+      variant="ghost"
+      className="menu-toggle"
+      onClick={() => {
+        if (engine.current?.status === 'playing') pause();
+        setMenuOpen(true);
+      }}
+      aria-haspopup="dialog"
+      aria-expanded={menuOpen}
+      aria-label={game.status === 'playing' ? 'Pause and open menu' : 'Menu'}
+    >
+      <Menu size={18} /> <span>Menu</span>
+    </Button>
+  );
 
   return (
     <main
@@ -908,23 +923,9 @@ export default function Home() {
             ICY TOWER<small>F R O S T B O U N D</small>
           </span>
         </div>
-        <div className="topbar-right">
-          <Button
-            variant="ghost"
-            className="menu-toggle"
-            onClick={() => {
-              if (engine.current?.status === 'playing') pause();
-              setMenuOpen(true);
-            }}
-            aria-haspopup="dialog"
-            aria-expanded={menuOpen}
-            aria-label={
-              game.status === 'playing' ? 'Pause and open menu' : 'Menu'
-            }
-          >
-            <Menu size={18} /> <span>Menu</span>
-          </Button>
-        </div>
+        {game.status !== 'ready' && (
+          <div className="topbar-right">{menuButton}</div>
+        )}
       </header>
       {game.status === 'ready' && (
         <>
@@ -988,6 +989,7 @@ export default function Home() {
               <span className="enter-hint">
                 or press <kbd>ENTER</kbd>
               </span>
+              {menuButton}
               <div className="game-intro">
                 <p>
                   A free browser tower climber. Chain jumps and outrun the frost.

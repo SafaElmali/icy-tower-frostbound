@@ -304,6 +304,7 @@
 .title-play { width: 285px; max-width: 100%; margin-top: 38px; }
 .title-play .start-button { width: 100%; }
 .title-play .enter-hint { width: 100%; margin: 12px 0 0; }
+.title-play .menu-toggle { display: flex; width: 100%; margin-top: 14px; border-radius: 3px; }
 .game-intro { margin-top: 18px; font-size: 14px; line-height: 1.6; color: #abc3ca; }
 .game-intro p { margin: 0 0 8px; }
 .game-intro a { display: inline-block; padding-block: 6px; color: #c5e8de; text-decoration: underline; text-underline-offset: 4px; }
