@@ -6,8 +6,12 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "seo:generate": "node --experimental-strip-types scripts/generate-discovery.ts",
+    "predev": "npm run seo:generate",
     "dev": "vinext dev",
+    "prebuild": "npm run seo:generate",
     "build": "vinext build",
+    "prebuild:netlify": "npm run seo:generate",
     "build:netlify": "DEPLOY_TARGET=netlify vinext build",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",

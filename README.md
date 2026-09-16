@@ -56,6 +56,7 @@ Open [localhost:5188](http://localhost:5188). Race rooms work locally; the leade
 | [Leaderboards and sharing](docs/leaderboard-and-sharing.md) | Verified scores, replay compatibility, and friend challenges |
 | [Two-player races](docs/multiplayer.md) | Lobby rules, networking, acceptance criteria, and testing |
 | [Development](docs/development.md) | Setup, checks, art and audio, validation notes, and Netlify deployment |
+| [SEO and GEO](docs/seo-geo.md) | Search metadata, structured data, crawl files, and AI-readable game guide |
 | [Playtesting](docs/playtesting.md) | Human playtest protocol and local measurement exports |
 
 An independent Icy Tower-inspired browser prototype with no original game assets or affiliation. See [asset credits](public/assets/ATTRIBUTION.md), [audio credits](public/audio/ATTRIBUTION.md), and [cover artwork details](docs/cover-prompt.md).
