@@ -6,6 +6,12 @@ A playable 2.5D arcade tower climber built with Three.js. Build momentum, chain 
 
 **[Play in your browser](https://icy-tower-frostbound.netlify.app)** · [Gameplay guide](docs/gameplay.md) · [Development guide](docs/development.md)
 
+## Gameplay trailer
+
+Wall jumps, Party double jumps, crumbling floors, falling icicles, frost bats, and a race with a friend — in 18 seconds.
+
+https://github.com/user-attachments/assets/95bce11a-1ef0-41e0-ac6b-309b7eed7533
+
 ## Play
 
 | Action | Keyboard |
