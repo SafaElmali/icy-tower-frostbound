@@ -397,3 +397,23 @@
 
 .wardrobe-preview .preview-playback { justify-self: start; width: fit-content; min-height: 32px; height: auto; padding: 5px 8px; margin-left: -8px; font-size: 14px; color: #c3dce1; }
 .wardrobe-preview .preview-playback:hover { color: #e5f0ed; background: #83afbc22; }
+
+/* Fit notifications around the compact gameplay HUD. */
+.toast {
+  width: max-content;
+  max-width: min(440px, calc(100% - 32px - var(--safe-left) - var(--safe-right)));
+  padding: 12px 16px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.unlock-toast { font-size: 13px; }
+.unlock-toast > span { min-width: 0; }
+@media (min-width: 761px) and (min-height: 501px) and (pointer: fine) {
+  .state-playing > .toast, .state-paused > .toast {
+    left: auto;
+    right: 5%;
+    transform: none;
+    max-width: min(360px, 40%);
+  }
+}

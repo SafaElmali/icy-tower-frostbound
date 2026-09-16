@@ -9,8 +9,20 @@ function GoalProgress({ goal }: { goal: SkillGoalView }) {
   </div>)}</div>;
 }
 
-export function FeaturedSkillGoal({ profile, snapshot }: { profile: SkillProgress; snapshot?: SkillRun }) {
+export function FeaturedSkillGoal({ profile, snapshot, compact = false }: { profile: SkillProgress; snapshot?: SkillRun; compact?: boolean }) {
   const goal = getFeaturedSkillGoal(profile, snapshot);
+  if (compact) {
+    if (!goal) return null;
+    const progress = goal.progress.reduce((total, item) => total + item.value / item.target, 0) / goal.progress.length;
+    const detail = goal.progress.map(item => `${item.label}: ${item.value}/${item.target}`).join(', ');
+    const count = goal.progress.length === 1 ? `${goal.progress[0].value}/${goal.progress[0].target}` : `${Math.round(progress * 100)}%`;
+    return <section className={styles.compact} aria-label="Featured skill goal" title={`${goal.title} · ${detail}`}>
+      <Target size={12} aria-hidden="true" />
+      <span>{goal.title}</span>
+      <small>{count}</small>
+      <progress aria-label={goal.title} aria-valuetext={detail} value={progress} max={1} />
+    </section>;
+  }
   return <section className={styles.featured} aria-label="Featured skill goal">
     <div className={styles.heading}><Target size={15} aria-hidden="true" /><span>{goal ? 'Next goal' : 'Skill goals complete'}</span></div>
     <strong>{goal?.title ?? 'You mastered the climbing milestones'}</strong>

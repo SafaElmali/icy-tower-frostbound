@@ -1,0 +1,175 @@
+.layout :global(.brand),
+.layout :global(.utility),
+.layout :global(.menu-toggle) > span {
+  display: none;
+}
+.layout :global(.topbar) {
+  justify-content: flex-end;
+  padding: calc(16px + var(--safe-top)) calc(24px + var(--safe-right)) 0;
+  pointer-events: none;
+}
+.layout :global(.menu-toggle) {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  pointer-events: auto;
+  background: #0a1c29d9;
+}
+.hud {
+  position: absolute;
+  top: calc(16px + var(--safe-top));
+  left: calc(24px + var(--safe-left));
+  max-width: calc(100% - 104px - var(--safe-left) - var(--safe-right));
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.readout {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #a2ccd22b;
+  border-radius: 12px;
+  background: #0a1c29d9;
+}
+.floor {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #b9ced3;
+  font-size: 12px;
+}
+.floor strong {
+  color: #edf5ef;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1;
+}
+.score {
+  color: #d3e4e3;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.score small,
+.combo small {
+  color: #a9c2c7;
+  font-size: 10px;
+  font-weight: 400;
+}
+.combo {
+  color: #ade8d4;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.momentum {
+  position: absolute;
+  left: 12px;
+  bottom: 0;
+  width: calc(100% - 24px);
+  height: 2px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+}
+.momentum::-webkit-progress-bar {
+  background: transparent;
+}
+.momentum::-webkit-progress-value {
+  background: #b5e6cb;
+}
+.momentum::-moz-progress-bar {
+  background: #b5e6cb;
+}
+.goal {
+  width: min(260px, 100%);
+}
+.goal:empty {
+  display: none;
+}
+.context {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #c4dcd9;
+  background: #0a1c2980;
+  font-size: 11px;
+  line-height: 16px;
+}
+.tip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 280px;
+  padding-left: 10px;
+  border-radius: 8px;
+  background: #0a1c29c9;
+  color: #c5e9de;
+  font-size: 12px;
+  line-height: 17px;
+}
+.tip output {
+  min-width: 0;
+}
+.tip button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #b1c9cc;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.tip button:focus-visible {
+  outline: 2px solid #c5e9de;
+  outline-offset: -4px;
+}
+.tip button:hover {
+  background: #b1c9cc1a;
+}
+@media (max-width: 760px), (any-pointer: coarse) {
+  .layout :global(.topbar) {
+    padding: calc(12px + var(--safe-top)) calc(16px + var(--safe-right)) 0;
+  }
+  .hud {
+    top: calc(12px + var(--safe-top));
+    left: calc(16px + var(--safe-left));
+    max-width: calc(100% - 88px - var(--safe-left) - var(--safe-right));
+  }
+  .tip button {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+  }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .hud {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .goal {
+    width: 220px;
+    max-width: 100%;
+  }
+  .tip {
+    font-size: 11px;
+  }
+}

@@ -14,7 +14,6 @@ import {
   Ghost,
   Maximize2,
   Menu,
-  Pause,
   Play,
   RotateCcw,
   Share2,
@@ -26,8 +25,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import menuStyles from './game-menu.module.css';
-import mobileHudStyles from '@/components/mobile-game-hud.module.css';
-import { MobileGameHud } from '@/components/mobile-game-hud';
+import hudStyles from '@/components/game-hud.module.css';
+import { GameHud } from '@/components/game-hud';
 import { WardrobeDialog } from '@/components/wardrobe';
 import {
   COSMETICS,
@@ -106,10 +105,8 @@ import {
 } from '@/lib/personal-progress';
 import {
   ComboFeedbackTracker,
-  comboMilestoneLabel,
   type ComboMilestone,
 } from '@/lib/combo-feedback';
-import { getTowerSection } from '@/lib/tower-sections';
 import { DailyTowerCard, DailyTowerBanner } from '@/components/daily-tower';
 import {
   todayDailyTower,
@@ -122,13 +119,7 @@ import {
   DAILY_PROGRESS_STORAGE_KEY,
   type DailyTower,
 } from '@/lib/daily-tower';
-import { ClimbGuidance } from '@/components/climb-guidance';
-import {
-  hasActionNotice,
-  TowerActionHud,
-  TowerActionResults,
-  TowerFrenzyMeter,
-} from '@/components/tower-action-hud';
+import { TowerActionResults } from '@/components/tower-action-hud';
 import {
   readGuidanceProfile,
   freshGuidanceRun,
@@ -230,11 +221,6 @@ export default function Home() {
     personalRunBaseline(readPersonalProgress(null), 'arcade'),
   );
   const comboFeedback = useRef(new ComboFeedbackTracker());
-  const [comboMilestone, setComboMilestone] = useState<ComboMilestone | null>(
-    null,
-  );
-  const sectionNoticeRef = useRef<{ id: string; until: number } | null>(null);
-  const [sectionNotice, setSectionNotice] = useState('');
 
   function saveGuidance(next: GuidanceProfile) {
     if (guidanceProfile.current === next) return;
@@ -306,9 +292,6 @@ export default function Home() {
     setRunDetailsOpen(false);
     guidanceRun.current = freshGuidanceRun();
     comboFeedback.current.reset();
-    setComboMilestone(null);
-    sectionNoticeRef.current = null;
-    setSectionNotice('');
     guidanceCueId.current = null;
     setGuidanceCue(null);
     ghost.current = null;
@@ -609,27 +592,11 @@ export default function Home() {
               e.combo,
               e.comboTime,
             );
-            if (milestone !== null) {
-              setComboMilestone(milestone);
-              if (!events.some((event) => event.type === 'frenzy'))
-                tone('combo', milestone);
-            } else if (e.combo === 0)
-              setComboMilestone((previous) =>
-                previous === null ? previous : null,
-              );
-            const section = getTowerSection(e.floor);
             if (
-              section.startsAtFloor > 0 &&
-              sectionNoticeRef.current?.id !== section.id
-            ) {
-              sectionNoticeRef.current = { id: section.id, until: e.time + 3 };
-              setSectionNotice(section.name);
-            }
-            if (
-              sectionNoticeRef.current &&
-              e.time > sectionNoticeRef.current.until
+              milestone !== null &&
+              !events.some((event) => event.type === 'frenzy')
             )
-              setSectionNotice((previous) => (previous ? '' : previous));
+              tone('combo', milestone);
             const guided = advanceGuidance(
               guidanceProfile.current,
               guidanceRun.current,
@@ -921,13 +888,11 @@ export default function Home() {
     onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
   };
   const active = game.status === 'playing' || game.status === 'paused';
-  const zone = getTowerSection(game.floor).name;
   const actionRules = game.rulesVersion >= 6;
-  const actionNotice = actionRules && hasActionNotice(game.action);
 
   return (
     <main
-      className={`game-shell state-${game.status} mode-${game.mode} ${active ? mobileHudStyles.layout : ''} ${challenge ? 'friend-run' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}
+      className={`game-shell state-${game.status} mode-${game.mode} ${active ? hudStyles.layout : ''} ${challenge ? 'friend-run' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}
     >
       <canvas
         className="world-canvas"
@@ -944,24 +909,6 @@ export default function Home() {
           </span>
         </div>
         <div className="topbar-right">
-          {active && (
-            <span className="edition">
-              <i /> {MODE_LABELS[game.mode].toUpperCase()} · {zone}
-            </span>
-          )}
-          {active && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="utility"
-              onClick={pause}
-              aria-label={
-                game.status === 'paused' ? 'Resume game' : 'Pause game'
-              }
-            >
-              {game.status === 'paused' ? <Play /> : <Pause />}
-            </Button>
-          )}
           <Button
             variant="ghost"
             className="menu-toggle"
@@ -979,11 +926,6 @@ export default function Home() {
           </Button>
         </div>
       </header>
-      {game.status === 'playing' && sectionNotice && !actionNotice && (
-        <output className="section-notice" aria-live="polite">
-          {sectionNotice}
-        </output>
-      )}
       {game.status === 'ready' && (
         <>
           <section
@@ -1057,154 +999,13 @@ export default function Home() {
       )}
       {active && (
         <>
-          {game.status === 'playing' && (
-            <MobileGameHud
-              game={game}
-              guidance={guidanceCue}
-              onSkip={() => saveGuidance(skipGuidance(guidanceProfile.current))}
-            />
-          )}
-          {!actionNotice && (
-            <aside className="skill-hud">
-              <FeaturedSkillGoal profile={skills} snapshot={game} />
-            </aside>
-          )}
-          {game.status === 'playing' && actionRules && (
-            <div className="desktop-action-hud">
-              <TowerActionHud action={game.action} />
-            </div>
-          )}
-          {game.status === 'playing' && guidanceCue && (
-            <div className="guidance-dock">
-              <ClimbGuidance
-                cue={guidanceCue}
-                onSkip={() =>
-                  saveGuidance(skipGuidance(guidanceProfile.current))
-                }
-              />
-            </div>
-          )}
-          <section className="score-hud">
-            {daily && (
-              <DailyTowerBanner
-                daily={daily}
-                best={getDailyBest(dailyProgress, daily)}
-              />
-            )}
-            <span className="eyebrow">FLOOR</span>
-            <strong>{game.floor.toString().padStart(3, '0')}</strong>
-            <div className="score-number">
-              {game.score.toLocaleString()} <small>PTS</small>
-            </div>
-            <div className="run-readout" aria-label="Run time and tower pace">
-              <span aria-label="Elapsed time">{formatTime(game.time)}</span>
-              {game.mode !== 'practice' && game.pace.level > 0 && (
-                <span>· Pace {game.pace.level}</span>
-              )}
-            </div>
-            <div className="height-readout">
-              <ArrowUp size={13} /> {game.height} m
-            </div>
-            <div className="gem-count">
-              <Diamond size={13} /> {game.gems}
-            </div>
-            {race && (
-              <div
-                className={`ghost-race ${race.beaten ? 'ghost-beaten' : ''}`}
-              >
-                <span>
-                  <Ghost size={16} /> YOUR BEST · {race.floor}
-                </span>
-                <strong>
-                  {race.beaten
-                    ? 'Best floor beaten!'
-                    : race.finished
-                      ? 'Ghost finished'
-                      : race.lead === 0
-                        ? 'Neck and neck'
-                        : `${Math.abs(race.lead)} m ${race.lead > 0 ? 'ahead' : 'behind'}`}
-                </strong>
-                <small>
-                  {race.finished || race.beaten
-                    ? 'Keep climbing for a new record'
-                    : 'Racing your previous climb'}
-                </small>
-              </div>
-            )}
-            {game.mode === 'party' && (
-              <div
-                className="party-hud"
-                data-power-active={game.doubleJumpTime > 0}
-              >
-                <strong>PARTY · LOW GRAVITY</strong>
-                <span>
-                  {game.doubleJumpTime > 0
-                    ? `DOUBLE JUMP · ${Math.ceil(game.doubleJumpTime)}s`
-                    : 'CRYSTALS GRANT DOUBLE JUMPS'}
-                </span>
-                {game.doubleJumpTime > 0 && (
-                  <small>
-                    {game.doubleJumpReady
-                      ? 'PRESS JUMP AGAIN IN MIDAIR'
-                      : 'LAND TO RECHARGE'}
-                  </small>
-                )}
-                <small>Pink springs launch you higher</small>
-              </div>
-            )}
-            {challenge && (
-              <div className="friend-target">
-                <span>
-                  {game.floor > challenge.floor
-                    ? 'Floor beaten!'
-                    : `Beat floor ${challenge.floor}`}
-                </span>
-                <small>
-                  {game.score > challenge.score
-                    ? 'Score beaten!'
-                    : `${challenge.score.toLocaleString()} pts to beat`}
-                </small>
-              </div>
-            )}
-          </section>
-          <div
-            className={`combo-hud ${(game.combo >= 3 || (actionRules && game.action.frenzyTime > 0)) && !guidanceCue ? 'visible' : ''}`}
-          >
-            <span>
-              {comboMilestone
-                ? comboMilestoneLabel(comboMilestone).toUpperCase()
-                : 'KEEP IT GOING'}
-            </span>
-            <strong>
-              {game.combo}
-              <small>COMBO</small>
-            </strong>
-            <div className="combo-track">
-              <i style={{ transform: `scaleX(${game.comboTime / 3.8})` }} />
-            </div>
-            {actionRules && <TowerFrenzyMeter action={game.action} />}
-          </div>
-          <div className="speed-meter">
-            <span>MOMENTUM</span>
-            <div>
-              {Array.from({ length: 12 }, (_, i) => (
-                <i
-                  key={i}
-                  className={(game.speed / 8.4) * 12 > i ? 'filled' : ''}
-                />
-              ))}
-            </div>
-            <small>
-              {game.speed > 6
-                ? 'SUPER JUMP READY'
-                : 'BUILD SPEED TO JUMP HIGHER'}
-            </small>
-          </div>
-          {game.stormDistance < 4 && game.status === 'playing' && (
-            <div className="storm-warning">
-              <ArrowUp size={15} /> THE FROST IS CATCHING UP
-            </div>
-          )}
+          <GameHud
+            game={game}
+            skills={skills}
+            guidance={game.status === 'playing' ? guidanceCue : null}
+            ghost={race}
+            onSkip={() => saveGuidance(skipGuidance(guidanceProfile.current))}
+          />
           {game.status === 'playing' && (
             <fieldset
               className="touch-controls"
@@ -1897,22 +1698,6 @@ export default function Home() {
             setHelp(true);
           }}
         />
-      )}
-      {active && (
-        <footer className="bottom-bar">
-          <div className="controls-legend">
-            <span>
-              <kbd>←</kbd>
-              <kbd>→</kbd> MOVE
-            </span>
-            <span>
-              <kbd>SPACE</kbd> JUMP
-            </span>
-            <span>
-              <kbd>ESC</kbd> PAUSE
-            </span>
-          </div>
-        </footer>
       )}
     </main>
   );
