@@ -6,10 +6,17 @@ import type { TowerGhost } from '@/lib/tower-ghost';
 import { FeaturedSkillGoal } from './skill-goals';
 import styles from './game-hud.module.css';
 
-const tips = {
+const keyboardTips = {
   move: 'Hold ← or → to run',
   jump: 'Space / JUMP to reach the next ledge',
   momentum: 'Run, then jump to go higher',
+  frost: 'Frost is rising — keep climbing',
+};
+const touchTips = {
+  move: 'Hold an arrow with your left thumb',
+  jump: 'Keep holding an arrow + tap JUMP',
+  momentum: 'Build speed, then tap JUMP to go higher',
+  frost: keyboardTips.frost,
 };
 
 /** One small status group for desktop and touch; hazards stay in the playfield. */
@@ -19,14 +26,16 @@ export function GameHud({
   guidance,
   ghost,
   onSkip,
+  touch = false,
 }: {
   game: Snapshot;
   skills: SkillProgress;
   guidance: GuidanceCue | null;
   ghost: ReturnType<TowerGhost['snapshot']> | null;
   onSkip: () => void;
+  touch?: boolean;
 }) {
-  const tip = guidance && guidance.id !== 'frost' ? tips[guidance.id] : null;
+  const tip = guidance ? (touch ? touchTips : keyboardTips)[guidance.id] : null;
   const frenzy = game.rulesVersion >= 6 && game.action.frenzyTime > 0;
   const ghostText = ghost
     ? ghost.beaten
@@ -83,13 +92,15 @@ export function GameHud({
           <output aria-live="polite" aria-atomic="true">
             {tip}
           </output>
-          <button
-            type="button"
-            onClick={onSkip}
-            aria-label="Skip climbing guidance"
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
+          {guidance?.skippable && (
+            <button
+              type="button"
+              onClick={onSkip}
+              aria-label="Skip climbing guidance"
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
     </aside>

@@ -40,6 +40,7 @@ import { TowerEngine, type Controls } from '@/lib/tower-engine';
 import { TowerInput } from '@/lib/tower-input';
 import { TowerAudio } from '@/lib/tower-audio';
 import { ComboFeedbackTracker } from '@/lib/combo-feedback';
+import { GraphicsRecovery } from '@/lib/graphics-recovery';
 import { readProfile, OUTFIT_STORAGE_KEY } from '@/lib/outfits';
 import type { TowerWorld } from '@/lib/tower-world';
 import styles from './race-game.module.css';
@@ -475,6 +476,8 @@ export function RaceGame() {
       previous = 0,
       synced = 0;
     const controls = input.current;
+    let graphics: GraphicsRecovery | undefined;
+    let modelLoaded = false;
     const idle = new TowerEngine();
     const keyControl = (key: string): keyof Controls | null =>
       key === 'ArrowLeft' || key.toLowerCase() === 'a'
@@ -485,6 +488,7 @@ export function RaceGame() {
             ? 'jump'
             : null;
     const keyDown = (event: KeyboardEvent) => {
+      if (graphics?.blocked) return;
       const local = runner.current,
         current = roomRef.current;
       if (
@@ -515,7 +519,8 @@ export function RaceGame() {
     };
     const focus = () =>
       audio.current?.setPaused(
-        !runner.current?.started ||
+        !!graphics?.blocked ||
+          !runner.current?.started ||
           !!runner.current.recording ||
           roomRef.current?.phase === 'finished',
       );
@@ -528,6 +533,27 @@ export function RaceGame() {
         if (disposed || !canvas.current) return;
         const scene = new TowerWorld(canvas.current);
         world.current = scene;
+        const stopGraphics = (message: string) => {
+          resetInput();
+          audio.current?.setPaused(true);
+          setLoaded(false);
+          setRenderError(message);
+        };
+        graphics = new GraphicsRecovery(canvas.current, {
+          lost: () =>
+            stopGraphics(
+              'Graphics were interrupted. The shared race clock continues while they reconnect.',
+            ),
+          restored: () => {
+            scene.setQuality(false);
+            setRenderError('');
+            setLoaded(modelLoaded);
+          },
+          failed: (error) => {
+            console.error('Frostbound race rendering stopped.', error);
+            stopGraphics('The graphics stopped working. Reload to reconnect.');
+          },
+        });
         scene.setQuality(!window.matchMedia('(pointer: coarse)').matches);
         let reduced = window.matchMedia(
           '(prefers-reduced-motion: reduce)',
@@ -551,99 +577,100 @@ export function RaceGame() {
         } catch {
           /* Use the starter outfit. */
         }
-        setLoaded(true);
+        modelLoaded = true;
+        setLoaded(!graphics.blocked);
         const animate = (now: number) => {
           if (disposed) return;
           const dt = Math.min(0.1, (now - (previous || now)) / 1000);
           previous = now;
-          const local = runner.current,
-            current = roomRef.current;
-          const serverNow = connection.current?.now() ?? Date.now();
-          if (local && current) {
-            const wasStarted = local.started;
-            const wasRecorded = !!local.recording;
-            local.advance(
-              serverNow,
-              current.startAt,
-              input.current.controls,
-              current.phase === 'finished',
-            );
-            if (!wasRecorded && local.recording) wakePoll.current?.();
-            if (!wasStarted && local.started) {
-              resetInput();
-              comboFeedback.current.reset();
-              audio.current?.resetRun();
-              canvas.current?.focus({ preventScroll: true });
-              audio.current?.play('jump');
+          graphics?.frame(() => {
+            const local = runner.current,
+              current = roomRef.current;
+            const serverNow = connection.current?.now() ?? Date.now();
+            if (local && current) {
+              const wasStarted = local.started;
+              const wasRecorded = !!local.recording;
+              local.advance(
+                serverNow,
+                current.startAt,
+                input.current.controls,
+                current.phase === 'finished',
+              );
+              if (!wasRecorded && local.recording) wakePoll.current?.();
+              if (!wasStarted && local.started) {
+                resetInput();
+                comboFeedback.current.reset();
+                audio.current?.resetRun();
+                canvas.current?.focus({ preventScroll: true });
+                audio.current?.play('jump');
+              }
+              peer.current?.sendPose(current.round, local.pose);
+              audio.current?.setPaused(
+                !local.started ||
+                  !!local.recording ||
+                  current.phase === 'finished' ||
+                  !document.hasFocus(),
+              );
+              const events = local.engine.drainEvents();
+              const milestone = comboFeedback.current.observe(
+                local.engine.combo,
+                local.engine.comboTime,
+              );
+              if (
+                milestone !== null &&
+                !events.some((event) => event.type === 'frenzy')
+              )
+                audio.current?.play('combo', milestone);
+              for (const event of events) {
+                scene.effect(event, local.engine.time);
+                if (event.type !== 'combo') audio.current?.play(event.type);
+              }
             }
-            peer.current?.sendPose(current.round, local.pose);
-            audio.current?.setPaused(
-              !local.started ||
-                !!local.recording ||
-                current.phase === 'finished' ||
-                !document.hasFocus(),
+            rival.current.advance(now, dt);
+            scene.render(
+              local?.engine ?? idle,
+              dt,
+              now / 1000,
+              current?.phase === 'racing' ||
+                current?.phase === 'finishing' ||
+                current?.phase === 'finished'
+                ? rival.current
+                : null,
             );
-            const events = local.engine.drainEvents();
-            const milestone = comboFeedback.current.observe(
-              local.engine.combo,
-              local.engine.comboTime,
-            );
-            if (
-              milestone !== null &&
-              !events.some((event) => event.type === 'frenzy')
-            )
-              audio.current?.play('combo', milestone);
-            for (const event of events) {
-              scene.effect(event, local.engine.time);
-              if (event.type !== 'combo') audio.current?.play(event.type);
+            if (now - synced > 100) {
+              synced = now;
+              setClock(serverNow);
+              setFloor(
+                Math.min(
+                  current?.settings.targetFloor ??
+                    DEFAULT_RACE_SETTINGS.targetFloor,
+                  local?.engine.floor ?? 0,
+                ),
+              );
+              setFriendPose(friendPoseRef.current);
+              setRespawnFloor(local?.respawning ? local.checkpointFloor : null);
+              setShoveReady(
+                !shovePending.current &&
+                  !local?.protected &&
+                  serverNow >= nextShoveAt.current,
+              );
+              setClimbEnded(!!local?.recording);
+              setFinishKind(local?.finished ?? null);
             }
-          }
-          rival.current.advance(now, dt);
-          scene.render(
-            local?.engine ?? idle,
-            dt,
-            now / 1000,
-            current?.phase === 'racing' ||
-              current?.phase === 'finishing' ||
-              current?.phase === 'finished'
-              ? rival.current
-              : null,
-          );
-          if (now - synced > 100) {
-            synced = now;
-            setClock(serverNow);
-            setFloor(
-              Math.min(
-                current?.settings.targetFloor ??
-                  DEFAULT_RACE_SETTINGS.targetFloor,
-                local?.engine.floor ?? 0,
-              ),
-            );
-            setFriendPose(friendPoseRef.current);
-            setRespawnFloor(local?.respawning ? local.checkpointFloor : null);
-            setShoveReady(
-              !shovePending.current &&
-                !local?.protected &&
-                serverNow >= nextShoveAt.current,
-            );
-            setClimbEnded(!!local?.recording);
-            setFinishKind(local?.finished ?? null);
-          }
+          });
           frame = requestAnimationFrame(animate);
         };
         frame = requestAnimationFrame(animate);
       })
       .catch((error) => {
+        console.error('Frostbound race could not load.', error);
         if (!disposed)
-          setRenderError(
-            error instanceof Error
-              ? error.message
-              : 'The tower could not load.',
-          );
+          setRenderError('The tower could not load. Try reloading this page.');
       });
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
+      graphics?.dispose();
       world.current?.dispose();
       world.current = null;
       peer.current?.close();
@@ -712,6 +739,7 @@ export function RaceGame() {
       type="button"
       aria-label={label}
       aria-pressed={pressed[control]}
+      disabled={!loaded || !!renderError}
       onPointerDown={(event) => {
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -782,9 +810,10 @@ export function RaceGame() {
       </header>
       {(networkError || renderError) && (
         <div className={styles.error} role="alert">
-          {renderError
-            ? 'The tower could not load. Try reloading this page.'
-            : networkError}
+          {renderError || networkError}
+          {renderError && (
+            <button onClick={() => location.reload()}>Reload game</button>
+          )}
           {blocked && (
             <button onClick={() => void leave()}>Back to tower</button>
           )}
@@ -1123,7 +1152,12 @@ export function RaceGame() {
                       type="button"
                       className={styles.shoveButton}
                       aria-label="Shove your friend"
-                      disabled={!shoveReady || respawnFloor !== null}
+                      disabled={
+                        !loaded ||
+                        !!renderError ||
+                        !shoveReady ||
+                        respawnFloor !== null
+                      }
                       onPointerDown={(event) => {
                         event.preventDefault();
                         void shove();

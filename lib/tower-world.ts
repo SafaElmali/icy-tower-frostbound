@@ -131,7 +131,10 @@ export class TowerWorld {
   async load() {
     // The custom GLB is optional while the playable model remains available.
     try {
-      const gltf = await new GLTFLoader().loadAsync('/assets/harold.glb');
+      // A stalled optional model must not leave Play disabled indefinitely.
+      const response = await fetch('/assets/harold.glb', { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error('Climber model unavailable');
+      const gltf = await new GLTFLoader().parseAsync(await response.arrayBuffer(), '/assets/');
       if (this.disposed) { gltf.scene.traverse(o => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose(); } }); return; }
       this.character.traverse(o => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose(); } });
       this.character.clear();

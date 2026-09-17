@@ -112,7 +112,8 @@
   align-items: center;
   gap: 4px;
   max-width: 280px;
-  padding-left: 10px;
+  padding: 4px 10px;
+  min-height: 36px;
   border-radius: 8px;
   background: #0a1c29c9;
   color: #c5e9de;

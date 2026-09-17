@@ -68,6 +68,12 @@
 }
 .touch-hint { display: none; }
 .touch-controls, .touch-move { border: 0; margin: 0; min-width: 0; padding: 0; }
+.touch-controls[data-guidance="move"] .touch-move button,
+.touch-controls[data-guidance="jump"] .touch-jump,
+.touch-controls[data-guidance="momentum"] button {
+  outline: 2px solid #d9f6c4;
+  outline-offset: 3px;
+}
 .overlay {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);

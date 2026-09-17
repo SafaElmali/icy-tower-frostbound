@@ -96,6 +96,7 @@ import {
 } from '@/lib/playtest-analytics';
 import { PlaytestReport } from '@/components/playtest-report';
 import { RunFeedback } from '@/components/run-feedback';
+import { GraphicsRecovery } from '@/lib/graphics-recovery';
 import { PersonalProgressResults } from '@/components/personal-progress';
 import {
   readPersonalProgress,
@@ -154,6 +155,7 @@ export default function Home() {
   const world = useRef<TowerWorld | null>(null);
   const input = useRef(new TowerInput());
   const [touchPressed, setTouchPressed] = useState(freshControls());
+  const [touchGuidance, setTouchGuidance] = useState(false);
   const [game, setGame] = useState<Snapshot>(initial);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
@@ -415,7 +417,7 @@ export default function Home() {
   }
   function pause() {
     const e = engine.current;
-    if (!e) return;
+    if (!e || !ready || error) return;
     resetInput();
     e.togglePause();
     audio.current?.setPaused(e.status === 'paused');
@@ -450,6 +452,8 @@ export default function Home() {
       last = 0,
       sync = 0;
     let unregisterTools = () => {};
+    let graphics: GraphicsRecovery | undefined;
+    let loaded = false;
     analytics.current = createPlaytestAnalytics();
     const query = new URLSearchParams(window.location.search);
     const incoming = query.get('challenge');
@@ -510,6 +514,7 @@ export default function Home() {
     }
     void Promise.resolve().then(() => {
       if (disposed) return;
+      setTouchGuidance(window.matchMedia('(any-pointer: coarse)').matches);
       setDaily(loadedDaily);
       setDailyChoice(loadedDaily ?? todayDailyTower());
       setDailyProgress(dailyProgressRef.current);
@@ -551,6 +556,32 @@ export default function Home() {
         try {
           const w = new TowerWorld(canvas.current);
           world.current = w;
+          const stopGraphics = (message: string) => {
+            resetInput();
+            if (e.status === 'playing') e.togglePause();
+            audio.current?.setPaused(true);
+            setReady(false);
+            setGame(e.snapshot());
+            setError(message);
+          };
+          graphics = new GraphicsRecovery(canvas.current, {
+            lost: () =>
+              stopGraphics(
+                'Graphics were interrupted. Your climb is paused while they reconnect.',
+              ),
+            restored: () => {
+              w.setQuality(false);
+              setQuality(false);
+              setReady(loaded);
+              setError('');
+            },
+            failed: (cause) => {
+              console.error('Frostbound rendering stopped.', cause);
+              stopGraphics(
+                'The graphics stopped working. Reload to try again.',
+              );
+            },
+          });
           const high = !window.matchMedia('(pointer: coarse)').matches;
           w.setQuality(high);
           w.setReducedMotion(reducedMotionRef.current);
@@ -561,10 +592,12 @@ export default function Home() {
             return;
           }
           w.setOutfit(profileRef.current.equipped);
-          setReady(true);
+          loaded = true;
+          setReady(!graphics.blocked);
           setBests({ ...bestRef.current });
           unregisterTools = registerGameTools(e, {
             start: (selected) => {
+              if (graphics?.blocked) return;
               startRun(e, selected);
               audio.current?.setPaused(false);
               setHelp(false);
@@ -572,159 +605,169 @@ export default function Home() {
               canvas.current?.focus();
             },
             pause: () => {
+              if (graphics?.blocked) return;
               resetInput();
               e.togglePause();
+              audio.current?.setPaused(e.status === 'paused');
               setGame(e.snapshot());
             },
           });
           const animate = (now: number) => {
+            if (disposed) return;
             const dt = Math.min((now - (last || now)) / 1000, 0.1);
             last = now;
-            e.tick(dt, input.current.controls);
-            audio.current?.updateAction(
-              e.time,
-              e.rulesVersion >= 6 ? e.action.frenzyTime : 0,
-              e.status === 'playing',
-            );
-            ghost.current?.advanceTo(e.time);
-            const events = e.drainEvents();
-            const milestone = comboFeedback.current.observe(
-              e.combo,
-              e.comboTime,
-            );
-            if (
-              milestone !== null &&
-              !events.some((event) => event.type === 'frenzy')
-            )
-              tone('combo', milestone);
-            const guided = advanceGuidance(
-              guidanceProfile.current,
-              guidanceRun.current,
-              e,
-              events,
-              input.current.controls,
-            );
-            saveGuidance(guided.profile);
-            guidanceRun.current = guided.run;
-            const cue = getGuidanceCue(
-              guidanceProfile.current,
-              guidanceRun.current,
-              e,
-            );
-            if ((cue?.id ?? null) !== guidanceCueId.current) {
-              guidanceCueId.current = cue?.id ?? null;
-              setGuidanceCue(cue);
-            }
-            for (const event of events) {
-              w.effect(event, e.time);
-              if (event.type !== 'combo') tone(event.type);
-              if (event.type === 'over') {
-                const progress = recordPersonalProgress(
-                  personalProgress.current,
-                  e.snapshot(),
-                );
-                if (progress !== personalProgress.current) {
-                  personalProgress.current = progress;
-                  try {
-                    localStorage.setItem(
-                      PERSONAL_PROGRESS_STORAGE_KEY,
-                      JSON.stringify(progress),
-                    );
-                  } catch {
-                    /* Preserve session records. */
-                  }
-                }
-                if (dailyRef.current) {
-                  const next = updateDailyProgress(
-                    dailyProgressRef.current,
-                    dailyRef.current,
-                    e,
+            graphics?.frame(() => {
+              e.tick(dt, input.current.controls);
+              audio.current?.updateAction(
+                e.time,
+                e.rulesVersion >= 6 ? e.action.frenzyTime : 0,
+                e.status === 'playing',
+              );
+              ghost.current?.advanceTo(e.time);
+              const events = e.drainEvents();
+              const milestone = comboFeedback.current.observe(
+                e.combo,
+                e.comboTime,
+              );
+              if (
+                milestone !== null &&
+                !events.some((event) => event.type === 'frenzy')
+              )
+                tone('combo', milestone);
+              const guided = advanceGuidance(
+                guidanceProfile.current,
+                guidanceRun.current,
+                e,
+                events,
+                input.current.controls,
+              );
+              saveGuidance(guided.profile);
+              guidanceRun.current = guided.run;
+              const cue = getGuidanceCue(
+                guidanceProfile.current,
+                guidanceRun.current,
+                e,
+              );
+              if ((cue?.id ?? null) !== guidanceCueId.current) {
+                guidanceCueId.current = cue?.id ?? null;
+                setGuidanceCue(cue);
+              }
+              for (const event of events) {
+                w.effect(event, e.time);
+                if (event.type !== 'combo') tone(event.type);
+                if (event.type === 'over') {
+                  const progress = recordPersonalProgress(
+                    personalProgress.current,
+                    e.snapshot(),
                   );
-                  if (next !== dailyProgressRef.current) {
-                    dailyProgressRef.current = next;
-                    setDailyProgress(next);
+                  if (progress !== personalProgress.current) {
+                    personalProgress.current = progress;
                     try {
                       localStorage.setItem(
-                        DAILY_PROGRESS_STORAGE_KEY,
-                        JSON.stringify(next),
+                        PERSONAL_PROGRESS_STORAGE_KEY,
+                        JSON.stringify(progress),
                       );
                     } catch {
-                      /* Keep this visit's daily best. */
+                      /* Preserve session records. */
                     }
                   }
-                }
-                if (measuredRun.current)
-                  analytics.current?.finishRun(measuredRun.current, {
-                    floor: e.floor,
-                    bestCombo: e.bestCombo,
-                    wallRebounds: e.wallJumps,
-                    gems: e.gems,
-                  });
-                resetInput();
-                setGhostUnavailable(
-                  e.mode === 'arcade' && e.floor > 0 && !e.getReplay(),
-                );
-                const nextGhost =
-                  e.version === CURRENT_RULES_VERSION
-                    ? bestGhost(ghostBest.current, e)
-                    : ghostBest.current;
-                if (nextGhost && nextGhost !== ghostBest.current) {
-                  ghostBest.current = nextGhost;
-                  setGhostFloor(nextGhost.floor);
-                  setNewGhost(true);
+                  if (dailyRef.current) {
+                    const next = updateDailyProgress(
+                      dailyProgressRef.current,
+                      dailyRef.current,
+                      e,
+                    );
+                    if (next !== dailyProgressRef.current) {
+                      dailyProgressRef.current = next;
+                      setDailyProgress(next);
+                      try {
+                        localStorage.setItem(
+                          DAILY_PROGRESS_STORAGE_KEY,
+                          JSON.stringify(next),
+                        );
+                      } catch {
+                        /* Keep this visit's daily best. */
+                      }
+                    }
+                  }
+                  if (measuredRun.current)
+                    analytics.current?.finishRun(measuredRun.current, {
+                      floor: e.floor,
+                      bestCombo: e.bestCombo,
+                      wallRebounds: e.wallJumps,
+                      gems: e.gems,
+                    });
+                  resetInput();
+                  setGhostUnavailable(
+                    e.mode === 'arcade' && e.floor > 0 && !e.getReplay(),
+                  );
+                  const nextGhost =
+                    e.version === CURRENT_RULES_VERSION
+                      ? bestGhost(ghostBest.current, e)
+                      : ghostBest.current;
+                  if (nextGhost && nextGhost !== ghostBest.current) {
+                    ghostBest.current = nextGhost;
+                    setGhostFloor(nextGhost.floor);
+                    setNewGhost(true);
+                    try {
+                      localStorage.setItem(
+                        GHOST_STORAGE_KEY,
+                        JSON.stringify(nextGhost),
+                      );
+                    } catch {
+                      /* Keep the ghost in memory if storage is full or blocked. */
+                    }
+                  }
+                  const record = {
+                    floor: Math.max(bestRef.current[e.mode].floor, e.floor),
+                    score: Math.max(bestRef.current[e.mode].score, e.score),
+                  };
+                  bestRef.current = { ...bestRef.current, [e.mode]: record };
+                  setBests(bestRef.current);
                   try {
                     localStorage.setItem(
-                      GHOST_STORAGE_KEY,
-                      JSON.stringify(nextGhost),
+                      bestKey(e.mode),
+                      JSON.stringify(record),
                     );
                   } catch {
-                    /* Keep the ghost in memory if storage is full or blocked. */
+                    /* Optional local record. */
                   }
                 }
-                const record = {
-                  floor: Math.max(bestRef.current[e.mode].floor, e.floor),
-                  score: Math.max(bestRef.current[e.mode].score, e.score),
-                };
-                bestRef.current = { ...bestRef.current, [e.mode]: record };
-                setBests(bestRef.current);
-                try {
-                  localStorage.setItem(bestKey(e.mode), JSON.stringify(record));
-                } catch {
-                  /* Optional local record. */
+              }
+              if (events.length) {
+                saveSkills(
+                  advanceSkillProgress(skillsRef.current, e.snapshot()),
+                );
+                const current = profileRef.current;
+                const progress = advanceProgress(current.progress, {
+                  floor: e.floor,
+                  score: e.score,
+                  combo: e.bestCombo,
+                });
+                if (
+                  progress.floor !== current.progress.floor ||
+                  progress.score !== current.progress.score ||
+                  progress.combo !== current.progress.combo
+                ) {
+                  const earned = COSMETICS.filter(
+                    (item) =>
+                      !isUnlocked(item, current.progress) &&
+                      isUnlocked(item, progress),
+                  );
+                  saveProfile({ ...current, progress });
+                  if (earned.length)
+                    setUnlockNotice(
+                      `Unlocked: ${earned.map((item) => item.name).join(', ')}. Find it in Outfits.`,
+                    );
                 }
               }
-            }
-            if (events.length) {
-              saveSkills(advanceSkillProgress(skillsRef.current, e.snapshot()));
-              const current = profileRef.current;
-              const progress = advanceProgress(current.progress, {
-                floor: e.floor,
-                score: e.score,
-                combo: e.bestCombo,
-              });
-              if (
-                progress.floor !== current.progress.floor ||
-                progress.score !== current.progress.score ||
-                progress.combo !== current.progress.combo
-              ) {
-                const earned = COSMETICS.filter(
-                  (item) =>
-                    !isUnlocked(item, current.progress) &&
-                    isUnlocked(item, progress),
-                );
-                saveProfile({ ...current, progress });
-                if (earned.length)
-                  setUnlockNotice(
-                    `Unlocked: ${earned.map((item) => item.name).join(', ')}. Find it in Outfits.`,
-                  );
+              w.render(e, dt, now / 1000, ghost.current);
+              if (now - sync > 65 || events.length) {
+                setGame(e.snapshot());
+                setRace(ghost.current?.snapshot(e) ?? null);
+                sync = now;
               }
-            }
-            w.render(e, dt, now / 1000, ghost.current);
-            if (now - sync > 65 || events.length) {
-              setGame(e.snapshot());
-              setRace(ghost.current?.snapshot(e) ?? null);
-              sync = now;
-            }
+            });
             frame = requestAnimationFrame(animate);
           };
           frame = requestAnimationFrame(animate);
@@ -746,12 +789,25 @@ export default function Home() {
         return;
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!loaded || graphics?.blocked) return;
       const editable =
         event.target instanceof HTMLElement &&
         event.target.closest(
           'input, select, textarea, dialog, [role="dialog"]',
         );
       if (editable) return;
+      if (
+        [
+          'KeyA',
+          'KeyD',
+          'KeyW',
+          'ArrowLeft',
+          'ArrowRight',
+          'ArrowUp',
+          'Space',
+        ].includes(event.code)
+      )
+        setTouchGuidance(false);
       const button =
         event.target instanceof HTMLElement && event.target.closest('button');
       const active = e.status === 'playing';
@@ -834,6 +890,7 @@ export default function Home() {
       disposed = true;
       endVisit();
       cancelAnimationFrame(frame);
+      graphics?.dispose();
       world.current?.dispose();
       world.current = null;
       engine.current = null;
@@ -858,6 +915,7 @@ export default function Home() {
     setTouchPressed({ ...input.current.controls });
   };
   const pressTouch = (event: React.PointerEvent<HTMLButtonElement>) => {
+    setTouchGuidance(true);
     const control = event.currentTarget.dataset.control;
     if (control !== 'left' && control !== 'right' && control !== 'jump') return;
     if (engine.current?.status !== 'playing' || event.button !== 0) return;
@@ -992,7 +1050,8 @@ export default function Home() {
               {menuButton}
               <div className="game-intro">
                 <p>
-                  A free browser tower climber. Chain jumps and outrun the frost.
+                  A free browser tower climber. Chain jumps and outrun the
+                  frost.
                 </p>
                 {/* Use full navigation for the Netlify static export. */}
                 {/* oxlint-disable-next-line next/no-html-link-for-pages */}
@@ -1014,12 +1073,14 @@ export default function Home() {
             skills={skills}
             guidance={game.status === 'playing' ? guidanceCue : null}
             ghost={race}
+            touch={touchGuidance}
             onSkip={() => saveGuidance(skipGuidance(guidanceProfile.current))}
           />
           {game.status === 'playing' && (
             <fieldset
               className="touch-controls"
               aria-label="Touch game controls"
+              data-guidance={guidanceCue?.id}
             >
               <fieldset className="touch-move" aria-label="Movement">
                 <Button
@@ -1099,6 +1160,7 @@ export default function Home() {
                     : `Personal best · ${runBaseline.floor} floors`}
               </p>
             )}
+            {game.status === 'over' && <RunFeedback snapshot={game} compact />}
             <Button
               className="start-button"
               onClick={() => (game.status === 'paused' ? pause() : begin())}
