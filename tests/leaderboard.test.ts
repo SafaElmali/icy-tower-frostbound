@@ -7,7 +7,7 @@ import { getStore, setEnvironmentContext } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
 import { TowerEngine, freshControls, type RankedMode, type RunReplay } from '../lib/tower-engine.ts';
 import { Leaderboard, verifySubmission, type LeaderboardEntry, type LeaderboardStore } from '../lib/leaderboard.ts';
-import handler from '../netlify/functions/leaderboard.ts';
+import handler, { submissionAnalyticsContext } from '../netlify/functions/leaderboard.ts';
 
 function completedRun(seed = 17, paused = false, goal = 12, version: RunReplay['version'] = 2, mode: RankedMode = 'arcade') {
   const engine = new TowerEngine(seed, true, version); engine.start(mode);
@@ -150,4 +150,14 @@ void test('a controlled wall jump and subsequent climb replay to the same verifi
   const verified = verifySubmission({ name: 'Wall climber', replay });
   assert.equal(verified.score, engine.score); assert.equal(verified.floor, engine.floor);
   assert.equal(verified.duration, Math.round(engine.time * 1000));
+});
+
+void test('score analytics accepts only bounded anonymous identifiers and keeps legacy submissions usable', () => {
+  const metadata = { submissionAttemptId: '8c77f997-bba7-4f7f-b4ae-a83d5e8f4350', analyticsDistinctId: '$device:8c77f997-bba7-4f7f-b4ae-a83d5e8f4350' };
+  assert.deepEqual(submissionAnalyticsContext(metadata), { attemptId: metadata.submissionAttemptId, distinctId: metadata.analyticsDistinctId });
+  for (const payload of [null, {}, { submissionAttemptId: 'https://private.example/token', analyticsDistinctId: 'name@example.com' }, { submissionAttemptId: 'a'.repeat(101), analyticsDistinctId: 'a'.repeat(201) }]) {
+    const context = submissionAnalyticsContext(payload);
+    assert.match(context.attemptId, /^[a-f0-9-]{36}$/);
+    assert.equal(context.distinctId, undefined);
+  }
 });

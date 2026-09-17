@@ -58,5 +58,8 @@ Open [localhost:5188](http://localhost:5188). Race rooms work locally; the leade
 | [Development](docs/development.md) | Setup, checks, art and audio, validation notes, and Netlify deployment |
 | [SEO and GEO](docs/seo-geo.md) | Search metadata, structured data, crawl files, and AI-readable game guide |
 | [Playtesting](docs/playtesting.md) | Human playtest protocol and local measurement exports |
+| [Product analytics](docs/posthog-setup.md) | PostHog configuration, events, dashboards, and measurement limits |
+
+Production builds send anonymous gameplay and feature events to the Frostbound PostHog project. Names, input recordings, and raw invitation links are excluded; the detailed playtest report remains local. Development capture is off by default. See the analytics guide for configuration and disabling capture.
 
 An independent Icy Tower-inspired browser prototype with no original game assets or affiliation. See [asset credits](public/assets/ATTRIBUTION.md), [audio credits](public/audio/ATTRIBUTION.md), and [cover artwork details](docs/cover-prompt.md).

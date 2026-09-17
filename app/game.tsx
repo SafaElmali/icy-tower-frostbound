@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { trackEvent, analyticsId } from '@/lib/analytics';
+import { SoloAnalytics } from '@/lib/solo-analytics';
 import {
   ArrowLeft,
   ArrowRight,
@@ -223,9 +225,61 @@ export default function Home() {
     personalRunBaseline(readPersonalProgress(null), 'arcade'),
   );
   const comboFeedback = useRef(new ComboFeedbackTracker());
+  const telemetry = useRef(new SoloAnalytics(trackEvent, analyticsId));
+  const [remoteRunId, setRemoteRunId] = useState<string | undefined>();
+  const lastInput = useRef('unknown');
+  const guidanceShownAt = useRef<Record<string, number>>({});
+  const startBest = useRef<PersonalBest>({ floor: 0, score: 0 });
+  const startGhostFloor = useRef<number | null>(null);
+  const startGoalCount = useRef(0);
+  const panelHistory = useRef<Record<string, boolean>>({});
+  useEffect(() => {
+    const panels = {
+      menu: menuOpen,
+      help,
+      goals: challengesOpen,
+      outfits: wardrobeOpen,
+      daily: dailyOpen,
+      playtest: measurementsOpen,
+      run_details: runDetailsOpen,
+    };
+    for (const [panel, open] of Object.entries(panels)) {
+      if (open && !panelHistory.current[panel]) {
+        telemetry.current.event('feature_panel_opened', { panel });
+        if (panel === 'run_details')
+          telemetry.current.event('run_results_viewed', { view: 'details' });
+      }
+    }
+    panelHistory.current = panels;
+  }, [
+    menuOpen,
+    help,
+    challengesOpen,
+    wardrobeOpen,
+    dailyOpen,
+    measurementsOpen,
+    runDetailsOpen,
+  ]);
 
   function saveGuidance(next: GuidanceProfile) {
     if (guidanceProfile.current === next) return;
+    for (const step of next.completed) {
+      if (!guidanceProfile.current.completed.includes(step))
+        telemetry.current.event('guidance_step_completed', {
+          step_id: step,
+          guidance_attempt_id: telemetry.current.runId,
+          active_duration_s: engine.current?.time ?? 0,
+          step_duration_s: Math.max(
+            0,
+            (engine.current?.time ?? 0) - (guidanceShownAt.current[step] ?? 0),
+          ),
+        });
+    }
+    if (next.skipped && !guidanceProfile.current.skipped)
+      telemetry.current.event('guidance_skipped', {
+        step_id: guidanceCueId.current,
+        guidance_attempt_id: telemetry.current.runId,
+      });
     guidanceProfile.current = next;
     try {
       localStorage.setItem(GUIDANCE_STORAGE_KEY, JSON.stringify(next));
@@ -238,8 +292,13 @@ export default function Home() {
     if (next === skillsRef.current) return;
     if (measuredRun.current)
       for (const id of next.completed) {
-        if (!skillsRef.current.completed.includes(id))
+        if (!skillsRef.current.completed.includes(id)) {
           analytics.current?.completeGoal(measuredRun.current, id);
+          telemetry.current.event('skill_goal_completed', {
+            goal_id: id,
+            completion_kind: 'first_persistent_unlock',
+          });
+        }
       }
     skillsRef.current = next;
     setSkills(next);
@@ -251,6 +310,14 @@ export default function Home() {
   }
 
   function changeMotion(reduced: boolean) {
+    if (reduced !== reducedMotionRef.current)
+      trackEvent('setting_changed', {
+        surface: 'solo',
+        setting: 'reduced_motion',
+        previous_value: reducedMotionRef.current,
+        value: reduced,
+        source: 'user',
+      });
     reducedMotionRef.current = reduced;
     setReducedMotion(reduced);
     world.current?.setReducedMotion(reduced);
@@ -286,7 +353,14 @@ export default function Home() {
     return () => preference.removeEventListener('change', apply);
   }, []);
 
-  function startRun(e: TowerEngine, selectedMode: GameMode) {
+  function startRun(e: TowerEngine, selectedMode: GameMode, source = 'button') {
+    const reason =
+      e.status === 'over'
+        ? 'retry'
+        : telemetry.current.runId
+          ? 'restart'
+          : 'first';
+    telemetry.current.terminal(e, 'abandoned', { reason: 'restart' });
     if (measuredRun.current)
       analytics.current?.abandonRun(measuredRun.current, 'restart');
     resetInput();
@@ -295,12 +369,45 @@ export default function Home() {
     guidanceRun.current = freshGuidanceRun();
     comboFeedback.current.reset();
     guidanceCueId.current = null;
+    guidanceShownAt.current = {};
     setGuidanceCue(null);
     ghost.current = null;
     if (dailyRef.current) startDailyRun(e, dailyRef.current);
     else if (challengeRef.current)
       startChallengeRun(e, challengeRef.current, selectedMode);
     else ghost.current = startGhostRun(e, ghostBest.current, selectedMode);
+    startGoalCount.current = skillsRef.current.completed.length;
+    if (source === 'game_tool') lastInput.current = 'game_tool';
+    startBest.current = { ...bestRef.current[e.mode] };
+    startGhostFloor.current = ghost.current
+      ? (ghostBest.current?.floor ?? null)
+      : null;
+    telemetry.current.start(e, {
+      start_source: source,
+      start_reason: reason,
+      input_type:
+        source === 'game_tool'
+          ? 'game_tool'
+          : source === 'keyboard'
+            ? 'keyboard'
+            : lastInput.current,
+      device_proxy: window.matchMedia('(any-pointer: coarse)').matches
+        ? 'coarse_pointer'
+        : 'fine_pointer',
+      run_context: dailyRef.current
+        ? 'daily'
+        : challengeRef.current
+          ? 'friend_challenge'
+          : 'normal',
+      daily_date: dailyRef.current?.date,
+      target_floor: challengeRef.current?.floor,
+      target_score: challengeRef.current?.score,
+      ghost_enabled: !!ghost.current,
+      guidance_enabled:
+        !guidanceProfile.current.skipped &&
+        guidanceProfile.current.completed.length < 3,
+    });
+    setRemoteRunId(telemetry.current.runId ?? undefined);
     const baseline = personalRunBaseline(personalProgress.current, e.mode);
     setRunBaseline(baseline);
     world.current?.setPersonalBest(baseline.floor);
@@ -332,11 +439,17 @@ export default function Home() {
       { ...current.equipped, [slot]: id },
       current.progress,
     );
+    if (equipped[slot] !== current.equipped[slot])
+      telemetry.current.event('cosmetic_equipped', {
+        slot,
+        previous_item_id: current.equipped[slot],
+        item_id: equipped[slot],
+      });
     saveProfile({ ...current, equipped });
     world.current?.setOutfit(equipped);
   }
   function openWardrobe() {
-    if (engine.current?.status === 'playing') pause();
+    if (engine.current?.status === 'playing') pause('outfits_dialog');
     setWardrobeOpen(true);
   }
   useEffect(() => {
@@ -366,6 +479,11 @@ export default function Home() {
     canvas.current?.focus({ preventScroll: true });
   }
   function leaveChallenge() {
+    if (challengeRef.current)
+      telemetry.current.event('challenge_exited', {
+        context_type: 'friend_challenge',
+        status: engine.current?.status,
+      });
     challengeRef.current = null;
     setChallenge(null);
     setChallengeError('');
@@ -383,6 +501,11 @@ export default function Home() {
       });
   }
   function leaveDaily() {
+    if (dailyRef.current)
+      telemetry.current.event('challenge_exited', {
+        context_type: 'daily',
+        status: engine.current?.status,
+      });
     dailyRef.current = null;
     setDaily(null);
     const url = new URL(window.location.href);
@@ -392,6 +515,10 @@ export default function Home() {
   function playDaily(selected: DailyTower) {
     if (!ready) return;
     leaveChallenge();
+    telemetry.current.event('daily_tower_selected', {
+      daily_date: selected.date,
+      selection_source: 'daily_panel',
+    });
     dailyRef.current = selected;
     setDaily(selected);
     setDailyChoice(selected);
@@ -409,28 +536,40 @@ export default function Home() {
     leaveDaily();
     saveGuidance(replayGuidance());
     begin('practice');
+    telemetry.current.event('guided_practice_started', {
+      entry_surface: 'solo',
+    });
   }
   function openDailyShare(selected: DailyTower) {
+    telemetry.current.event('share_dialog_opened', {
+      share_type: 'daily',
+      daily_date: selected.date,
+    });
     setDailyShare(dailyTowerUrl(window.location.href, selected));
     setDailyOpen(false);
     setCopyStatus('');
   }
-  function pause() {
+  function pause(reason = 'button') {
     const e = engine.current;
     if (!e || !ready || error) return;
     resetInput();
     e.togglePause();
+    telemetry.current.pause(e, reason);
     audio.current?.setPaused(e.status === 'paused');
     setGame(e.snapshot());
     if (e.status === 'playing') canvas.current?.focus({ preventScroll: true });
   }
   function openLeaderboard() {
-    if (engine.current?.status === 'playing') pause();
+    if (engine.current?.status === 'playing') pause('leaderboard_dialog');
     setSubmissionRun(engine.current?.getReplay() ?? null);
     setLeaderboardOpen(true);
   }
   function menu() {
     setRunDetailsOpen(false);
+    if (engine.current)
+      telemetry.current.terminal(engine.current, 'abandoned', {
+        reason: 'menu',
+      });
     if (measuredRun.current)
       analytics.current?.abandonRun(measuredRun.current, 'menu');
     measuredRun.current = null;
@@ -454,6 +593,20 @@ export default function Home() {
     let unregisterTools = () => {};
     let graphics: GraphicsRecovery | undefined;
     let loaded = false;
+    const loadId = analyticsId();
+    const loadStarted = performance.now();
+    let recoveryStarted = 0;
+    let readyReported = false;
+    const reportReady = () => {
+      if (readyReported || !loaded || graphics?.blocked) return;
+      readyReported = true;
+      trackEvent('game_ready', {
+        surface: 'solo',
+        load_id: loadId,
+        load_duration_ms: Math.round(performance.now() - loadStarted),
+      });
+    };
+    trackEvent('game_load_started', { surface: 'solo', load_id: loadId });
     analytics.current = createPlaytestAnalytics();
     const query = new URLSearchParams(window.location.search);
     const incoming = query.get('challenge');
@@ -461,6 +614,21 @@ export default function Home() {
     const mixedLinks = incoming !== null && incomingDaily !== null;
     const loadedChallenge = mixedLinks ? null : decodeChallenge(incoming);
     const loadedDaily = mixedLinks ? null : decodeDailyTower(incomingDaily);
+    if (incoming !== null || incomingDaily !== null)
+      trackEvent('shared_link_opened', {
+        surface: 'solo',
+        link_type: mixedLinks
+          ? 'mixed'
+          : incomingDaily !== null
+            ? 'daily'
+            : 'friend_challenge',
+        result: mixedLinks
+          ? 'mixed'
+          : loadedChallenge || loadedDaily
+            ? 'valid'
+            : 'invalid',
+        rules_version: loadedDaily?.version ?? loadedChallenge?.version,
+      });
     challengeRef.current = loadedChallenge;
     dailyRef.current = loadedDaily;
     const e = new TowerEngine(loadedDaily?.seed ?? loadedChallenge?.seed);
@@ -558,24 +726,46 @@ export default function Home() {
           world.current = w;
           const stopGraphics = (message: string) => {
             resetInput();
-            if (e.status === 'playing') e.togglePause();
+            if (e.status === 'playing') {
+              e.togglePause();
+              telemetry.current.pause(e, 'graphics');
+            }
             audio.current?.setPaused(true);
             setReady(false);
             setGame(e.snapshot());
             setError(message);
           };
           graphics = new GraphicsRecovery(canvas.current, {
-            lost: () =>
+            lost: () => {
+              recoveryStarted = performance.now();
+              telemetry.current.event('graphics_context_lost', {
+                load_id: loadId,
+                phase: e.status,
+              });
               stopGraphics(
                 'Graphics were interrupted. Your climb is paused while they reconnect.',
-              ),
+              );
+            },
             restored: () => {
+              telemetry.current.event('graphics_context_restored', {
+                load_id: loadId,
+                recovery_duration_ms: Math.round(
+                  performance.now() - recoveryStarted,
+                ),
+                quality_fallback: true,
+              });
               w.setQuality(false);
               setQuality(false);
               setReady(loaded);
               setError('');
+              reportReady();
             },
             failed: (cause) => {
+              telemetry.current.event('graphics_failed', {
+                load_id: loadId,
+                error_code: 'render_failed',
+                phase: e.status,
+              });
               console.error('Frostbound rendering stopped.', cause);
               stopGraphics(
                 'The graphics stopped working. Reload to try again.',
@@ -594,11 +784,12 @@ export default function Home() {
           w.setOutfit(profileRef.current.equipped);
           loaded = true;
           setReady(!graphics.blocked);
+          reportReady();
           setBests({ ...bestRef.current });
           unregisterTools = registerGameTools(e, {
             start: (selected) => {
               if (graphics?.blocked) return;
-              startRun(e, selected);
+              startRun(e, selected, 'game_tool');
               audio.current?.setPaused(false);
               setHelp(false);
               setGame(e.snapshot());
@@ -608,6 +799,7 @@ export default function Home() {
               if (graphics?.blocked) return;
               resetInput();
               e.togglePause();
+              telemetry.current.pause(e, 'game_tool');
               audio.current?.setPaused(e.status === 'paused');
               setGame(e.snapshot());
             },
@@ -617,6 +809,7 @@ export default function Home() {
             const dt = Math.min((now - (last || now)) / 1000, 0.1);
             last = now;
             graphics?.frame(() => {
+              reportReady();
               e.tick(dt, input.current.controls);
               audio.current?.updateAction(
                 e.time,
@@ -625,6 +818,7 @@ export default function Home() {
               );
               ghost.current?.advanceTo(e.time);
               const events = e.drainEvents();
+              let savedGhost = false;
               const milestone = comboFeedback.current.observe(
                 e.combo,
                 e.comboTime,
@@ -649,6 +843,14 @@ export default function Home() {
                 e,
               );
               if ((cue?.id ?? null) !== guidanceCueId.current) {
+                if (cue) {
+                  guidanceShownAt.current[cue.id] = e.time;
+                  telemetry.current.event('guidance_step_shown', {
+                    step_id: cue.id,
+                    guidance_attempt_id: telemetry.current.runId,
+                    active_duration_s: e.time,
+                  });
+                }
                 guidanceCueId.current = cue?.id ?? null;
                 setGuidanceCue(cue);
               }
@@ -678,6 +880,17 @@ export default function Home() {
                       e,
                     );
                     if (next !== dailyProgressRef.current) {
+                      const previous = getDailyBest(
+                        dailyProgressRef.current,
+                        dailyRef.current,
+                      );
+                      telemetry.current.event('daily_best_improved', {
+                        daily_date: dailyRef.current.date,
+                        previous_floor: previous?.floor ?? 0,
+                        previous_score: previous?.score ?? 0,
+                        floor: e.floor,
+                        score: e.score,
+                      });
                       dailyProgressRef.current = next;
                       setDailyProgress(next);
                       try {
@@ -690,13 +903,6 @@ export default function Home() {
                       }
                     }
                   }
-                  if (measuredRun.current)
-                    analytics.current?.finishRun(measuredRun.current, {
-                      floor: e.floor,
-                      bestCombo: e.bestCombo,
-                      wallRebounds: e.wallJumps,
-                      gems: e.gems,
-                    });
                   resetInput();
                   setGhostUnavailable(
                     e.mode === 'arcade' && e.floor > 0 && !e.getReplay(),
@@ -706,6 +912,7 @@ export default function Home() {
                       ? bestGhost(ghostBest.current, e)
                       : ghostBest.current;
                   if (nextGhost && nextGhost !== ghostBest.current) {
+                    savedGhost = true;
                     ghostBest.current = nextGhost;
                     setGhostFloor(nextGhost.floor);
                     setNewGhost(true);
@@ -754,11 +961,55 @@ export default function Home() {
                       !isUnlocked(item, current.progress) &&
                       isUnlocked(item, progress),
                   );
+                  for (const item of earned)
+                    telemetry.current.event('cosmetic_unlocked', {
+                      item_id: item.id,
+                      slot: item.slot,
+                      criterion: item.metric,
+                    });
                   saveProfile({ ...current, progress });
                   if (earned.length)
                     setUnlockNotice(
                       `Unlocked: ${earned.map((item) => item.name).join(', ')}. Find it in Outfits.`,
                     );
+                }
+              }
+              if (events.length || now - sync > 65)
+                telemetry.current.progress(e);
+              if (events.some((event) => event.type === 'over')) {
+                if (measuredRun.current)
+                  analytics.current?.finishRun(measuredRun.current, {
+                    floor: e.floor,
+                    bestCombo: e.bestCombo,
+                    wallRebounds: e.wallJumps,
+                    gems: e.gems,
+                  });
+                const completed = telemetry.current.terminal(e, 'finished', {
+                  input_type: lastInput.current,
+                  personal_best_floor: e.floor > startBest.current.floor,
+                  personal_best_score: e.score > startBest.current.score,
+                  skill_goals_completed:
+                    skillsRef.current.completed.length - startGoalCount.current,
+                  new_ghost: savedGhost,
+                  recording_unavailable:
+                    e.mode === 'arcade' && e.floor > 0 && !e.getReplay(),
+                });
+                if (completed) {
+                  telemetry.current.event('run_results_viewed', {
+                    view: 'summary',
+                  });
+                  if (challengeRef.current)
+                    telemetry.current.event('challenge_result', {
+                      target_floor: challengeRef.current.floor,
+                      target_score: challengeRef.current.score,
+                      floor_beaten: e.floor > challengeRef.current.floor,
+                      score_beaten: e.score > challengeRef.current.score,
+                    });
+                  if (startGhostFloor.current !== null)
+                    telemetry.current.event('ghost_result', {
+                      target_floor: startGhostFloor.current,
+                      beaten: e.floor > startGhostFloor.current,
+                    });
                 }
               }
               w.render(e, dt, now / 1000, ghost.current);
@@ -772,15 +1023,31 @@ export default function Home() {
           };
           frame = requestAnimationFrame(animate);
         } catch (cause) {
+          if (disposed) return;
+          trackEvent('game_load_failed', {
+            surface: 'solo',
+            load_id: loadId,
+            stage: 'world',
+            error_code: 'world_load_failed',
+            load_duration_ms: Math.round(performance.now() - loadStarted),
+          });
           console.error(cause);
           setError(
             'The 3D world could not load. Please reload in a browser with WebGL enabled.',
           );
         }
       })
-      .catch(() =>
-        setError('The game could not load. Check your connection and reload.'),
-      );
+      .catch(() => {
+        if (disposed) return;
+        trackEvent('game_load_failed', {
+          surface: 'solo',
+          load_id: loadId,
+          stage: 'import',
+          error_code: 'import_failed',
+          load_duration_ms: Math.round(performance.now() - loadStarted),
+        });
+        setError('The game could not load. Check your connection and reload.');
+      });
     const key = (event: KeyboardEvent, down: boolean) => {
       const source = `key:${event.code}`;
       if (!down) {
@@ -825,19 +1092,22 @@ export default function Home() {
           input.current.press(source, 'jump');
         setTouchPressed({ ...input.current.controls });
       }
+      lastInput.current = 'keyboard';
       if (event.repeat) return;
       if (event.code === 'Escape' || event.code === 'KeyP') {
         resetInput();
         e.togglePause();
+        telemetry.current.pause(e, 'keyboard');
         audio.current?.setPaused(e.status === 'paused');
         setGame(e.snapshot());
       }
       if (event.code === 'Enter' && !button && world.current) {
         if (e.status === 'paused') {
           e.togglePause();
+          telemetry.current.pause(e, 'keyboard');
           audio.current?.setPaused(false);
         } else if (e.status !== 'playing') {
-          startRun(e, e.mode);
+          startRun(e, e.mode, 'keyboard');
           audio.current?.setPaused(false);
           tone('jump');
         }
@@ -850,6 +1120,7 @@ export default function Home() {
       resetInput();
       if (e.status === 'playing') {
         e.togglePause();
+        telemetry.current.pause(e, document.hidden ? 'visibility' : 'blur');
         audio.current?.setPaused(true);
         setGame(e.snapshot());
       }
@@ -872,6 +1143,7 @@ export default function Home() {
       if (document.hidden) blur();
     };
     const endVisit = () => {
+      telemetry.current.terminal(e, 'abandoned', { reason: 'unload' });
       if (measuredRun.current)
         analytics.current?.abandonRun(measuredRun.current, 'unload');
     };
@@ -881,6 +1153,12 @@ export default function Home() {
       if (event.persisted) blur();
       else endVisit();
     };
+    const fullscreen = () =>
+      trackEvent('fullscreen_changed', {
+        surface: 'solo',
+        fullscreen: !!document.fullscreenElement,
+      });
+    document.addEventListener('fullscreenchange', fullscreen);
     window.addEventListener('pagehide', pagehide);
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
@@ -898,6 +1176,7 @@ export default function Home() {
       window.removeEventListener('keyup', up);
       window.removeEventListener('blur', blur);
       document.removeEventListener('visibilitychange', visibility);
+      document.removeEventListener('fullscreenchange', fullscreen);
       window.removeEventListener('pagehide', pagehide);
       orientation.removeEventListener('change', blur);
       viewport?.removeEventListener('resize', syncViewport);
@@ -915,6 +1194,7 @@ export default function Home() {
     setTouchPressed({ ...input.current.controls });
   };
   const pressTouch = (event: React.PointerEvent<HTMLButtonElement>) => {
+    lastInput.current = event.pointerType === 'touch' ? 'touch' : 'pointer';
     setTouchGuidance(true);
     const control = event.currentTarget.dataset.control;
     if (control !== 'left' && control !== 'right' && control !== 'jump') return;
@@ -952,7 +1232,7 @@ export default function Home() {
       variant="ghost"
       className="menu-toggle"
       onClick={() => {
-        if (engine.current?.status === 'playing') pause();
+        if (engine.current?.status === 'playing') pause('menu_dialog');
         setMenuOpen(true);
       }}
       aria-haspopup="dialog"
@@ -965,6 +1245,12 @@ export default function Home() {
 
   return (
     <main
+      onPointerDownCapture={(event) => {
+        lastInput.current = event.pointerType === 'touch' ? 'touch' : 'pointer';
+      }}
+      onKeyDownCapture={() => {
+        lastInput.current = 'keyboard';
+      }}
       className={`game-shell state-${game.status} mode-${game.mode} ${active ? hudStyles.layout : ''} ${challenge ? 'friend-run' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}
     >
       <canvas
@@ -1308,6 +1594,12 @@ export default function Home() {
                 value={mode}
                 onChange={(event) => {
                   const next = event.target.value as GameMode;
+                  if (next !== mode)
+                    trackEvent('mode_selected', {
+                      surface: 'solo',
+                      previous_mode: mode,
+                      mode: next,
+                    });
                   setMode(next);
                   if (engine.current) {
                     engine.current.start(
@@ -1424,7 +1716,15 @@ export default function Home() {
                 </p>
               )}
             </section>
-            <details className={menuStyles.settings}>
+            <details
+              className={menuStyles.settings}
+              onToggle={(event) => {
+                if (event.currentTarget.open)
+                  telemetry.current.event('feature_panel_opened', {
+                    panel: 'settings',
+                  });
+              }}
+            >
               <summary>
                 <Settings2 aria-hidden="true" />
                 <span>Settings</span>
@@ -1442,6 +1742,13 @@ export default function Home() {
                     onChange={(event) => {
                       const enabled = event.target.checked;
                       soundRef.current = enabled;
+                      trackEvent('setting_changed', {
+                        surface: 'solo',
+                        setting: 'sound',
+                        previous_value: sound,
+                        value: enabled,
+                        source: 'user',
+                      });
                       setSound(enabled);
                       audio.current?.setEnabled(enabled);
                       if (enabled) tone('gem');
@@ -1455,6 +1762,13 @@ export default function Home() {
                     checked={music}
                     onChange={(event) => {
                       const enabled = event.target.checked;
+                      trackEvent('setting_changed', {
+                        surface: 'solo',
+                        setting: 'music',
+                        previous_value: music,
+                        value: enabled,
+                        source: 'user',
+                      });
                       setMusic(enabled);
                       audio.current ??= new TowerAudio();
                       audio.current.setMusicEnabled(enabled);
@@ -1475,6 +1789,13 @@ export default function Home() {
                     type="checkbox"
                     checked={quality}
                     onChange={(event) => {
+                      trackEvent('setting_changed', {
+                        surface: 'solo',
+                        setting: 'quality',
+                        previous_value: quality,
+                        value: event.target.checked,
+                        source: 'user',
+                      });
                       setQuality(event.target.checked);
                       world.current?.setQuality(event.target.checked);
                     }}
@@ -1487,7 +1808,16 @@ export default function Home() {
                     const request = document.fullscreenElement
                       ? document.exitFullscreen()
                       : document.documentElement.requestFullscreen?.();
+                    if (!request)
+                      trackEvent('fullscreen_failed', {
+                        surface: 'solo',
+                        error_code: 'unavailable',
+                      });
                     void request?.catch(() => {
+                      trackEvent('fullscreen_failed', {
+                        surface: 'solo',
+                        error_code: 'rejected',
+                      });
                       setToast('Fullscreen is unavailable in this view.');
                       setTimeout(() => setToast(''), 3500);
                     });
@@ -1544,12 +1874,34 @@ export default function Home() {
           />
           <Button
             onClick={() => {
-              void navigator.clipboard
-                ?.writeText(dailyShare)
-                .then(() => setCopyStatus('Link copied.'))
-                .catch(() => setCopyStatus('Select and copy the link above.'));
-              if (!navigator.clipboard)
+              const operationId = analyticsId();
+              const props = {
+                share_type: 'daily',
+                method: 'clipboard',
+                operation_id: operationId,
+              };
+              telemetry.current.event('share_attempted', props);
+              if (!navigator.clipboard) {
+                telemetry.current.event('share_failed', {
+                  ...props,
+                  error_code: 'unavailable',
+                });
                 setCopyStatus('Select and copy the link above.');
+                return;
+              }
+              void navigator.clipboard
+                .writeText(dailyShare)
+                .then(() => {
+                  telemetry.current.event('share_completed', props);
+                  setCopyStatus('Link copied.');
+                })
+                .catch(() => {
+                  telemetry.current.event('share_failed', {
+                    ...props,
+                    error_code: 'clipboard_failed',
+                  });
+                  setCopyStatus('Select and copy the link above.');
+                });
             }}
           >
             Copy link
@@ -1567,9 +1919,15 @@ export default function Home() {
           <SkillGoalProgression
             profile={skills}
             snapshot={game}
-            onSelect={(id) =>
-              saveSkills(selectSkillGoal(skillsRef.current, id))
-            }
+            onSelect={(id) => {
+              const next = selectSkillGoal(skillsRef.current, id);
+              if (next !== skillsRef.current)
+                telemetry.current.event('skill_goal_selected', {
+                  goal_id: id,
+                  previous_goal_id: skillsRef.current.featuredId,
+                });
+              saveSkills(next);
+            }}
           />
           <details className="advanced-challenges">
             <summary>Expert challenges · per run</summary>
@@ -1729,6 +2087,7 @@ export default function Home() {
       </Dialog>
       {sharedRun && (
         <FriendChallengeDialog
+          runId={remoteRunId}
           challenge={sharedRun.challenge}
           url={sharedRun.url}
           onClose={() => setSharedRun(null)}
@@ -1736,6 +2095,7 @@ export default function Home() {
       )}
       {leaderboardOpen && (
         <LeaderboardDialog
+          runId={submissionRun ? remoteRunId : undefined}
           open={leaderboardOpen}
           onOpenChange={setLeaderboardOpen}
           run={submissionRun}

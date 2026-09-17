@@ -1,9 +1,20 @@
+import { randomUUID } from 'node:crypto';
+import { captureServerEvent } from '../../lib/analytics-server.ts';
 import { getStore } from '@netlify/blobs';
 import type { Config } from '@netlify/functions';
 import { Leaderboard, LeaderboardError, verifySubmission } from '../../lib/leaderboard.ts';
 
 const MAX_BODY_BYTES = 192 * 1024;
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
+
+// Optional metadata is ignored unless it matches the bounded anonymous identifier contract.
+// Legacy clients can still submit without analytics metadata.
+export function submissionAnalyticsContext(payload: unknown) {
+  const data = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+  const attemptId = typeof data.submissionAttemptId === 'string' && /^[a-zA-Z0-9_-]{8,100}$/.test(data.submissionAttemptId) ? data.submissionAttemptId : randomUUID();
+  const distinctId = typeof data.analyticsDistinctId === 'string' && /^[a-zA-Z0-9:$_.-]{1,200}$/.test(data.analyticsDistinctId) ? data.analyticsDistinctId : undefined;
+  return { attemptId, distinctId };
+}
 
 export default async function handler(request: Request) {
   try {
@@ -29,7 +40,17 @@ export default async function handler(request: Request) {
     text += decoder.decode();
     let payload: unknown;
     try { payload = JSON.parse(text); } catch { return json({ error: 'Invalid score submission.' }, 400); }
-    return json(await board.submit(verifySubmission(payload)));
+    const entry = verifySubmission(payload);
+    const result = await board.submit(entry);
+    const { attemptId, distinctId } = submissionAnalyticsContext(payload);
+    // Only capture after the authoritative board operation succeeds. An accepted
+    // score outside the top 50 is verified but does not create a stored board row.
+    if (distinctId) await captureServerEvent('score_verified', distinctId, {
+      surface: 'solo', submission_attempt_id: attemptId, mode: entry.mode,
+      score: entry.score, floor: entry.floor, best_combo: entry.combo,
+      active_duration_s: entry.duration / 1000, rank: result.rank, top_50: result.rank !== null,
+    }, `score-verified:${entry.id}`);
+    return json(result);
   } catch (error) {
     if (error instanceof LeaderboardError) return json({ error: error.message }, error.status);
     console.error('Leaderboard request failed', error);

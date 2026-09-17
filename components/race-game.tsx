@@ -43,6 +43,8 @@ import { ComboFeedbackTracker } from '@/lib/combo-feedback';
 import { GraphicsRecovery } from '@/lib/graphics-recovery';
 import { readProfile, OUTFIT_STORAGE_KEY } from '@/lib/outfits';
 import type { TowerWorld } from '@/lib/tower-world';
+import { trackEvent, analyticsId } from '@/lib/analytics';
+import { RaceAnalyticsTransitions } from '@/lib/race-analytics';
 import styles from './race-game.module.css';
 
 const sessionKey = (room: string) => `frostbound-race:${room}`;
@@ -56,6 +58,43 @@ const sameSettings = (a: RaceSettings, b: RaceSettings) =>
   a.bumping === b.bumping;
 
 export function RaceGame() {
+  const analytics = useRef(new RaceAnalyticsTransitions());
+  const analyticsRoom = useRef('');
+  const respawnOrdinal = useRef(0);
+  const shoveCounts = useRef({ attempts: 0, accepted: 0 });
+  const inputType = useRef('keyboard');
+  const left = useRef(false);
+  function capture(
+    name: string,
+    properties: Record<
+      string,
+      string | number | boolean | null | undefined
+    > = {},
+    current = roomRef.current,
+  ) {
+    trackEvent(name, {
+      surface: 'race',
+      run_context: 'multiplayer',
+      analytics_room_id: analyticsRoom.current || undefined,
+      role: current?.you,
+      round: current?.round,
+      phase: current?.phase,
+      target_floor: current?.settings.targetFloor,
+      duration_ms: current?.settings.durationMs,
+      bumping: current?.settings.bumping,
+      ...properties,
+    });
+  }
+  function failure(error: unknown) {
+    return error instanceof RaceRequestError
+      ? `http_${error.status}`
+      : 'network_error';
+  }
+  function trackLeave(reason: string) {
+    if (left.current || !roomRef.current) return;
+    left.current = true;
+    capture('race_left', { reason });
+  }
   const canvas = useRef<HTMLCanvasElement>(null);
   const world = useRef<TowerWorld | null>(null);
   const connection = useRef<RaceConnection | null>(null);
@@ -121,12 +160,29 @@ export function RaceGame() {
 
   function receive(next: RaceView) {
     const previous = roomRef.current;
+    for (const event of analytics.current.receive(next))
+      capture(
+        event.name,
+        {
+          ...event.properties,
+          ...(event.name === 'race_results_viewed'
+            ? {
+                shove_attempts: shoveCounts.current.attempts,
+                shove_accepted: shoveCounts.current.accepted,
+                respawn_count: respawnOrdinal.current,
+              }
+            : {}),
+        },
+        next,
+      );
     if (
       runner.current?.round !== next.round ||
       previous?.id !== next.id ||
       (previous && !sameSettings(previous.settings, next.settings))
     ) {
       runner.current = new RaceRunner(next.round, next.seed, next.settings);
+      respawnOrdinal.current = 0;
+      shoveCounts.current = { attempts: 0, accepted: 0 };
       rival.current = new RaceRival();
       friendPoseRef.current = null;
       nextShoveAt.current = 0;
@@ -153,7 +209,14 @@ export function RaceGame() {
           if (connection.current === client) receivePose(pose, round, 'peer');
         },
         onState: (state) => {
-          if (connection.current === client) setPeerState(state);
+          if (connection.current === client) {
+            if (analytics.current.transport(state))
+              capture('race_transport_changed', {
+                state,
+                transport: state === 'live' ? 'peer' : 'http',
+              });
+            setPeerState(state);
+          }
         },
         onRoomUpdate: () => {
           if (connection.current === client) wakePoll.current?.();
@@ -180,6 +243,10 @@ export function RaceGame() {
 
   async function connect(join: boolean, restored?: RaceSession | null) {
     if (busy) return;
+    const attemptId = analyticsId();
+    const startedAt = performance.now();
+    const operation = restored ? 'restore' : join ? 'join' : 'create';
+    trackLeave('replaced');
     setBusy(true);
     setNetworkError('');
     setBlocked(false);
@@ -199,6 +266,14 @@ export function RaceGame() {
     }
     previous?.close();
     closePeer();
+    analyticsRoom.current = analyticsId();
+    analytics.current = new RaceAnalyticsTransitions();
+    left.current = false;
+    capture(
+      'race_connection_attempted',
+      { attempt_id: attemptId, operation },
+      null,
+    );
     const client = new RaceConnection(next, receive);
     connection.current = client;
     runner.current = null;
@@ -220,7 +295,23 @@ export function RaceGame() {
       else if (restored && view.phase === 'countdown')
         await client.send({ action: 'ready', round: view.round, ready: false });
       setSession(next);
+      capture(
+        join ? 'race_room_joined' : 'race_room_created',
+        {
+          attempt_id: attemptId,
+          operation,
+          restored: !!restored,
+          latency_ms: Math.round(performance.now() - startedAt),
+        },
+        view,
+      );
     } catch (error) {
+      capture('race_connection_failed', {
+        attempt_id: attemptId,
+        operation,
+        error_code: failure(error),
+        latency_ms: Math.round(performance.now() - startedAt),
+      });
       setNetworkError(
         error instanceof Error ? error.message : 'Could not open the race.',
       );
@@ -245,12 +336,19 @@ export function RaceGame() {
     audio.current.setPaused(true);
     audio.current.setEnabled(soundRef.current);
     try {
-      await client.send({
+      const updated = await client.send({
         action,
         round: current.round,
         ready: !current.players.find((p) => p.slot === current.you)?.ready,
       });
+      if (action === 'rematch' && analytics.current.rematch(current.round))
+        capture(
+          'race_rematch_requested',
+          { prior_round: current.round, next_round: updated.round },
+          current,
+        );
     } catch (error) {
+      capture('race_action_failed', { action, error_code: failure(error) });
       setNetworkError(
         error instanceof Error ? error.message : 'Could not update this race.',
       );
@@ -274,12 +372,26 @@ export function RaceGame() {
     setBusy(true);
     setNetworkError('');
     try {
-      await client.send({
+      const updated = await client.send({
         action: 'configure',
         round: current.round,
         settings: draftSettings,
       });
+      if (!sameSettings(current.settings, updated.settings))
+        capture(
+          'race_settings_changed',
+          {
+            previous_target_floor: current.settings.targetFloor,
+            previous_duration_ms: current.settings.durationMs,
+            previous_bumping: current.settings.bumping,
+          },
+          updated,
+        );
     } catch (error) {
+      capture('race_action_failed', {
+        action: 'configure',
+        error_code: failure(error),
+      });
       setNetworkError(
         error instanceof Error ? error.message : 'Could not save race rules.',
       );
@@ -305,6 +417,7 @@ export function RaceGame() {
     )
       return;
     shovePending.current = true;
+    shoveCounts.current.attempts++;
     nextShoveAt.current = client.now() + 1_500;
     setShoveReady(false);
     try {
@@ -315,6 +428,7 @@ export function RaceGame() {
         pose: local.pose,
         seq: sendSequence.current++,
       });
+      shoveCounts.current.accepted++;
     } catch (error) {
       if (
         connection.current === client &&
@@ -332,6 +446,7 @@ export function RaceGame() {
   }
 
   async function leave() {
+    trackLeave('button');
     resetInput();
     setBusy(true);
     const client = connection.current;
@@ -352,6 +467,10 @@ export function RaceGame() {
       if (disposed) return;
       const value = new URLSearchParams(window.location.search).get('room');
       if (value === null) return;
+      capture('shared_link_opened', {
+        link_type: 'race',
+        result: validRaceId(value) ? 'valid' : 'invalid',
+      });
       if (!validRaceId(value)) {
         setNetworkError(
           'This invite link is invalid. Create a new race below.',
@@ -409,10 +528,21 @@ export function RaceGame() {
                 ...(local.started ? { pose: local.pose } : {}),
               },
         );
-        if (!stopped) setNetworkError('');
+        if (!stopped) {
+          const restored = analytics.current.restored(performance.now());
+          if (restored) capture('race_connection_restored', restored);
+          setNetworkError('');
+        }
         if (client.view?.phase === 'finishing') delay = 100;
       } catch (error) {
         if (stopped) return;
+        // Concurrent ready/rematch responses can supersede an in-flight poll.
+        // A rejected old-round request is not a transport outage.
+        if (
+          !(error instanceof RaceRequestError && error.status === 409) &&
+          analytics.current.lost(performance.now())
+        )
+          capture('race_connection_lost', { error_code: failure(error) });
         fatal =
           error instanceof RaceRequestError &&
           [400, 401, 403, 404, 410].includes(error.status);
@@ -446,6 +576,7 @@ export function RaceGame() {
     wakePoll.current = wake;
     void poll();
     const onPageHide = () => {
+      trackLeave('page_exit');
       if (!client.view || client.view.phase === 'finished') return;
       void fetch(RACE_API, {
         method: 'POST',
@@ -471,6 +602,20 @@ export function RaceGame() {
   }, [session]);
 
   useEffect(() => {
+    const loadId = analyticsId();
+    const loadStarted = performance.now();
+    let loadStage = 'import';
+    let graphicsLostAt = 0;
+    let readyTracked = false;
+    const ready = () => {
+      if (readyTracked || !modelLoaded || graphics?.blocked) return;
+      readyTracked = true;
+      capture('game_ready', {
+        load_id: loadId,
+        load_duration_ms: Math.round(performance.now() - loadStarted),
+      });
+    };
+    capture('game_load_started', { load_id: loadId });
     let disposed = false,
       frame = 0,
       previous = 0,
@@ -508,6 +653,7 @@ export function RaceGame() {
       const control = keyControl(event.key);
       if (!control) return;
       event.preventDefault();
+      inputType.current = 'keyboard';
       input.current.press(`key:${event.code}`, control);
     };
     const keyUp = (event: KeyboardEvent) => {
@@ -531,6 +677,7 @@ export function RaceGame() {
     import('@/lib/tower-world')
       .then(async ({ TowerWorld }) => {
         if (disposed || !canvas.current) return;
+        loadStage = 'world';
         const scene = new TowerWorld(canvas.current);
         world.current = scene;
         const stopGraphics = (message: string) => {
@@ -540,16 +687,30 @@ export function RaceGame() {
           setRenderError(message);
         };
         graphics = new GraphicsRecovery(canvas.current, {
-          lost: () =>
+          lost: () => {
+            graphicsLostAt = performance.now();
+            capture('graphics_context_lost', { load_id: loadId });
             stopGraphics(
               'Graphics were interrupted. The shared race clock continues while they reconnect.',
-            ),
+            );
+          },
           restored: () => {
+            capture('graphics_context_restored', {
+              load_id: loadId,
+              recovery_duration_ms: Math.round(
+                performance.now() - graphicsLostAt,
+              ),
+              quality_fallback: true,
+            });
             scene.setQuality(false);
             setRenderError('');
             setLoaded(modelLoaded);
           },
           failed: (error) => {
+            capture('graphics_failed', {
+              load_id: loadId,
+              error_code: 'render_failed',
+            });
             console.error('Frostbound race rendering stopped.', error);
             stopGraphics('The graphics stopped working. Reload to reconnect.');
           },
@@ -579,25 +740,38 @@ export function RaceGame() {
         }
         modelLoaded = true;
         setLoaded(!graphics.blocked);
+        ready();
         const animate = (now: number) => {
           if (disposed) return;
           const dt = Math.min(0.1, (now - (previous || now)) / 1000);
           previous = now;
           graphics?.frame(() => {
+            ready();
             const local = runner.current,
               current = roomRef.current;
             const serverNow = connection.current?.now() ?? Date.now();
             if (local && current) {
               const wasStarted = local.started;
               const wasRecorded = !!local.recording;
+              const wasRespawning = local.respawning;
               local.advance(
                 serverNow,
                 current.startAt,
                 input.current.controls,
                 current.phase === 'finished',
               );
+              if (wasRespawning && !local.respawning && !local.recording)
+                capture('race_respawned', {
+                  checkpoint_floor: local.checkpointFloor,
+                  respawn_ordinal: ++respawnOrdinal.current,
+                });
               if (!wasRecorded && local.recording) wakePoll.current?.();
               if (!wasStarted && local.started) {
+                if (analytics.current.started(current.round))
+                  capture('race_started', {
+                    input_type: inputType.current,
+                    rules_version: local.engine.rulesVersion,
+                  });
                 resetInput();
                 comboFeedback.current.reset();
                 audio.current?.resetRun();
@@ -664,8 +838,15 @@ export function RaceGame() {
       })
       .catch((error) => {
         console.error('Frostbound race could not load.', error);
-        if (!disposed)
+        if (!disposed) {
+          capture('game_load_failed', {
+            load_id: loadId,
+            stage: loadStage,
+            error_code: 'load_failed',
+            load_duration_ms: Math.round(performance.now() - loadStarted),
+          });
           setRenderError('The tower could not load. Try reloading this page.');
+        }
       });
     return () => {
       disposed = true;
@@ -742,6 +923,7 @@ export function RaceGame() {
       disabled={!loaded || !!renderError}
       onPointerDown={(event) => {
         event.preventDefault();
+        inputType.current = 'touch';
         event.currentTarget.setPointerCapture(event.pointerId);
         input.current.press(`touch:${event.pointerId}`, control);
         setPressed({ ...input.current.controls });
@@ -783,6 +965,12 @@ export function RaceGame() {
           aria-label={sound ? 'Mute sound' : 'Enable sound'}
           onClick={() => {
             const enabled = !sound;
+            capture('setting_changed', {
+              setting: 'sound',
+              previous_value: sound,
+              value: enabled,
+              source: 'user',
+            });
             setSound(enabled);
             soundRef.current = enabled;
             audio.current ??= new TowerAudio();
@@ -800,6 +988,12 @@ export function RaceGame() {
           aria-pressed={music}
           onClick={() => {
             const enabled = !music;
+            capture('setting_changed', {
+              setting: 'music',
+              previous_value: music,
+              value: enabled,
+              source: 'user',
+            });
             setMusic(enabled);
             audio.current ??= new TowerAudio();
             audio.current.setMusicEnabled(enabled);
@@ -1006,10 +1200,22 @@ export function RaceGame() {
                   type="button"
                   aria-label="Copy invite link"
                   onClick={async () => {
+                    const operationId = analyticsId();
+                    const properties = {
+                      share_type: 'race',
+                      method: 'clipboard',
+                      operation_id: operationId,
+                    };
+                    capture('share_attempted', properties);
                     try {
                       await navigator.clipboard.writeText(invite);
                       setCopied(true);
+                      capture('share_completed', properties);
                     } catch {
+                      capture('share_failed', {
+                        ...properties,
+                        error_code: 'clipboard_failed',
+                      });
                       setNetworkError(
                         'Select the invite link and copy it to share.',
                       );

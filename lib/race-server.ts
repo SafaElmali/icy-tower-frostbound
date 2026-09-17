@@ -408,10 +408,17 @@ export class RaceService {
   private store: RaceStore;
   private clock: () => number;
   private seed: () => number;
-  constructor(store: RaceStore, clock = Date.now, seed = randomSeed) {
+  private onFinished?: (result: RaceView) => Promise<void>;
+  constructor(
+    store: RaceStore,
+    clock = Date.now,
+    seed = randomSeed,
+    onFinished?: (result: RaceView) => Promise<void>,
+  ) {
     this.store = store;
     this.clock = clock;
     this.seed = seed;
+    this.onFinished = onFinished;
   }
 
   async act(input: unknown, token: string): Promise<RaceView> {
@@ -616,7 +623,17 @@ export class RaceService {
         ...(current ? { onlyIfMatch: current.etag! } : { onlyIfNew: true }),
         metadata: { expiresAt: room.expiresAt },
       });
-      if (result.modified) return view(room, player.slot, now);
+      if (result.modified) {
+        const response = view(room, player.slot, now);
+        if (room.finished && !current?.data.finished && this.onFinished) {
+          try {
+            await this.onFinished(response);
+          } catch {
+            /* Optional measurement cannot invalidate a committed result. */
+          }
+        }
+        return response;
+      }
     }
     throw new RaceError('The room is busy. Reconnecting…', 503);
   }

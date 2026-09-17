@@ -22,7 +22,9 @@ For a subsequent controlled comparison, assign participants to versions before p
 
 ## Built-in local report
 
-Open **Playtest measurements** to inspect, export JSON or clear data. The game stores at most 300 run records locally; no data is transmitted. Browser storage denial falls back to memory. Exports contain timestamps, session/run IDs, device category, mode, feature version, completed goal IDs and end-of-run performance, with no player name, typed input or input replay.
+The report below remains local. Production builds now also send separate anonymous semantic events to PostHog; they do not upload the local report or control recordings. See [product analytics setup](posthog-setup.md) for configuration, dashboard definitions, opt-out behavior, and delivery limits. Local and remote measurements have separate identifiers and retention semantics.
+
+Open **Playtest measurements** to inspect, export JSON or clear data. The report stores at most 300 run records locally; these records are not transmitted. Browser storage denial falls back to memory. Exports contain timestamps, session/run IDs, device category, mode, feature version, completed goal IDs and end-of-run performance, with no player name, typed input or input replay.
 
 `beginRun` records an actual player-started run, not opening the home page. `finishRun` is idempotent; `abandonRun` separately marks menu exits, restarts and unloads without treating them as deaths. Unfinished/abandoned runs remain in start denominators. `completeGoal` records each completed skill goal once per run. Practice, daily and challenge contexts must be labelled distinctly when invoking the API. Device uses coarse pointer as a practical mobile proxy, not exact hardware identification.
 
@@ -30,7 +32,7 @@ Reports split by device, mode and feature version. A session spans starts, finis
 
 Next-day return is a run in the same group on the UTC calendar day following its first run. A negative result is only assigned after that full UTC day has elapsed. UTC does not match every participant's local day. One installation produces at most one acquisition/return observation per group; exported records are required to combine separate consenting participants. After any history eviction, acquisition retention is marked unavailable, while run/session rates describe retained history and may contain partial sessions. Browser clears, shared browsers, multiple devices, multiple tabs and manual clock changes limit interpretation. Use one active tab during supervised tests.
 
-For aggregation, combine one export per anonymous participant; if collecting updates, replace their previous export rather than double-counting. Filter by the predefined version/device/mode, use the first session for the experiment's primary measure, and exclude pending/truncated next-day observations from the mature return denominator. Collect next-day exports after the observation window through the chosen consented research process. There is no central dashboard or automatic cross-person inference.
+For aggregation, combine one export per anonymous participant; if collecting updates, replace their previous export rather than double-counting. Filter by the predefined version/device/mode, use the first session for the experiment's primary measure, and exclude pending/truncated next-day observations from the mature return denominator. Collect next-day exports after the observation window through the chosen consented research process. This local report does not aggregate across participants; the separate PostHog dashboard measures anonymous browser events.
 
 ## Action mechanics diagnostic round
 

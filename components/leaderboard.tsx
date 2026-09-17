@@ -12,22 +12,29 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 import { OutfitBadges } from '@/components/wardrobe';
 import type { Outfit } from '@/lib/outfits';
+import { analyticsId, getAnalyticsDistinctId, trackEvent } from '@/lib/analytics';
 
 const ENDPOINT = '/.netlify/functions/leaderboard';
 
-export function LeaderboardDialog({ open, onOpenChange, run, initialMode, outfit }: { open: boolean; onOpenChange: (open: boolean) => void; run: RunReplay | null; initialMode: RankedMode; outfit: Outfit }) {
+export function LeaderboardDialog({ open, onOpenChange, run, initialMode, outfit, runId }: { open: boolean; onOpenChange: (open: boolean) => void; run: RunReplay | null; initialMode: RankedMode; outfit: Outfit; runId?: string }) {
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="leaderboard-card">
     <div className="leaderboard-heading"><Trophy size={28} strokeWidth={1.4} /><div><DialogTitle>Hall of climbers</DialogTitle><DialogDescription>Top 50 by score. Classic and Party rank separately.</DialogDescription></div></div>
     <Tabs defaultValue={run ? replayMode(run) : initialMode} className="ranking-tabs">
       <TabsList aria-label="Ranking mode"><TabsTrigger value="arcade">Classic</TabsTrigger><TabsTrigger value="party">Party</TabsTrigger></TabsList>
       {(['arcade', 'party'] as const).map(mode => <TabsContent key={mode} value={mode}>
-        <Rankings mode={mode} outfit={outfit} run={run && replayMode(run) === mode ? run : null} />
+        <Rankings mode={mode} outfit={outfit} runId={runId} run={run && replayMode(run) === mode ? run : null} />
       </TabsContent>)}
     </Tabs>
   </DialogContent></Dialog>;
 }
 
-function Rankings({ mode, run, outfit }: { mode: RankedMode; run: RunReplay | null; outfit: Outfit }) {
+function Rankings({ mode, run, outfit, runId }: { mode: RankedMode; run: RunReplay | null; outfit: Outfit; runId?: string }) {
+  const viewed = useRef(false);
+  useEffect(() => {
+    if (viewed.current) return;
+    viewed.current = true;
+    trackEvent('leaderboard_viewed', { surface: 'solo', mode, submission_eligible: !!run, source: run ? 'results' : 'menu', run_id: runId });
+  }, [mode, run, runId]);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -39,15 +46,24 @@ function Rankings({ mode, run, outfit }: { mode: RankedMode; run: RunReplay | nu
 
   const load = useCallback(async () => {
     request.current?.abort(); const controller = new AbortController(); request.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const requestId = analyticsId(), startedAt = performance.now();
+    let errorCode = 'network';
+    const timeout = setTimeout(() => { errorCode = 'timeout'; controller.abort(); }, 12000);
     try {
       const response = await fetch(`${ENDPOINT}?mode=${mode}`, { signal: controller.signal, cache: 'no-store' });
-      if (!response.ok) throw new Error('The leaderboard is unavailable. Please try again.');
+      if (!response.ok) { errorCode = 'http'; throw new Error('The leaderboard is unavailable. Please try again.'); }
+      errorCode = 'invalid_response';
       const data = await response.json() as { entries: LeaderboardEntry[]; error?: string; id: string; rank: number | null };
-      if (!Array.isArray(data.entries)) throw new Error('The leaderboard is unavailable. Please try again.');
-      if (request.current === controller) setEntries(data.entries);
+      if (!Array.isArray(data.entries)) { errorCode = 'invalid_response'; throw new Error('The leaderboard is unavailable. Please try again.'); }
+      if (request.current === controller) {
+        setEntries(data.entries);
+        trackEvent('leaderboard_loaded', { surface: 'solo', mode, request_id: requestId, latency_ms: Math.round(performance.now() - startedAt), result_count: data.entries.length });
+      }
     } catch {
-      if (request.current === controller) setLoadError('Could not load the leaderboard. Check your connection and try again.');
+      if (request.current === controller) {
+        setLoadError('Could not load the leaderboard. Check your connection and try again.');
+        trackEvent('leaderboard_load_failed', { surface: 'solo', mode, request_id: requestId, latency_ms: Math.round(performance.now() - startedAt), error_code: errorCode });
+      }
     } finally { clearTimeout(timeout); if (request.current === controller) setLoading(false); }
   }, [mode]);
   useEffect(() => {
@@ -56,19 +72,29 @@ function Rankings({ mode, run, outfit }: { mode: RankedMode; run: RunReplay | nu
     return () => { active = false; const previous = request.current; request.current = null; previous?.abort(); };
   }, [run, load]);
 
-  function refresh() { setLoading(true); setLoadError(''); void load(); }
+  function refresh() { trackEvent('leaderboard_refreshed', { surface: 'solo', mode, reason: loadError ? 'retry' : 'refresh' }); setLoading(true); setLoadError(''); void load(); }
 
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault(); if (!run || sending) return;
     const previous = request.current; request.current = null; previous?.abort(); setLoading(false);
     setSending(true); setSubmitError('');
+    const submissionAttemptId = analyticsId(), startedAt = performance.now();
+    const properties = { surface: 'solo', mode, submission_attempt_id: submissionAttemptId, run_id: runId, rules_version: run.version };
+    let errorCode = 'network', status: number | undefined;
+    trackEvent('score_submission_started', properties);
     try {
-      const response = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, replay: run, outfit }), signal: AbortSignal.timeout(20000) });
+      const response = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, replay: run, outfit, submissionAttemptId, analyticsDistinctId: getAnalyticsDistinctId() }), signal: AbortSignal.timeout(20000) });
+      status = response.status;
+      errorCode = !response.ok ? (response.status < 500 ? 'rejected' : 'unavailable') : 'invalid_response';
       const data = await response.json() as { entries: LeaderboardEntry[]; error?: string; id: string; rank: number | null };
-      if (!response.ok) throw new Error(data.error || 'Could not submit your score. Please try again.');
+      if (!response.ok) { errorCode = response.status < 500 ? 'rejected' : 'unavailable'; throw new Error(data.error || 'Could not submit your score. Please try again.'); }
+      if (!Array.isArray(data.entries) || typeof data.id !== 'string' || !(data.rank === null || (Number.isInteger(data.rank) && data.rank > 0))) { errorCode = 'invalid_response'; throw new Error('The leaderboard returned an invalid response. Please try again.'); }
+      trackEvent('score_submission_succeeded', { ...properties, rank: data.rank, top_50: data.rank !== null, latency_ms: Math.round(performance.now() - startedAt) });
       setEntries(data.entries); setLoadError(''); setSubmitted({ id: data.id, rank: data.rank });
       try { localStorage.setItem('frostbound-player-name', name.trim()); } catch { /* Optional remembered name. */ }
-    } catch (error) { setSubmitError(error instanceof Error && error.name !== 'TimeoutError' ? error.message : 'The connection timed out. Your run is still here; try submitting again.'); }
+    } catch (error) {
+      trackEvent('score_submission_failed', { ...properties, status, error_code: error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : errorCode, latency_ms: Math.round(performance.now() - startedAt) });
+      setSubmitError(error instanceof Error && error.name !== 'TimeoutError' ? error.message : 'The connection timed out. Your run is still here; try submitting again.'); }
     finally { setSending(false); }
   }
 

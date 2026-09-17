@@ -36,9 +36,23 @@ const localBindingConfig = {
 };
 
 export default defineConfig(async () => {
+  const analyticsBuild = {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(
+      process.env.VITE_APP_VERSION ||
+        process.env.COMMIT_REF ||
+        process.env.GITHUB_SHA ||
+        '0.1.0',
+    ),
+    'import.meta.env.VITE_APP_ENV': JSON.stringify(
+      process.env.VITE_APP_ENV ||
+        process.env.CONTEXT ||
+        (process.env.NODE_ENV === 'production' ? 'production' : 'development'),
+    ),
+  };
   // The game runs entirely in the browser; Netlify serves a static export.
   if (process.env.DEPLOY_TARGET === 'netlify') {
     return {
+      define: analyticsBuild,
       css: { postcss: { plugins: [tailwindcss()] } },
       plugins: [raceDevelopmentServer(), vinext()],
     };
@@ -53,6 +67,7 @@ export default defineConfig(async () => {
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
   return {
+    define: analyticsBuild,
     css: { postcss: { plugins: [tailwindcss()] } },
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
