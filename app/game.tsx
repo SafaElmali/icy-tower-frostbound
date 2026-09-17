@@ -179,7 +179,7 @@ export default function Home() {
   );
   const profileRef = useRef(profile);
   const [storageAvailable, setStorageAvailable] = useState(true);
-  const [unlockNotice, setUnlockNotice] = useState('');
+  const [newOutfits, setNewOutfits] = useState<string[]>([]);
   const [bests, setBests] = useState(emptyBests);
   const best = bests[mode];
   const [toast, setToast] = useState('');
@@ -451,12 +451,8 @@ export default function Home() {
   function openWardrobe() {
     if (engine.current?.status === 'playing') pause('outfits_dialog');
     setWardrobeOpen(true);
+    setNewOutfits([]);
   }
-  useEffect(() => {
-    if (!unlockNotice) return;
-    const timer = setTimeout(() => setUnlockNotice(''), 6000);
-    return () => clearTimeout(timer);
-  }, [unlockNotice]);
 
   function resetInput() {
     input.current.reset();
@@ -969,9 +965,9 @@ export default function Home() {
                     });
                   saveProfile({ ...current, progress });
                   if (earned.length)
-                    setUnlockNotice(
-                      `Unlocked: ${earned.map((item) => item.name).join(', ')}. Find it in Outfits.`,
-                    );
+                    setNewOutfits((previous) => [
+                      ...new Set([...previous, ...earned.map((item) => item.name)]),
+                    ]);
                 }
               }
               if (events.length || now - sync > 65)
@@ -1237,9 +1233,10 @@ export default function Home() {
       }}
       aria-haspopup="dialog"
       aria-expanded={menuOpen}
-      aria-label={game.status === 'playing' ? 'Pause and open menu' : 'Menu'}
+      aria-label={`${game.status === 'playing' ? 'Pause and open menu' : 'Menu'}${newOutfits.length ? ', new outfits available' : ''}`}
     >
       <Menu size={18} /> <span>Menu</span>
+      {newOutfits.length > 0 && <i className={menuStyles.unlockDot} aria-hidden="true" />}
     </Button>
   );
 
@@ -1696,9 +1693,14 @@ export default function Home() {
                 onClick={() => fromMenu(openWardrobe)}
               >
                 <Shirt aria-hidden="true" />
-                <span>Outfits</span>
+                <span>Outfits{' '}{newOutfits.length > 0 && <span className={menuStyles.newLabel}>New</span>}</span>
                 <ChevronRight aria-hidden="true" />
               </Button>
+              {newOutfits.length > 0 && (
+                <p className={menuStyles.unlockDetails}>
+                  Unlocked: {newOutfits.join(', ')}. Open Outfits to try them on.
+                </p>
+              )}
               <Button
                 className={menuStyles.row}
                 variant="ghost"
@@ -2110,12 +2112,6 @@ export default function Home() {
         onEquip={equip}
         storageAvailable={storageAvailable}
       />
-      {unlockNotice && (
-        <output className="toast unlock-toast" aria-live="polite">
-          <Shirt size={18} />
-          <span>{unlockNotice}</span>
-        </output>
-      )}
       {error && (
         <div className="error-message" role="alert">
           {error}

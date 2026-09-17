@@ -239,3 +239,29 @@
     margin-bottom: 18px;
   }
 }
+
+/* Unlocks stay in the paused menu; only a quiet marker appears during play. */
+.unlockDot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c4e7be;
+  pointer-events: none;
+}
+
+.newLabel {
+  margin-left: 8px;
+  color: #c4e7be;
+  font-size: 10px;
+}
+
+.unlockDetails {
+  margin: 0 10px 12px 42px;
+  color: #a9c5bd;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

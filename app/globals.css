@@ -50,8 +50,6 @@
 .wardrobe-item>strong{font-size:14px;font-weight:600}.wardrobe-achievement{font-size:13px;line-height:1.5;font-weight:400;color:#a4bdc7}
 .wardrobe-item-status{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:500;margin-top:auto;padding-top:6px;color:#b8d8d7}
 .is-equipped .wardrobe-item-status{color:#c1ebcd}.wardrobe-note{font-size:13px;line-height:1.6;color:#9ab5c0;margin:18px 0 0}
-.unlock-toast{display:flex;align-items:center;gap:12px;max-width:calc(100vw - 36px);width:max-content;font-size:14px;border-color:#a1d8b377;pointer-events:none;box-shadow:0 10px 35px #0005}
-.unlock-toast svg{flex-shrink:0;color:#c4e7be}
 @media(max-width:520px){.wardrobe-card[data-slot=dialog-content]{padding:23px 16px}.wardrobe-options{gap:7px}.wardrobe-item{padding:12px 9px;min-height:210px}.wardrobe-equipped{align-items:flex-start;flex-direction:column;gap:9px}.wardrobe-swatch{align-items:flex-start;flex-direction:column;gap:8px}.wardrobe-heading [data-slot=dialog-title]{font-size:30px}.wardrobe-item>strong{line-height:1.4}.wardrobe-heading [data-slot=dialog-description]{font-size:14px}.outfit-badges{gap:3px;margin-left:5px}.outfit-badges>span{padding:2px}.climber-name{min-width:120px}.collection-menu{gap:18px}.topbar{padding-inline:16px}.topbar-right{gap:6px}}
 @media(max-width:360px){.wardrobe-options{grid-template-columns:1fr}.wardrobe-item{min-height:0}.wardrobe-swatch{flex-direction:row}.brand{gap:6px}.utility{width:30px;height:30px}}
 
@@ -297,7 +295,7 @@
 
 /* Keep the title focused on starting a climb. Secondary actions live in Menu. */
 .state-ready .brand > span { display: none; }
-.menu-toggle { min-height: 44px; padding: 0 14px; gap: 9px; color: #d5e5e3; font-size: 13px; border: 1px solid #a2ccd22b; background: #09192366; border-radius: 24px; }
+.menu-toggle { position: relative; min-height: 44px; padding: 0 14px; gap: 9px; color: #d5e5e3; font-size: 13px; border: 1px solid #a2ccd22b; background: #09192366; border-radius: 24px; }
 .state-ready .title-screen {
   top: 50%; bottom: auto; left: 9%; right: auto; width: 470px;
   max-width: calc(100% - 48px); max-height: calc(100dvh - 160px);
@@ -418,8 +416,6 @@
   overflow-wrap: anywhere;
   text-align: left;
 }
-.unlock-toast { font-size: 13px; }
-.unlock-toast > span { min-width: 0; }
 @media (min-width: 761px) and (min-height: 501px) and (pointer: fine) {
   .state-playing > .toast, .state-paused > .toast {
     left: auto;
