@@ -7,15 +7,15 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { applyCharacterOutfit } from './character-outfit';
-import { ClimberMotion } from './climber-motion';
-import { ComboStarTrail } from './combo-star-trail';
-import { cosmeticFor, normalizeOutfit, type Outfit } from './outfits';
-import { TowerInterior } from './tower-interior';
-import { PersonalBestMarker } from './personal-best-marker';
-import { getTowerSection } from './tower-sections';
-import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
-import { TowerActionWorld, type CrumbleVisual } from './tower-action-world';
+import { applyCharacterOutfit } from './character-outfit.ts';
+import { ClimberMotion } from './climber-motion.ts';
+import { ComboStarTrail } from './combo-star-trail.ts';
+import { cosmeticFor, normalizeOutfit, type Outfit } from './outfits.ts';
+import { TowerInterior } from './tower-interior.ts';
+import { PersonalBestMarker } from './personal-best-marker.ts';
+import { getTowerSection } from './tower-sections.ts';
+import type { TowerEngine, GameEvent, Platform } from './tower-engine.ts';
+import { TowerActionWorld, type CrumbleVisual } from './tower-action-world.ts';
 
 type ClimberView = {
   engine: Pick<TowerEngine, 'x' | 'y' | 'vx' | 'vy' | 'facing' | 'grounded' | 'time' | 'status'>;
@@ -69,6 +69,7 @@ export class TowerWorld {
   private glow: THREE.PointLight;
   private key: THREE.DirectionalLight;
   private disposed = false;
+  private loadAbort = new AbortController();
   private env: THREE.WebGLRenderTarget;
   private stone: THREE.MeshStandardMaterial;
   private snowMat = new THREE.MeshStandardMaterial({ color: 0xc2dfdf, roughness: .79, metalness: .03 });
@@ -86,53 +87,63 @@ export class TowerWorld {
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.65));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
-    this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.scene.background = new THREE.Color(0x07121e);
-    this.scene.fog = new THREE.FogExp2(0x101f2c, .018);
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    const environment = new RoomEnvironment();
-    this.env = pmrem.fromScene(environment, .04);
-    this.scene.environment = this.env.texture; this.scene.environmentIntensity = .36;
-    environment.dispose(); pmrem.dispose();
-    this.scene.add(new THREE.HemisphereLight(0x9de5ff, 0x192330, 2));
-    this.key = new THREE.DirectionalLight(0xe0f6ff, 3.3); this.key.position.set(-4, 10, 8);
-    this.key.castShadow = true; this.key.shadow.mapSize.set(1024, 1024);
-    Object.assign(this.key.shadow.camera, { left: -10, right: 10, top: 12, bottom: -12, far: 45, near: .1 });
-    this.key.shadow.bias = -.0006;
-    this.scene.add(this.key, this.key.target);
-    this.rim = new THREE.DirectionalLight(0x58cfff, 3.5); this.rim.position.set(6, 8, -6); this.scene.add(this.rim);
-    this.glow = new THREE.PointLight(0xffc692, 5, 8, 1.3); this.scene.add(this.glow);
-    this.scene.add(this.root); this.root.add(this.tumble, this.columns, this.starTrail.mesh, this.bestMarker.group, this.actionWorld.group); this.tumble.add(this.character);
-    this.camera.position.set(0, 5.2, 26); this.camera.lookAt(0, 5.2, 0);
-    const stoneNoise = this.makeNoiseTexture();
-    this.stone = new THREE.MeshStandardMaterial({ color: 0x405a65, roughness: .89, metalness: .08, bumpMap: stoneNoise, bumpScale: .12, roughnessMap: stoneNoise });
-    this.iceMat = new THREE.MeshPhysicalMaterial({ color: 0x4cbbcf, roughness: .2, metalness: .22, clearcoat: 1, clearcoatRoughness: .16, emissive: 0x185160, emissiveIntensity: .45, bumpMap: stoneNoise, bumpScale: .055 });
-    this.fallbackCharacter(); this.buildColumns(); this.batchMeshes(this.columns);
-    this.interior = new TowerInterior(stoneNoise); this.root.add(this.interior.group);
-    const shadowTexture = this.radialTexture();
-    this.groundShadow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, .42), new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, opacity: .48, depthWrite: false, color: 0x071320 }));
-    this.groundShadow.rotation.x = -Math.PI / 2; this.root.add(this.groundShadow);
-    const count = 800;
-    this.snowPositions = new Float32Array(count * 3); this.snowSeeds = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) { this.snowSeeds[i * 3] = Math.random() * 38 - 19; this.snowSeeds[i * 3 + 1] = Math.random() * 34 - 17; this.snowSeeds[i * 3 + 2] = Math.random() * 16 - 7; }
-    const snowGeo = new THREE.BufferGeometry(); snowGeo.setAttribute('position', new THREE.BufferAttribute(this.snowPositions, 3));
-    this.snow = new THREE.Points(snowGeo, new THREE.PointsMaterial({ size: .055, map: shadowTexture, transparent: true, opacity: .64, depthWrite: false, color: 0xc8e9f5, blending: THREE.AdditiveBlending }));
-    this.snow.frustumCulled = false; this.scene.add(this.snow);
-    this.frost = new THREE.Mesh(new THREE.PlaneGeometry(48, 18), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { time: { value: 0 } }, vertexShader: 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}', fragmentShader: 'varying vec2 vUv; uniform float time; void main(){float wave=sin(vUv.x*29.+time)*.025+sin(vUv.x*58.-time*.7)*.015; float a=(1.-smoothstep(.62,1.,vUv.y+wave));gl_FragColor=vec4(mix(vec3(.12,.3,.39),vec3(.28,.64,.73),vUv.y),a*.9);}' }));
-    this.frost.position.z = 2; this.root.add(this.frost);
-    this.composer = new EffectComposer(this.renderer); this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1024, 768), .32, .5, .85); this.composer.addPass(this.bloom); this.composer.addPass(new OutputPass());
-    this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(canvas); this.resize();
+    try {
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.65));
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = 1.15;
+      this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.scene.background = new THREE.Color(0x07121e);
+      this.scene.fog = new THREE.FogExp2(0x101f2c, .018);
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const environment = new RoomEnvironment();
+      try {
+        this.env = pmrem.fromScene(environment, .04);
+        this.scene.environment = this.env.texture; this.scene.environmentIntensity = .36;
+      } finally { environment.dispose(); pmrem.dispose(); }
+      this.scene.add(new THREE.HemisphereLight(0x9de5ff, 0x192330, 2));
+      this.key = new THREE.DirectionalLight(0xe0f6ff, 3.3); this.key.position.set(-4, 10, 8);
+      this.key.castShadow = true; this.key.shadow.mapSize.set(1024, 1024);
+      Object.assign(this.key.shadow.camera, { left: -10, right: 10, top: 12, bottom: -12, far: 45, near: .1 });
+      this.key.shadow.bias = -.0006;
+      this.scene.add(this.key, this.key.target);
+      this.rim = new THREE.DirectionalLight(0x58cfff, 3.5); this.rim.position.set(6, 8, -6); this.scene.add(this.rim);
+      this.glow = new THREE.PointLight(0xffc692, 5, 8, 1.3); this.scene.add(this.glow);
+      this.scene.add(this.root); this.root.add(this.tumble, this.columns, this.starTrail.mesh, this.bestMarker.group, this.actionWorld.group); this.tumble.add(this.character);
+      this.camera.position.set(0, 5.2, 26); this.camera.lookAt(0, 5.2, 0);
+      const stoneNoise = this.makeNoiseTexture();
+      this.stone = new THREE.MeshStandardMaterial({ color: 0x405a65, roughness: .89, metalness: .08, bumpMap: stoneNoise, bumpScale: .12, roughnessMap: stoneNoise });
+      this.iceMat = new THREE.MeshPhysicalMaterial({ color: 0x4cbbcf, roughness: .2, metalness: .22, clearcoat: 1, clearcoatRoughness: .16, emissive: 0x185160, emissiveIntensity: .45, bumpMap: stoneNoise, bumpScale: .055 });
+      this.fallbackCharacter(); this.buildColumns(); this.batchMeshes(this.columns);
+      this.interior = new TowerInterior(stoneNoise); this.root.add(this.interior.group);
+      const shadowTexture = this.radialTexture();
+      this.groundShadow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, .42), new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, opacity: .48, depthWrite: false, color: 0x071320 }));
+      this.groundShadow.rotation.x = -Math.PI / 2; this.root.add(this.groundShadow);
+      const count = 800;
+      this.snowPositions = new Float32Array(count * 3); this.snowSeeds = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) { this.snowSeeds[i * 3] = Math.random() * 38 - 19; this.snowSeeds[i * 3 + 1] = Math.random() * 34 - 17; this.snowSeeds[i * 3 + 2] = Math.random() * 16 - 7; }
+      const snowGeo = new THREE.BufferGeometry(); snowGeo.setAttribute('position', new THREE.BufferAttribute(this.snowPositions, 3));
+      this.snow = new THREE.Points(snowGeo, new THREE.PointsMaterial({ size: .055, map: shadowTexture, transparent: true, opacity: .64, depthWrite: false, color: 0xc8e9f5, blending: THREE.AdditiveBlending }));
+      this.snow.frustumCulled = false; this.scene.add(this.snow);
+      this.frost = new THREE.Mesh(new THREE.PlaneGeometry(48, 18), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { time: { value: 0 } }, vertexShader: 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}', fragmentShader: 'varying vec2 vUv; uniform float time; void main(){float wave=sin(vUv.x*29.+time)*.025+sin(vUv.x*58.-time*.7)*.015; float a=(1.-smoothstep(.62,1.,vUv.y+wave));gl_FragColor=vec4(mix(vec3(.12,.3,.39),vec3(.28,.64,.73),vUv.y),a*.9);}' }));
+      this.frost.position.z = 2; this.root.add(this.frost);
+      this.composer = new EffectComposer(this.renderer); this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(1024, 768), .32, .5, .85); this.composer.addPass(this.bloom); this.composer.addPass(new OutputPass());
+      this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(canvas); this.resize();
+    } catch (error) {
+      // Initialization may fail after acquiring a context or allocating targets.
+      // The caller cannot dispose an object whose constructor never returned.
+      this.dispose();
+      throw error;
+    }
   }
   async load() {
+    if (this.disposed) return;
     // The custom GLB is optional while the playable model remains available.
+    const timeout = setTimeout(() => this.loadAbort.abort(), 8000);
     try {
       // A stalled optional model must not leave Play disabled indefinitely.
-      const response = await fetch('/assets/harold.glb', { signal: AbortSignal.timeout(8000) });
+      const response = await fetch('/assets/harold.glb', { signal: this.loadAbort.signal });
       if (!response.ok) throw new Error('Climber model unavailable');
       const gltf = await new GLTFLoader().parseAsync(await response.arrayBuffer(), '/assets/');
       if (this.disposed) { gltf.scene.traverse(o => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose(); } }); return; }
@@ -144,6 +155,7 @@ export class TowerWorld {
       this.legs = ['Leg_L', 'Leg_R'].map(n => model.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
       this.arms = ['Arm_L', 'Arm_R'].map(n => model.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
     } catch { /* The built-in Harold model keeps the game playable offline. */ }
+    finally { clearTimeout(timeout); }
     if (this.disposed) return;
     this.ghostCharacter = this.character.clone(true);
     const ghostMaterial = new THREE.MeshBasicMaterial({ color: 0x91dfff, transparent: true, opacity: .32, depthWrite: false });
@@ -285,7 +297,17 @@ export class TowerWorld {
     ledge.plaque?.material.map?.dispose(); ledge.plaque?.material.dispose();
     this.ledges.delete(ledge.id);
   }
-  setQuality(high: boolean) { this.high = high; this.renderer.shadowMap.enabled = high; this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 1.65 : 1)); this.resize(); }
+  setQuality(high: boolean) {
+    if (this.disposed) return;
+    this.high = high;
+    this.renderer.shadowMap.enabled = high;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 1.65 : 1));
+    // EffectComposer caches its own ratio; changing only the renderer leaves
+    // high-resolution targets alive after switching to performance quality.
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    if (!high) { this.key.shadow.dispose(); this.key.shadow.map = null; this.key.shadow.mapPass = null; }
+    this.resize();
+  }
   setPersonalBest(floor: number) { this.bestMarker.setFloor(floor); }
   setReducedMotion(reduced: boolean) {
     this.reducedMotion = reduced;
@@ -294,11 +316,15 @@ export class TowerWorld {
     if (reduced) { for (const fleck of this.flecks) this.root.remove(fleck.mesh); this.flecks.length = 0; }
   }
   private resize() {
+    if (this.disposed) return;
     const { width, height } = this.renderer.domElement.getBoundingClientRect();
     if (!width || !height) return;
     const aspect = width / height; const h = Math.max(15.5, 15 / aspect);
     this.camera.aspect = aspect; this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(h / 52)); this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height, false); this.composer.setSize(width, height);
+    this.renderer.setSize(width, height, false);
+    // Bloom is bypassed at performance quality. Release its viewport-sized
+    // buffers until the player opts back into high quality.
+    this.composer.setSize(this.high ? width : 1, this.high ? height : 1);
 
   }
   effect(e: GameEvent, time: number) {
@@ -400,7 +426,7 @@ export class TowerWorld {
     if (this.high) this.composer.render(dt); else this.renderer.render(this.scene, this.camera);
   }
   dispose() {
-    if (this.disposed) return; this.disposed = true; this.observer.disconnect();
+    if (this.disposed) return; this.disposed = true; this.loadAbort.abort(); this.observer?.disconnect();
     this.root.remove(this.starTrail.mesh); this.starTrail.dispose();
     this.root.remove(this.actionWorld.group);
     for (const ledge of this.ledges.values()) ledge.crumble?.group.removeFromParent();
@@ -409,6 +435,15 @@ export class TowerWorld {
     const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>([this.springMat, this.partyGemMat, this.gemMat, this.routeMat, this.crackedIceMat, this.impactFleckMat, this.frenzyFleckMat]), textures = new Set<THREE.Texture>();
     this.scene.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Points) { geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m); } });
     for (const m of materials) { for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value); m.dispose(); }
-    geometries.forEach(g => g.dispose()); textures.forEach(t => t.dispose()); this.env.dispose(); this.fleckGeometry.dispose(); this.fleckMat.dispose(); this.composer.dispose(); this.bloom.dispose(); this.renderer.dispose();
+    geometries.forEach(g => g.dispose()); textures.forEach(t => t.dispose()); this.env?.dispose(); this.fleckGeometry.dispose(); this.fleckMat.dispose();
+    this.key?.shadow.dispose();
+    // Composer owns its two targets, but each pass owns separate GPU resources.
+    this.composer?.passes.forEach(pass => pass.dispose());
+    this.composer?.dispose(); this.renderer.dispose();
+    // React can restart an effect on the same mounted canvas. Losing its
+    // context would make the replacement renderer fail before it can restore.
+    // Wait for unmount to detach it, then release that abandoned context.
+    const renderer = this.renderer;
+    queueMicrotask(() => { if (!renderer.domElement.isConnected) renderer.forceContextLoss(); });
   }
 }

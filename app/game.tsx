@@ -53,6 +53,7 @@ import {
   readSkillProgress,
   advanceSkillProgress,
   selectSkillGoal,
+  getFeaturedSkillGoal,
   SKILL_GOALS_STORAGE_KEY,
   type SkillProgress,
 } from '@/lib/skill-goals';
@@ -99,6 +100,7 @@ import {
 import { PlaytestReport } from '@/components/playtest-report';
 import { RunFeedback } from '@/components/run-feedback';
 import { GraphicsRecovery } from '@/lib/graphics-recovery';
+import { graphicsFailureCode } from '@/lib/graphics-diagnostics';
 import { PersonalProgressResults } from '@/components/personal-progress';
 import {
   readPersonalProgress,
@@ -593,6 +595,7 @@ export default function Home() {
     const loadStarted = performance.now();
     let recoveryStarted = 0;
     let readyReported = false;
+    let loadStage = 'world_initialize';
     const reportReady = () => {
       if (readyReported || !loaded || graphics?.blocked) return;
       readyReported = true;
@@ -759,7 +762,7 @@ export default function Home() {
             failed: (cause) => {
               telemetry.current.event('graphics_failed', {
                 load_id: loadId,
-                error_code: 'render_failed',
+                error_code: graphicsFailureCode(cause, 'render_failed'),
                 phase: e.status,
               });
               console.error('Frostbound rendering stopped.', cause);
@@ -772,11 +775,13 @@ export default function Home() {
           w.setQuality(high);
           w.setReducedMotion(reducedMotionRef.current);
           setQuality(high);
+          loadStage = 'world_assets';
           await w.load();
           if (disposed) {
             w.dispose();
             return;
           }
+          loadStage = 'world_ready';
           w.setOutfit(profileRef.current.equipped);
           loaded = true;
           setReady(!graphics.blocked);
@@ -806,7 +811,11 @@ export default function Home() {
             last = now;
             graphics?.frame(() => {
               reportReady();
-              e.tick(dt, input.current.controls);
+              const frameControls = input.current.sample();
+              const previousTime = e.time;
+              e.tick(dt, frameControls);
+              if (e.time > previousTime)
+                input.current.acknowledgeSample(frameControls);
               audio.current?.updateAction(
                 e.time,
                 e.rulesVersion >= 6 ? e.action.frenzyTime : 0,
@@ -829,7 +838,7 @@ export default function Home() {
                 guidanceRun.current,
                 e,
                 events,
-                input.current.controls,
+                frameControls,
               );
               saveGuidance(guided.profile);
               guidanceRun.current = guided.run;
@@ -1023,23 +1032,28 @@ export default function Home() {
           trackEvent('game_load_failed', {
             surface: 'solo',
             load_id: loadId,
-            stage: 'world',
-            error_code: 'world_load_failed',
+            stage: loadStage,
+            error_code: graphicsFailureCode(cause, 'world_load_failed'),
             load_duration_ms: Math.round(performance.now() - loadStarted),
           });
+          graphics?.dispose();
+          world.current?.dispose();
+          world.current = null;
+          loaded = false;
+          setReady(false);
           console.error(cause);
           setError(
             'The 3D world could not load. Please reload in a browser with WebGL enabled.',
           );
         }
       })
-      .catch(() => {
+      .catch((cause) => {
         if (disposed) return;
         trackEvent('game_load_failed', {
           surface: 'solo',
           load_id: loadId,
           stage: 'import',
-          error_code: 'import_failed',
+          error_code: graphicsFailureCode(cause, 'import_failed'),
           load_duration_ms: Math.round(performance.now() - loadStarted),
         });
         setError('The game could not load. Check your connection and reload.');
@@ -1189,6 +1203,10 @@ export default function Home() {
     input.current.release(`pointer:${event.pointerId}`);
     setTouchPressed({ ...input.current.controls });
   };
+  const cancelTouch = (event: React.PointerEvent<HTMLButtonElement>) => {
+    input.current.cancel(`pointer:${event.pointerId}`);
+    setTouchPressed({ ...input.current.controls });
+  };
   const pressTouch = (event: React.PointerEvent<HTMLButtonElement>) => {
     lastInput.current = event.pointerType === 'touch' ? 'touch' : 'pointer';
     setTouchGuidance(true);
@@ -1217,8 +1235,11 @@ export default function Home() {
     onPointerDown: pressTouch,
     onPointerMove: moveTouch,
     onPointerUp: releaseTouch,
-    onPointerCancel: releaseTouch,
-    onLostPointerCapture: releaseTouch,
+    onPointerCancel: cancelTouch,
+    onLostPointerCapture: (event: React.PointerEvent<HTMLButtonElement>) => {
+      // Normal pointer-up releases capture too; its short tap must stay queued.
+      if (input.current.has(`pointer:${event.pointerId}`)) cancelTouch(event);
+    },
     onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
   };
   const active = game.status === 'playing' || game.status === 'paused';
@@ -1330,6 +1351,10 @@ export default function Home() {
               <span className="enter-hint">
                 or press <kbd>ENTER</kbd>
               </span>
+              <p className="touch-hint">
+                Hold an arrow to run. Tap JUMP with your other thumb, then let go
+                before the next jump.
+              </p>
               {menuButton}
               <div className="game-intro">
                 <p>
@@ -1443,7 +1468,15 @@ export default function Home() {
                     : `Personal best · ${runBaseline.floor} floors`}
               </p>
             )}
-            {game.status === 'over' && <RunFeedback snapshot={game} compact />}
+            {game.status === 'over' && (
+              <RunFeedback
+                snapshot={game}
+                compact
+                nextGoal={
+                  challenge ? undefined : getFeaturedSkillGoal(skills)?.title
+                }
+              />
+            )}
             <Button
               className="start-button"
               onClick={() => (game.status === 'paused' ? pause() : begin())}

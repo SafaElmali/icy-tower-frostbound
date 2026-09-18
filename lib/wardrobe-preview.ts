@@ -15,6 +15,7 @@ export class WardrobePreview {
   private trail = new ComboStarTrail(() => (++this.sample * .61803398875) % 1);
   private observer: ResizeObserver;
   private disposed = false;
+  private loadAbort = new AbortController();
   private outfit: Outfit;
   private motion = new ClimberMotion();
   private arms: THREE.Object3D[] = [];
@@ -44,20 +45,26 @@ export class WardrobePreview {
   }
 
   async load() {
-    const { scene: model } = await new GLTFLoader().loadAsync('/assets/harold.glb');
-    if (this.disposed) { this.disposeModel(model); return; }
-    const bounds = new THREE.Box3().setFromObject(model);
-    const center = bounds.getCenter(new THREE.Vector3());
-    const scale = 2.4 / bounds.getSize(new THREE.Vector3()).y;
-    model.scale.setScalar(scale);
-    model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
-    this.baseY = model.position.y;
-    this.arms = ['Arm_L', 'Arm_R'].map(name => model.getObjectByName(name)).filter((part): part is THREE.Object3D => !!part);
-    this.legs = ['Leg_L', 'Leg_R'].map(name => model.getObjectByName(name)).filter((part): part is THREE.Object3D => !!part);
-    this.model = model; this.scene.add(model);
-    this.setOutfit(this.outfit);
-    this.resize();
-    this.setPlaying(this.playing);
+    if (this.disposed) return;
+    const timeout = setTimeout(() => this.loadAbort.abort(), 8000);
+    try {
+      const response = await fetch('/assets/harold.glb', { signal: this.loadAbort.signal });
+      if (!response.ok) throw new Error('Climber preview unavailable');
+      const { scene: model } = await new GLTFLoader().parseAsync(await response.arrayBuffer(), '/assets/');
+      if (this.disposed) { this.disposeModel(model); return; }
+      const bounds = new THREE.Box3().setFromObject(model);
+      const center = bounds.getCenter(new THREE.Vector3());
+      const scale = 2.4 / bounds.getSize(new THREE.Vector3()).y;
+      model.scale.setScalar(scale);
+      model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+      this.baseY = model.position.y;
+      this.arms = ['Arm_L', 'Arm_R'].map(name => model.getObjectByName(name)).filter((part): part is THREE.Object3D => !!part);
+      this.legs = ['Leg_L', 'Leg_R'].map(name => model.getObjectByName(name)).filter((part): part is THREE.Object3D => !!part);
+      this.model = model; this.scene.add(model);
+      this.setOutfit(this.outfit);
+      this.resize();
+      this.setPlaying(this.playing);
+    } finally { clearTimeout(timeout); }
   }
 
   setOutfit(outfit: Outfit) {
@@ -133,9 +140,12 @@ export class WardrobePreview {
   }
 
   dispose() {
-    this.disposed = true; this.observer.disconnect();
+    if (this.disposed) return;
+    this.disposed = true; this.loadAbort.abort(); this.observer.disconnect();
     cancelAnimationFrame(this.frame); this.lastFrame = null;
     if (this.model) this.disposeModel(this.model);
-    this.trail.dispose(); this.renderer.dispose(); this.renderer.forceContextLoss();
+    this.trail.dispose(); this.renderer.dispose();
+    const renderer = this.renderer;
+    queueMicrotask(() => { if (!renderer.domElement.isConnected) renderer.forceContextLoss(); });
   }
 }

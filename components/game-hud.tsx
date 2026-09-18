@@ -14,8 +14,8 @@ const keyboardTips = {
 };
 const touchTips = {
   move: 'Hold an arrow with your left thumb',
-  jump: 'Keep holding an arrow + tap JUMP',
-  momentum: 'Build speed, then tap JUMP to go higher',
+  jump: 'Hold an arrow + tap JUMP. Let go between jumps.',
+  momentum: 'Hold an arrow to build speed, then tap JUMP again.',
   frost: keyboardTips.frost,
 };
 

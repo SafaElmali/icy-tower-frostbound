@@ -41,6 +41,7 @@ import { TowerInput } from '@/lib/tower-input';
 import { TowerAudio } from '@/lib/tower-audio';
 import { ComboFeedbackTracker } from '@/lib/combo-feedback';
 import { GraphicsRecovery } from '@/lib/graphics-recovery';
+import { graphicsFailureCode } from '@/lib/graphics-diagnostics';
 import { readProfile, OUTFIT_STORAGE_KEY } from '@/lib/outfits';
 import type { TowerWorld } from '@/lib/tower-world';
 import { trackEvent, analyticsId } from '@/lib/analytics';
@@ -677,7 +678,7 @@ export function RaceGame() {
     import('@/lib/tower-world')
       .then(async ({ TowerWorld }) => {
         if (disposed || !canvas.current) return;
-        loadStage = 'world';
+        loadStage = 'world_initialize';
         const scene = new TowerWorld(canvas.current);
         world.current = scene;
         const stopGraphics = (message: string) => {
@@ -709,7 +710,7 @@ export function RaceGame() {
           failed: (error) => {
             capture('graphics_failed', {
               load_id: loadId,
-              error_code: 'render_failed',
+              error_code: graphicsFailureCode(error, 'render_failed'),
             });
             console.error('Frostbound race rendering stopped.', error);
             stopGraphics('The graphics stopped working. Reload to reconnect.');
@@ -726,11 +727,13 @@ export function RaceGame() {
           /* Respect the system preference. */
         }
         scene.setReducedMotion(reduced);
+        loadStage = 'world_assets';
         await scene.load();
         if (disposed) {
           scene.dispose();
           return;
         }
+        loadStage = 'world_ready';
         try {
           scene.setOutfit(
             readProfile(localStorage.getItem(OUTFIT_STORAGE_KEY)).equipped,
@@ -754,12 +757,16 @@ export function RaceGame() {
               const wasStarted = local.started;
               const wasRecorded = !!local.recording;
               const wasRespawning = local.respawning;
+              const previousFrame = local.frame;
+              const frameControls = input.current.sample();
               local.advance(
                 serverNow,
                 current.startAt,
-                input.current.controls,
+                frameControls,
                 current.phase === 'finished',
               );
+              if (local.frame > previousFrame)
+                input.current.acknowledgeSample(frameControls);
               if (wasRespawning && !local.respawning && !local.recording)
                 capture('race_respawned', {
                   checkpoint_floor: local.checkpointFloor,
@@ -842,9 +849,12 @@ export function RaceGame() {
           capture('game_load_failed', {
             load_id: loadId,
             stage: loadStage,
-            error_code: 'load_failed',
+            error_code: graphicsFailureCode(error, 'load_failed'),
             load_duration_ms: Math.round(performance.now() - loadStarted),
           });
+          graphics?.dispose();
+          world.current?.dispose();
+          world.current = null;
           setRenderError('The tower could not load. Try reloading this page.');
         }
       });
@@ -933,11 +943,12 @@ export function RaceGame() {
         setPressed({ ...input.current.controls });
       }}
       onPointerCancel={(event) => {
-        input.current.release(`touch:${event.pointerId}`);
+        input.current.cancel(`touch:${event.pointerId}`);
         setPressed({ ...input.current.controls });
       }}
       onLostPointerCapture={(event) => {
-        input.current.release(`touch:${event.pointerId}`);
+        const source = `touch:${event.pointerId}`;
+        if (input.current.has(source)) input.current.cancel(source);
         setPressed({ ...input.current.controls });
       }}
     >

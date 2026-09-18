@@ -20,9 +20,23 @@
 }
 .compact {
   margin: 12px auto;
-  max-width: 32ch;
-  color: #c5ded8;
+  max-width: 36ch;
+  text-wrap: pretty;
+}
+.compact .suggestion {
+  margin-top: 4px;
+}
+.goal {
+  margin: 10px 0 0;
+  color: #c8efb9;
   font-size: 12px;
   line-height: 1.45;
-  text-wrap: pretty;
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .compact {
+    margin: 8px auto;
+  }
+  .goal {
+    margin-top: 6px;
+  }
 }

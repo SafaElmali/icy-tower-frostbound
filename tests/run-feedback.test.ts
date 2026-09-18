@@ -20,7 +20,7 @@ void test('a recorded walk off a shortcut ledge yields its logical floor and a j
   assert.deepEqual(engine.snapshot().failureEvidence, { kind: 'left-ledge', floor: 14 });
   const feedback = getRunFeedback(engine.snapshot())!;
   assert.match(feedback.explanation, /floor 14 without jumping/);
-  assert.match(feedback.suggestion, /press jump before/);
+  assert.match(feedback.suggestion, /Jump before the edge/);
 });
 
 void test('a coyote-time jump clears walk-off evidence before frost catches an ascent', () => {
@@ -48,7 +48,7 @@ void test('a falling death has a general landing tip without claiming an oversho
   assert.deepEqual(engine.failureEvidence, { kind: 'fell' });
   const feedback = getRunFeedback(engine.snapshot())!;
   assert.equal(feedback.explanation, 'You fell into the frost.');
-  assert.match(feedback.suggestion, /center of a landing ledge/);
+  assert.match(feedback.suggestion, /center of a ledge/);
 });
 
 void test('restarting resets evidence and guidance stays hidden before a run finishes', () => {
