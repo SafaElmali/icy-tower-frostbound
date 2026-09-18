@@ -1,0 +1,446 @@
+.dialog[data-slot='dialog-content'] {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: calc(100vw - 32px);
+  max-width: 680px;
+  max-height: calc(
+    var(--visible-height, 100dvh) - 32px - var(--safe-top, 0px) -
+      var(--safe-bottom, 0px)
+  );
+  top: calc(var(--visible-top, 0px) + var(--visible-height, 100dvh) / 2);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #9fcbd43d;
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse at top left, #284b583d, transparent 65%), #0d202b;
+  color: #e3f0ee;
+  box-shadow:
+    inset 0 1px 0 #def9fc14,
+    0 32px 100px #0008;
+}
+.header {
+  flex: 0 0 auto;
+  padding: 26px 64px 22px 28px;
+  border-bottom: 1px solid #9dc4ce1c;
+}
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #8bb8c5;
+  font-size: 10px;
+  letter-spacing: 2px;
+  line-height: 1.5;
+}
+.eyebrow svg {
+  width: 16px;
+  height: 16px;
+}
+.title[data-slot='dialog-title'] {
+  margin: 12px 0 8px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 34px;
+  line-height: 1.2;
+  font-weight: 400;
+  letter-spacing: -0.6px;
+}
+.description[data-slot='dialog-description'] {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #99b4c0;
+}
+.dialog [data-slot='dialog-close'] {
+  top: 22px;
+  right: 18px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #91bdcd26;
+  border-radius: 50%;
+  background: #122b35;
+  color: #9dbdc8;
+}
+.dialog [data-slot='dialog-close']:hover {
+  color: #edfafa;
+  background: #233e49;
+}
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px 28px;
+  scrollbar-width: thin;
+  scrollbar-color: #7399a14d transparent;
+}
+.sectionTitle {
+  margin: 0 0 12px;
+  font-size: 10px;
+  line-height: 1.5;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: #88aab9;
+}
+.controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.controls article {
+  padding: 15px 14px 13px;
+  border: 1px solid #91bdcd2b;
+  border-radius: 9px;
+  background: #172e3a77;
+}
+.controlHeading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.controlHeading svg {
+  width: 17px;
+  height: 17px;
+  color: #acd1d7;
+  stroke-width: 1.7;
+}
+.controlHeading h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+}
+.keys kbd {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 24px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid #92bac53b;
+  border-bottom-width: 3px;
+  border-radius: 4px;
+  background: #0b202b;
+  color: #d5e8ec;
+  font-family: inherit;
+  font-size: 11px;
+}
+.keys span {
+  padding-inline: 1px;
+  font-size: 10px;
+  color: #7899a7;
+}
+.controls p {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #9bb7c3;
+}
+.touchTip {
+  margin: 14px 0 0;
+  padding-left: 12px;
+  border-left: 2px solid #78afb23d;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #90aeba;
+}
+.touchTip strong {
+  color: #bdd4dc;
+  font-weight: 500;
+  margin-right: 5px;
+}
+.mechanics {
+  margin-top: 26px;
+}
+.sectionHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sectionHeading > span {
+  font-size: 11px;
+  color: #7899a7;
+}
+.mechanic {
+  border-bottom: 1px solid #93bac821;
+}
+.mechanic summary {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 16px;
+  gap: 14px;
+  align-items: center;
+  min-height: 79px;
+  padding: 14px 8px;
+  border-radius: 7px;
+  list-style: none;
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+.mechanic summary::-webkit-details-marker {
+  display: none;
+}
+.mechanic summary::marker {
+  content: '';
+}
+.mechanic summary:hover {
+  background: #203c485c;
+}
+.icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  background: #223e4b66;
+  border: 1px solid #a2cbd521;
+  border-radius: 10px;
+  color: #b7d8e0;
+}
+.icon svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.65;
+}
+.mechanic[data-mechanic='hazards'] .icon {
+  color: #dec59d;
+  background: #aa845415;
+}
+.mechanic[data-mechanic='frenzy'] .icon {
+  color: #dcdfa3;
+  background: #aaae4915;
+}
+.mechanic[data-mechanic='party'] .icon {
+  color: #d9b8dc;
+  background: #b275c115;
+}
+.mechanic[data-mechanic='ghost'] .icon {
+  color: #b7c7e6;
+  background: #859fcc15;
+}
+.summaryText strong {
+  display: block;
+  color: #dceced;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.summaryText > span {
+  display: block;
+  margin-top: 4px;
+  color: #93b0bd;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.chevron {
+  width: 15px;
+  height: 15px;
+  color: #86a9b9;
+  transition: transform 150ms;
+}
+.mechanic[open] .chevron {
+  transform: rotate(180deg);
+}
+.mechanic[open] summary {
+  background: #203c4833;
+}
+.detail {
+  padding: 3px 30px 18px 60px;
+}
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border: 1px solid #acd8d729;
+  border-radius: 4px;
+  background: #638f9420;
+  color: #b6d5d8;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.detail p {
+  margin: 10px 0 0;
+  color: #a4bfca;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.note {
+  margin: 20px 0 12px;
+  color: #809fad;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.more a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: #b4d3d9;
+  font-size: 12px;
+}
+.more a svg {
+  width: 14px;
+  height: 14px;
+}
+.more button[data-slot='button'] {
+  color: #8eacba;
+  font-size: 11px;
+  min-height: 36px;
+  padding: 0 8px;
+}
+.footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 28px;
+  border-top: 1px solid #9dc4ce22;
+  background: #09192266;
+}
+.practice[data-slot='button'] {
+  height: 44px;
+  padding: 0 6px;
+  gap: 8px;
+  color: #b4ced6;
+  font-size: 12px;
+  font-weight: 400;
+}
+.play[data-slot='button'] {
+  height: 44px;
+  padding: 0 18px;
+  gap: 22px;
+  border: 1px solid #d3eeeb;
+  border-radius: 6px;
+  background: #d1e8e5;
+  color: #203f48;
+  font-size: 13px;
+}
+.play[data-slot='button']:hover {
+  background: #e6f6f3;
+}
+.dialog button:focus-visible,
+.dialog summary:focus-visible,
+.dialog a:focus-visible {
+  outline: 2px solid #c5efec;
+  outline-offset: 2px;
+}
+@media (max-width: 540px) {
+  .dialog[data-slot='dialog-content'] {
+    width: calc(100vw - 24px);
+    border-radius: 14px;
+  }
+  .header {
+    padding: 22px 50px 20px 20px;
+  }
+  .title[data-slot='dialog-title'] {
+    font-size: 29px;
+  }
+  .eyebrow {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+  }
+  .dialog [data-slot='dialog-close'] {
+    top: 16px;
+    right: 12px;
+  }
+  .body {
+    padding: 20px 16px;
+  }
+  .controls {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .controls article {
+    display: grid;
+    grid-template-columns: 78px 1fr;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 12px;
+  }
+  .controlHeading {
+    margin: 0;
+  }
+  .keys {
+    justify-content: flex-end;
+  }
+  .controls p {
+    grid-column: 1/-1;
+    margin-top: 2px;
+  }
+  .sectionHeading {
+    display: block;
+  }
+  .sectionHeading > span {
+    display: block;
+    margin: -5px 0 8px;
+  }
+  .mechanic summary {
+    grid-template-columns: 34px minmax(0, 1fr) 14px;
+    gap: 10px;
+    padding-inline: 4px;
+  }
+  .icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+  }
+  .detail {
+    padding-left: 48px;
+    padding-right: 16px;
+  }
+  .footer {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+  .practice[data-slot='button'] {
+    font-size: 11px;
+    padding: 0;
+  }
+  .play[data-slot='button'] {
+    font-size: 12px;
+    padding: 0 12px;
+    gap: 10px;
+  }
+}
+@media (max-width: 360px) {
+  .practice[data-slot='button'] svg {
+    display: none;
+  }
+}
+@media (max-height: 550px) {
+  .header {
+    padding-block: 15px;
+  }
+  .eyebrow {
+    display: none;
+  }
+  .title[data-slot='dialog-title'] {
+    font-size: 27px;
+    margin: 0 0 4px;
+  }
+  .description[data-slot='dialog-description'] {
+    font-size: 12px;
+  }
+  .footer {
+    padding-block: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog *,
+  .dialog *::after {
+    transition: none !important;
+  }
+}

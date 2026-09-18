@@ -6,6 +6,11 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
+  ChevronDown,
+  Clock3,
+  SlidersHorizontal,
+  UserRound,
+  UserRoundPlus,
   Copy,
   Flag,
   Hand,
@@ -953,6 +958,9 @@ export function RaceGame() {
         tabIndex={-1}
         aria-label="Two-player tower race. A and D to move, Space to jump."
       />
+      {(!room || waiting || finished) && (
+        <div className={styles.lobbyShade} aria-hidden="true" />
+      )}
       <header className={styles.topbar}>
         <button type="button" onClick={() => void leave()} disabled={busy}>
           <ArrowLeft size={16} /> {active ? 'Leave race' : 'Back to tower'}
@@ -960,47 +968,50 @@ export function RaceGame() {
         <span>
           <Users size={16} /> TWO PLAYER RACE
         </span>
-        <button
-          type="button"
-          aria-label={sound ? 'Mute sound' : 'Enable sound'}
-          onClick={() => {
-            const enabled = !sound;
-            capture('setting_changed', {
-              setting: 'sound',
-              previous_value: sound,
-              value: enabled,
-              source: 'user',
-            });
-            setSound(enabled);
-            soundRef.current = enabled;
-            audio.current ??= new TowerAudio();
-            audio.current.setPaused(
-              !runner.current?.started || !!runner.current.recording,
-            );
-            audio.current.setEnabled(enabled);
-          }}
-        >
-          {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
-        </button>
-        <button
-          type="button"
-          aria-label={music ? 'Mute music' : 'Enable music'}
-          aria-pressed={music}
-          onClick={() => {
-            const enabled = !music;
-            capture('setting_changed', {
-              setting: 'music',
-              previous_value: music,
-              value: enabled,
-              source: 'user',
-            });
-            setMusic(enabled);
-            audio.current ??= new TowerAudio();
-            audio.current.setMusicEnabled(enabled);
-          }}
-        >
-          <Music2 size={18} />
-        </button>
+        <div className={styles.audioControls}>
+          <button
+            type="button"
+            aria-pressed={sound}
+            aria-label={sound ? 'Mute sound' : 'Enable sound'}
+            onClick={() => {
+              const enabled = !sound;
+              capture('setting_changed', {
+                setting: 'sound',
+                previous_value: sound,
+                value: enabled,
+                source: 'user',
+              });
+              setSound(enabled);
+              soundRef.current = enabled;
+              audio.current ??= new TowerAudio();
+              audio.current.setPaused(
+                !runner.current?.started || !!runner.current.recording,
+              );
+              audio.current.setEnabled(enabled);
+            }}
+          >
+            {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
+          </button>
+          <button
+            type="button"
+            aria-label={music ? 'Mute music' : 'Enable music'}
+            aria-pressed={music}
+            onClick={() => {
+              const enabled = !music;
+              capture('setting_changed', {
+                setting: 'music',
+                previous_value: music,
+                value: enabled,
+                source: 'user',
+              });
+              setMusic(enabled);
+              audio.current ??= new TowerAudio();
+              audio.current.setMusicEnabled(enabled);
+            }}
+          >
+            <Music2 size={18} />
+          </button>
+        </div>
       </header>
       {(networkError || renderError) && (
         <div className={styles.error} role="alert">
@@ -1063,196 +1074,263 @@ export function RaceGame() {
       )}
 
       {waiting && (
-        <section className={styles.card} aria-labelledby="lobby-heading">
-          <p className={styles.kicker}>RACE TO FLOOR {settings.targetFloor}</p>
-          <h1 id="lobby-heading">
-            {friend ? 'Ready to climb?' : 'Bring a friend.'}
-          </h1>
-          {room.you === 'host' ? (
-            <form
-              className={styles.rules}
-              onSubmit={(event) => {
-                event.preventDefault();
-                void configure();
-              }}
-            >
-              <div className={styles.ruleFields}>
-                <label htmlFor="target-floor">
-                  Finish floor
+        <section
+          className={`${styles.card} ${styles.lobby}`}
+          aria-labelledby="lobby-heading"
+        >
+          <div className={styles.lobbyBody}>
+            <header className={styles.lobbyHeading}>
+              <p className={styles.kicker}>YOUR PRIVATE RACE</p>
+              <h1 id="lobby-heading">
+                {friendOnline ? 'Ready, set, climb.' : 'Better with a rival.'}
+              </h1>
+              <p>
+                {friendOnline
+                  ? 'Your friend is here. Get ready to race.'
+                  : friend
+                    ? 'Your friend disconnected. Waiting for them to return.'
+                    : 'Invite a friend. See who reaches the top first.'}
+              </p>
+            </header>
+            {!friend && (
+              <div className={styles.invite}>
+                <label htmlFor="race-invite">
+                  <UserRoundPlus size={18} /> Invite your friend
+                </label>
+                <div>
                   <input
-                    id="target-floor"
-                    type="number"
-                    min={5}
-                    max={100}
-                    step={1}
-                    inputMode="numeric"
-                    value={
-                      Number.isNaN(draftSettings.targetFloor)
-                        ? ''
-                        : draftSettings.targetFloor
-                    }
-                    disabled={busy || me?.ready}
-                    onChange={(event) =>
-                      setDraftSettings({
-                        ...draftSettings,
-                        targetFloor: event.target.valueAsNumber,
-                      })
-                    }
+                    id="race-invite"
+                    readOnly
+                    value={invite}
+                    onFocus={(event) => event.target.select()}
                   />
-                </label>
-                <label htmlFor="race-duration">
-                  Time limit
-                  <select
-                    id="race-duration"
-                    value={draftSettings.durationMs}
-                    disabled={busy || me?.ready}
-                    onChange={(event) =>
-                      setDraftSettings({
-                        ...draftSettings,
-                        durationMs: Number(event.target.value),
-                      })
-                    }
+                  <button
+                    type="button"
+                    aria-label="Copy invite link"
+                    onClick={async () => {
+                      const operationId = analyticsId();
+                      const properties = {
+                        share_type: 'race',
+                        method: 'clipboard',
+                        operation_id: operationId,
+                      };
+                      capture('share_attempted', properties);
+                      try {
+                        await navigator.clipboard.writeText(invite);
+                        setCopied(true);
+                        capture('share_completed', properties);
+                      } catch {
+                        capture('share_failed', {
+                          ...properties,
+                          error_code: 'clipboard_failed',
+                        });
+                        setNetworkError(
+                          'Select the invite link and copy it to share.',
+                        );
+                      }
+                    }}
                   >
-                    <option value={60_000}>1 minute</option>
-                    <option value={120_000}>2 minutes</option>
-                    <option value={180_000}>3 minutes</option>
-                    <option value={300_000}>5 minutes</option>
-                  </select>
-                </label>
+                    {copied ? <Check size={17} /> : <Copy size={17} />}
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
+                </div>
+                <output>
+                  {copied
+                    ? 'Link copied. Send it to your friend.'
+                    : 'Send this private link. No account needed.'}
+                </output>
               </div>
-              <label className={styles.bumpRule}>
-                <span>
-                  <Hand size={15} /> Allow shoves{' '}
-                  <small>Push a nearby friend · E</small>
+            )}
+
+            <div
+              className={styles.players}
+              aria-label="Players"
+              aria-live="polite"
+            >
+              <div data-ready={!!me?.ready}>
+                <span className={styles.playerAvatar}>
+                  <UserRound size={22} />
                 </span>
-                <input
-                  type="checkbox"
-                  checked={draftSettings.bumping}
-                  disabled={busy || me?.ready}
-                  onChange={(event) =>
-                    setDraftSettings({
-                      ...draftSettings,
-                      bumping: event.target.checked,
-                    })
-                  }
-                />
-              </label>
-              {settingsDirty && (
-                <button
-                  className={styles.saveRules}
-                  disabled={busy || me?.ready || !settingsValid}
-                  type="submit"
+                <span className={styles.playerInfo}>
+                  <strong>
+                    You <em>{room.you === 'host' ? 'Host' : 'Guest'}</em>
+                  </strong>
+                  <small>{me?.ready ? 'Ready to race' : 'Not ready yet'}</small>
+                </span>
+                {me?.ready && <Check size={17} />}
+              </div>
+              <div
+                data-ready={!!friend?.ready && friendOnline}
+                data-empty={!friendOnline}
+              >
+                <span
+                  className={`${styles.playerAvatar} ${styles.friendAvatar}`}
                 >
-                  {busy ? 'Saving…' : 'Save rules'}
-                </button>
-              )}
-              <small>
-                {me?.ready
-                  ? 'Choose Not ready to edit the rules.'
-                  : 'Checkpoints every 5 floors. Equal heights draw.'}
-              </small>
-            </form>
-          ) : (
-            <div className={styles.agreedRules}>
-              <span>
-                <Flag size={14} /> Floor {settings.targetFloor}
-              </span>
-              <span>{settings.durationMs / 60_000} min</span>
-              <span>{settings.bumping ? 'Shoves on' : 'Shoves off'}</span>
-              <small>
-                Your host sets the rules. Checkpoints every 5 floors.
-              </small>
+                  {friendOnline ? (
+                    <UserRound size={22} />
+                  ) : (
+                    <UserRoundPlus size={22} />
+                  )}
+                </span>
+                <span className={styles.playerInfo}>
+                  <strong>Friend</strong>
+                  <small>
+                    {!friend
+                      ? 'Waiting to join…'
+                      : !friendOnline
+                        ? 'Disconnected'
+                        : friend.ready
+                          ? 'Ready to race'
+                          : 'Not ready yet'}
+                  </small>
+                </span>
+                {friend?.ready && friendOnline && <Check size={17} />}
+              </div>
             </div>
-          )}
-          <div className={styles.players}>
-            <div>
-              <i className={styles.youDot} />
-              <span>You</span>
-              <small>{me?.ready ? 'Ready' : 'Getting ready'}</small>
-              {me?.ready && <Check size={16} />}
-            </div>
-            <div>
-              <i className={styles.friendDot} />
-              <span>Friend</span>
-              <small>
-                {!friend
-                  ? 'Waiting to join'
-                  : !friendOnline
-                    ? 'Disconnected'
-                    : friend.ready
-                      ? 'Ready'
-                      : 'Getting ready'}
-              </small>
-              {friend?.ready && <Check size={16} />}
-            </div>
-          </div>
-          {!friend && (
-            <div className={styles.invite}>
-              <label htmlFor="race-invite">Invite link</label>
-              <div>
-                <input
-                  id="race-invite"
-                  readOnly
-                  value={invite}
-                  onFocus={(event) => event.target.select()}
-                />
-                <button
-                  type="button"
-                  aria-label="Copy invite link"
-                  onClick={async () => {
-                    const operationId = analyticsId();
-                    const properties = {
-                      share_type: 'race',
-                      method: 'clipboard',
-                      operation_id: operationId,
-                    };
-                    capture('share_attempted', properties);
-                    try {
-                      await navigator.clipboard.writeText(invite);
-                      setCopied(true);
-                      capture('share_completed', properties);
-                    } catch {
-                      capture('share_failed', {
-                        ...properties,
-                        error_code: 'clipboard_failed',
-                      });
-                      setNetworkError(
-                        'Select the invite link and copy it to share.',
-                      );
-                    }
+            <details className={styles.ruleDetails}>
+              <summary>
+                <SlidersHorizontal size={18} />
+                <span>
+                  <strong>
+                    Race rules{' '}
+                    {settingsDirty && room.you === 'host' && <em>Unsaved</em>}
+                  </strong>
+                  <small>
+                    Floor {settings.targetFloor} ·{' '}
+                    {settings.durationMs / 60_000} min · Shoves{' '}
+                    {settings.bumping ? 'on' : 'off'}
+                  </small>
+                </span>
+                <ChevronDown size={18} className={styles.ruleChevron} />
+              </summary>
+              {room.you === 'host' ? (
+                <form
+                  className={styles.rules}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void configure();
                   }}
                 >
-                  {copied ? <Check size={17} /> : <Copy size={17} />}
-                </button>
-              </div>
-              <output>
-                {copied
-                  ? 'Link copied. Send it to your friend.'
-                  : 'Open this link on your friend’s device.'}
-              </output>
-            </div>
-          )}
-          <button
-            className={styles.primary}
-            disabled={
-              busy ||
-              (!friendOnline && !me?.ready) ||
-              !loaded ||
-              blocked ||
-              (room.you === 'host' && settingsDirty && !me?.ready)
-            }
-            onClick={() => void act('ready')}
-          >
-            {me?.ready ? 'Not ready' : 'I’m ready'}
-            <Check size={18} />
-          </button>
-          <small>
-            {me?.ready
-              ? 'Waiting for your friend to ready up.'
-              : settingsDirty && room.you === 'host'
-                ? 'Save your rules before getting ready.'
-                : 'Both players start together.'}
-          </small>
+                  <div className={styles.ruleFields}>
+                    <label htmlFor="target-floor">
+                      Finish floor
+                      <input
+                        id="target-floor"
+                        type="number"
+                        min={5}
+                        max={100}
+                        step={1}
+                        inputMode="numeric"
+                        value={
+                          Number.isNaN(draftSettings.targetFloor)
+                            ? ''
+                            : draftSettings.targetFloor
+                        }
+                        disabled={busy || me?.ready}
+                        onChange={(event) =>
+                          setDraftSettings({
+                            ...draftSettings,
+                            targetFloor: event.target.valueAsNumber,
+                          })
+                        }
+                      />
+                    </label>
+                    <label htmlFor="race-duration">
+                      Time limit
+                      <select
+                        id="race-duration"
+                        value={draftSettings.durationMs}
+                        disabled={busy || me?.ready}
+                        onChange={(event) =>
+                          setDraftSettings({
+                            ...draftSettings,
+                            durationMs: Number(event.target.value),
+                          })
+                        }
+                      >
+                        <option value={60_000}>1 minute</option>
+                        <option value={120_000}>2 minutes</option>
+                        <option value={180_000}>3 minutes</option>
+                        <option value={300_000}>5 minutes</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label className={styles.bumpRule}>
+                    <span>
+                      <Hand size={15} /> Allow shoves{' '}
+                      <small>Push a nearby friend · E</small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={draftSettings.bumping}
+                      disabled={busy || me?.ready}
+                      onChange={(event) =>
+                        setDraftSettings({
+                          ...draftSettings,
+                          bumping: event.target.checked,
+                        })
+                      }
+                    />
+                  </label>
+                  {settingsDirty && (
+                    <button
+                      className={styles.saveRules}
+                      disabled={busy || me?.ready || !settingsValid}
+                      type="submit"
+                    >
+                      {busy ? 'Saving…' : 'Save rules'}
+                    </button>
+                  )}
+                  <small>
+                    {me?.ready
+                      ? 'Choose Not ready to edit the rules.'
+                      : 'Checkpoints every 5 floors. Equal heights draw.'}
+                  </small>
+                </form>
+              ) : (
+                <div className={styles.agreedRules}>
+                  <span>
+                    <Flag size={15} /> Finish at floor {settings.targetFloor}
+                  </span>
+                  <span>
+                    <Clock3 size={15} /> {settings.durationMs / 60_000} minutes
+                  </span>
+                  <span>
+                    <Hand size={15} /> Shoves {settings.bumping ? 'on' : 'off'}
+                  </span>
+                  <small>
+                    Your host sets the rules. Checkpoints every 5 floors. Equal
+                    heights draw.
+                  </small>
+                </div>
+              )}
+            </details>
+          </div>
+          <footer className={styles.lobbyFooter}>
+            <button
+              className={styles.primary}
+              disabled={
+                busy ||
+                (!friendOnline && !me?.ready) ||
+                !loaded ||
+                blocked ||
+                (room.you === 'host' && settingsDirty && !me?.ready)
+              }
+              onClick={() => void act('ready')}
+            >
+              {busy ? 'Updating…' : me?.ready ? 'Not ready' : 'I’m ready'}
+              <Check size={18} />
+            </button>
+            <small>
+              {me?.ready
+                ? 'Waiting for your friend to ready up.'
+                : settingsDirty && room.you === 'host'
+                  ? 'Save your rules before getting ready.'
+                  : !friendOnline
+                    ? 'Your friend needs to join before you can ready up.'
+                    : 'Both ready? The race starts automatically.'}
+            </small>
+          </footer>
         </section>
       )}
 

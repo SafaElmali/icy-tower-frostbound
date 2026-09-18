@@ -7,12 +7,17 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  BookOpen,
+  ChartNoAxesColumnIncreasing,
   CalendarDays,
   ChevronRight,
   CircleHelp,
   Footprints,
   Settings2,
-  Diamond,
+  Settings,
+  Music2,
+  Sparkles,
+  Wind,
   Ghost,
   Maximize2,
   Menu,
@@ -24,9 +29,16 @@ import {
   Target,
   Trophy,
   Users,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { HowToPlayDialog } from '@/components/how-to-play-dialog';
+import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import menuStyles from './game-menu.module.css';
+import titleStyles from './title-menu.module.css';
+import skillGoalStyles from '@/components/skill-goals.module.css';
 import hudStyles from '@/components/game-hud.module.css';
 import { GameHud } from '@/components/game-hud';
 import { WardrobeDialog } from '@/components/wardrobe';
@@ -40,10 +52,6 @@ import {
   type OutfitSlot,
   type WardrobeProfile,
 } from '@/lib/outfits';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '@/components/ui/native-select';
 import { QuickChallenges } from '@/components/quick-challenges';
 import {
   FeaturedSkillGoal,
@@ -54,6 +62,7 @@ import {
   advanceSkillProgress,
   selectSkillGoal,
   SKILL_GOALS_STORAGE_KEY,
+  SKILL_GOALS,
   type SkillProgress,
 } from '@/lib/skill-goals';
 import { LeaderboardDialog } from '@/components/leaderboard';
@@ -169,8 +178,10 @@ export default function Home() {
   const reducedMotionRef = useRef(false);
   const [help, setHelp] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuTab, setMenuTab] = useState('play');
   const [runDetailsOpen, setRunDetailsOpen] = useState(false);
   const [challengesOpen, setChallengesOpen] = useState(false);
+  const goalsTitle = useRef<HTMLHeadingElement>(null);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [submissionRun, setSubmissionRun] = useState<RunReplay | null>(null);
   const [wardrobeOpen, setWardrobeOpen] = useState(false);
@@ -464,6 +475,19 @@ export default function Home() {
     audio.current.setPaused(engine.current?.status !== 'playing');
     audio.current.play(type, milestone);
   }
+  function changeSound(enabled: boolean) {
+    soundRef.current = enabled;
+    trackEvent('setting_changed', {
+      surface: 'solo',
+      setting: 'sound',
+      previous_value: sound,
+      value: enabled,
+      source: 'user',
+    });
+    setSound(enabled);
+    audio.current?.setEnabled(enabled);
+    if (enabled) tone('gem');
+  }
   function begin(selectedMode = mode) {
     if (!engine.current || !ready) return;
     startRun(engine.current, selectedMode);
@@ -579,6 +603,12 @@ export default function Home() {
   function fromMenu(action: () => void) {
     setMenuOpen(false);
     action();
+  }
+
+  function changeMenuTab(tab: string) {
+    setMenuTab(tab);
+    if (tab === 'settings')
+      telemetry.current.event('feature_panel_opened', { panel: 'settings' });
   }
 
   useEffect(() => {
@@ -966,7 +996,10 @@ export default function Home() {
                   saveProfile({ ...current, progress });
                   if (earned.length)
                     setNewOutfits((previous) => [
-                      ...new Set([...previous, ...earned.map((item) => item.name)]),
+                      ...new Set([
+                        ...previous,
+                        ...earned.map((item) => item.name),
+                      ]),
                     ]);
                 }
               }
@@ -1236,7 +1269,9 @@ export default function Home() {
       aria-label={`${game.status === 'playing' ? 'Pause and open menu' : 'Menu'}${newOutfits.length ? ', new outfits available' : ''}`}
     >
       <Menu size={18} /> <span>Menu</span>
-      {newOutfits.length > 0 && <i className={menuStyles.unlockDot} aria-hidden="true" />}
+      {newOutfits.length > 0 && (
+        <i className={menuStyles.unlockDot} aria-hidden="true" />
+      )}
     </Button>
   );
 
@@ -1253,11 +1288,12 @@ export default function Home() {
       <canvas
         className="world-canvas"
         ref={canvas}
-        tabIndex={0}
+        tabIndex={game.status === 'ready' ? -1 : 0}
+        aria-hidden={game.status === 'ready'}
         aria-label="Icy Tower game. Use the on-screen left, right and jump buttons, or A/D and Space. Pause with the top button or Escape."
       />
       <div className="screen-vignette" />
-      <header className="topbar">
+      <header className="topbar" hidden={game.status === 'ready'}>
         <div className="brand">
           <Snowflake size={23} strokeWidth={1.4} />
           <span>
@@ -1270,18 +1306,17 @@ export default function Home() {
       </header>
       {game.status === 'ready' && (
         <>
+          <div className={titleStyles.backdrop} aria-hidden="true" />
           <section
-            className={`title-screen ${challenge || daily || challengeError ? 'has-challenge' : ''}`}
+            className={`${titleStyles.menu} ${challenge || daily || challengeError ? titleStyles.invited : ''}`}
+            aria-label="Frostbound main menu"
           >
-            <div className="title-heading">
-              <h1>
-                ICY
-                <br />
-                <span>TOWER</span>
-              </h1>
-            </div>
-            <div className="subtitle">
-              <i /> F R O S T B O U N D <i />
+            <div className={titleStyles.heading}>
+              <h1>Frostbound</h1>
+              <div className={titleStyles.subtitle}>
+                <i aria-hidden="true" /> THE ENDLESS ASCENT{' '}
+                <i aria-hidden="true" />
+              </div>
             </div>
             {daily ? (
               <div className="friend-invite">
@@ -1311,42 +1346,94 @@ export default function Home() {
                 {challengeError}
               </p>
             ) : null}
-            <div className="title-play">
+            <div className={titleStyles.actions}>
               <Button
-                className="start-button"
+                className={titleStyles.play}
                 onClick={() => begin()}
                 disabled={!ready || !!error}
               >
-                <Play size={17} fill="currentColor" />
-                {ready
-                  ? daily
-                    ? 'CLIMB DAILY TOWER'
-                    : challenge
-                      ? 'ACCEPT CHALLENGE'
-                      : `PLAY ${MODE_LABELS[mode].toUpperCase()}`
-                  : 'ENTERING THE TOWER…'}
-                <ArrowRight size={19} />
+                <Play fill="currentColor" aria-hidden="true" />
+                <span>
+                  {ready
+                    ? daily
+                      ? 'CLIMB DAILY TOWER'
+                      : challenge
+                        ? 'ACCEPT CHALLENGE'
+                        : `PLAY ${MODE_LABELS[mode].toUpperCase()}`
+                    : 'ENTERING THE TOWER…'}
+                </span>
               </Button>
-              <span className="enter-hint">
-                or press <kbd>ENTER</kbd>
+              <span className={titleStyles.hint}>
+                Press <kbd>ENTER</kbd> to begin
               </span>
-              {menuButton}
-              <div className="game-intro">
-                <p>
-                  A free browser tower climber. Chain jumps and outrun the
-                  frost.
-                </p>
-                {/* Use full navigation for the Netlify static export. */}
-                {/* oxlint-disable-next-line next/no-html-link-for-pages */}
-                <a href="/how-to-play">How to play & game modes</a>
-              </div>
+              <nav className={titleStyles.links} aria-label="Game options">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    changeMenuTab('play');
+                    setMenuOpen(true);
+                  }}
+                  aria-haspopup="dialog"
+                  aria-expanded={menuOpen}
+                >
+                  <ChartNoAxesColumnIncreasing aria-hidden="true" />
+                  <span>Game modes</span>
+                  <ChevronRight aria-hidden="true" />
+                  {newOutfits.length > 0 && (
+                    <i
+                      className={menuStyles.unlockDot}
+                      aria-label="New outfits available"
+                    />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setHelp(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={help}
+                >
+                  <BookOpen aria-hidden="true" />
+                  <span>How to play</span>
+                  <ChevronRight aria-hidden="true" />
+                </Button>
+              </nav>
               {best.floor > 0 && (
-                <p className="title-record">
+                <p className={titleStyles.record}>
                   Personal best · {best.floor} floors
                 </p>
               )}
             </div>
           </section>
+          <footer className={titleStyles.footer}>
+            <p>Chain jumps. Outrun the frost.</p>
+            <div className={titleStyles.utilities}>
+              <Button
+                variant="ghost"
+                aria-label={sound ? 'Mute sound' : 'Unmute sound'}
+                aria-pressed={!sound}
+                onClick={() => changeSound(!sound)}
+              >
+                {sound ? (
+                  <Volume2 aria-hidden="true" />
+                ) : (
+                  <VolumeX aria-hidden="true" />
+                )}
+              </Button>
+              <span aria-hidden="true" />
+              <Button
+                variant="ghost"
+                aria-label="Settings"
+                aria-haspopup="dialog"
+                aria-expanded={menuOpen && menuTab === 'settings'}
+                onClick={() => {
+                  changeMenuTab('settings');
+                  setMenuOpen(true);
+                }}
+              >
+                <Settings aria-hidden="true" />
+              </Button>
+            </div>
+          </footer>
         </>
       )}
       {active && (
@@ -1573,264 +1660,381 @@ export default function Home() {
       <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
         <DialogContent className={menuStyles.dialog}>
           <div className={menuStyles.header}>
+            <div className={menuStyles.eyebrow}>
+              <Snowflake aria-hidden="true" /> FROSTBOUND
+            </div>
             <DialogTitle className={menuStyles.title}>
               Make it your climb.
             </DialogTitle>
+            <DialogDescription className={menuStyles.description}>
+              A new challenge. A little fine-tuning. Your next ascent.
+            </DialogDescription>
           </div>
-          <DialogDescription className="sr-only">
-            Game modes, challenges, progress, and settings.
-          </DialogDescription>
-          <div className={menuStyles.body}>
-            <div className={menuStyles.mode}>
-              <label htmlFor="game-mode">Game mode</label>
-              <NativeSelect
-                className={menuStyles.modeSelect}
-                disabled={active || !!challenge || !!daily}
-                id="game-mode"
-                aria-label="Game mode"
-                value={mode}
-                onChange={(event) => {
-                  const next = event.target.value as GameMode;
-                  if (next !== mode)
-                    trackEvent('mode_selected', {
-                      surface: 'solo',
-                      previous_mode: mode,
-                      mode: next,
-                    });
-                  setMode(next);
-                  if (engine.current) {
-                    engine.current.start(
-                      next,
-                      engine.current.seed,
-                      CURRENT_RULES_VERSION,
-                    );
-                    engine.current.status = 'ready';
-                    setGame(engine.current.snapshot());
-                  }
-                }}
-              >
-                <NativeSelectOption value="arcade">Classic</NativeSelectOption>
-                <NativeSelectOption value="party">Party</NativeSelectOption>
-                <NativeSelectOption value="practice">
-                  Practice
-                </NativeSelectOption>
-              </NativeSelect>
-            </div>
-            {active && (
-              <p className={menuStyles.note}>
-                Return to the title screen to change mode.
-              </p>
-            )}
-            <section
-              className={menuStyles.group}
-              aria-labelledby="menu-play-heading"
-            >
-              <h3 id="menu-play-heading">Play</h3>
-              <Button
-                className={menuStyles.row}
-                variant="ghost"
-                render={
-                  // oxlint-disable-next-line next/no-html-link-for-pages -- Vinext's client router fails in the static Netlify export.
-                  <a href="/race" aria-label="Race a friend" />
-                }
-                nativeButton={false}
-              >
-                <Users aria-hidden="true" />
-                <span>Race a friend</span>
-                <ChevronRight aria-hidden="true" />
-              </Button>
-              <Button
-                className={menuStyles.row}
-                variant="ghost"
-                onClick={() =>
-                  fromMenu(() => {
-                    setDailyChoice(daily ?? todayDailyTower());
-                    setDailyOpen(true);
-                  })
-                }
-              >
-                <CalendarDays aria-hidden="true" />
-                <span>Daily tower</span>
-                <ChevronRight aria-hidden="true" />
-              </Button>
-              <Button
-                className={menuStyles.row}
-                variant="ghost"
-                disabled={!ready}
-                onClick={() => fromMenu(guidedPractice)}
-              >
-                <Footprints aria-hidden="true" />
-                <span>Guided practice</span>
-                <ChevronRight aria-hidden="true" />
-              </Button>
-              <Button
-                className={menuStyles.row}
-                variant="ghost"
-                onClick={() => fromMenu(() => setHelp(true))}
-              >
-                <CircleHelp aria-hidden="true" />
-                <span>How to play</span>
-                <ChevronRight aria-hidden="true" />
-              </Button>
-            </section>
-            <section
-              className={menuStyles.group}
-              aria-labelledby="menu-progress-heading"
-            >
-              <h3 id="menu-progress-heading">Your climb</h3>
-              <Button
-                className={menuStyles.row}
-                variant="ghost"
-                onClick={() => fromMenu(() => setChallengesOpen(true))}
-              >
-                <Target aria-hidden="true" />
-                <span>Skill goals</span>
-                <ChevronRight aria-hidden="true" />
-              </Button>
-              <Button
-                className={menuStyles.row}
-                variant="ghost"
-                onClick={() => fromMenu(openWardrobe)}
-              >
-                <Shirt aria-hidden="true" />
-                <span>Outfits{' '}{newOutfits.length > 0 && <span className={menuStyles.newLabel}>New</span>}</span>
-                <ChevronRight aria-hidden="true" />
-              </Button>
-              {newOutfits.length > 0 && (
-                <p className={menuStyles.unlockDetails}>
-                  Unlocked: {newOutfits.join(', ')}. Open Outfits to try them on.
-                </p>
-              )}
-              <Button
-                className={menuStyles.row}
-                variant="ghost"
-                onClick={() => fromMenu(openLeaderboard)}
-              >
+          <Tabs
+            className={menuStyles.tabs}
+            value={menuTab}
+            onValueChange={(value) => changeMenuTab(String(value))}
+          >
+            <TabsList className={menuStyles.tabList} aria-label="Climb menu">
+              <TabsTrigger value="play">
+                <Play aria-hidden="true" />
+                Play
+              </TabsTrigger>
+              <TabsTrigger value="progress">
                 <Trophy aria-hidden="true" />
-                <span>Leaderboard</span>
-                <ChevronRight aria-hidden="true" />
-              </Button>
-              {ghostFloor !== null && (
-                <p className={menuStyles.ghost}>
-                  <Ghost aria-hidden="true" />
-                  <span>Classic ghost</span>
-                  <strong>Floor {ghostFloor}</strong>
-                </p>
-              )}
-            </section>
-            <details
-              className={menuStyles.settings}
-              onToggle={(event) => {
-                if (event.currentTarget.open)
-                  telemetry.current.event('feature_panel_opened', {
-                    panel: 'settings',
-                  });
-              }}
-            >
-              <summary>
+                Your climb
+              </TabsTrigger>
+              <TabsTrigger value="settings">
                 <Settings2 aria-hidden="true" />
-                <span>Settings</span>
-                <ChevronRight
-                  className={menuStyles.disclosure}
-                  aria-hidden="true"
-                />
-              </summary>
-              <div className={menuStyles.settingsContent}>
-                <label>
-                  <span>Sound</span>
-                  <input
-                    type="checkbox"
-                    checked={sound}
-                    onChange={(event) => {
-                      const enabled = event.target.checked;
-                      soundRef.current = enabled;
-                      trackEvent('setting_changed', {
-                        surface: 'solo',
-                        setting: 'sound',
-                        previous_value: sound,
-                        value: enabled,
-                        source: 'user',
-                      });
-                      setSound(enabled);
-                      audio.current?.setEnabled(enabled);
-                      if (enabled) tone('gem');
-                    }}
-                  />
-                </label>
-                <label>
-                  <span>Background music</span>
-                  <input
-                    type="checkbox"
-                    checked={music}
-                    onChange={(event) => {
-                      const enabled = event.target.checked;
-                      trackEvent('setting_changed', {
-                        surface: 'solo',
-                        setting: 'music',
-                        previous_value: music,
-                        value: enabled,
-                        source: 'user',
-                      });
-                      setMusic(enabled);
-                      audio.current ??= new TowerAudio();
-                      audio.current.setMusicEnabled(enabled);
-                    }}
-                  />
-                </label>
-                <label>
-                  <span>Reduce motion</span>
-                  <input
-                    type="checkbox"
-                    checked={reducedMotion}
-                    onChange={(event) => changeMotion(event.target.checked)}
-                  />
-                </label>
-                <label>
-                  <span>High quality effects</span>
-                  <input
-                    type="checkbox"
-                    checked={quality}
-                    onChange={(event) => {
-                      trackEvent('setting_changed', {
-                        surface: 'solo',
-                        setting: 'quality',
-                        previous_value: quality,
-                        value: event.target.checked,
-                        source: 'user',
-                      });
-                      setQuality(event.target.checked);
-                      world.current?.setQuality(event.target.checked);
-                    }}
-                  />
-                </label>
-                <Button
-                  className={menuStyles.row}
-                  variant="ghost"
-                  onClick={() => {
-                    const request = document.fullscreenElement
-                      ? document.exitFullscreen()
-                      : document.documentElement.requestFullscreen?.();
-                    if (!request)
-                      trackEvent('fullscreen_failed', {
-                        surface: 'solo',
-                        error_code: 'unavailable',
-                      });
-                    void request?.catch(() => {
-                      trackEvent('fullscreen_failed', {
-                        surface: 'solo',
-                        error_code: 'rejected',
-                      });
-                      setToast('Fullscreen is unavailable in this view.');
-                      setTimeout(() => setToast(''), 3500);
-                    });
-                  }}
+                Settings
+              </TabsTrigger>
+            </TabsList>
+            <div className={menuStyles.body}>
+              <TabsContent value="play" className={menuStyles.panel}>
+                <fieldset
+                  className={menuStyles.modes}
+                  disabled={active || !!challenge || !!daily}
                 >
-                  <Maximize2 aria-hidden="true" />
-                  <span>Toggle fullscreen</span>
-                </Button>
-              </div>
-            </details>
-          </div>
+                  <legend>CHOOSE YOUR MODE</legend>
+                  <div className={menuStyles.modeGrid}>
+                    {(
+                      [
+                        {
+                          value: 'arcade',
+                          label: 'Classic',
+                          description: 'Climb higher. Beat the frost.',
+                          Icon: Snowflake,
+                        },
+                        {
+                          value: 'party',
+                          label: 'Party',
+                          description: 'Low gravity. Bigger jumps.',
+                          Icon: Sparkles,
+                        },
+                        {
+                          value: 'practice',
+                          label: 'Practice',
+                          description: 'Find your feet. No rush.',
+                          Icon: Footprints,
+                        },
+                      ] as const
+                    ).map(({ value, label, description, Icon }) => (
+                      <label className={menuStyles.modeCard} key={value}>
+                        <input
+                          type="radio"
+                          name="game-mode"
+                          aria-label={label}
+                          value={value}
+                          checked={mode === value}
+                          onChange={() => {
+                            if (value !== mode)
+                              trackEvent('mode_selected', {
+                                surface: 'solo',
+                                previous_mode: mode,
+                                mode: value,
+                              });
+                            setMode(value);
+                            if (engine.current) {
+                              engine.current.start(
+                                value,
+                                engine.current.seed,
+                                CURRENT_RULES_VERSION,
+                              );
+                              engine.current.status = 'ready';
+                              setGame(engine.current.snapshot());
+                            }
+                          }}
+                        />
+                        <Icon aria-hidden="true" />
+                        <strong>{label}</strong>
+                        <small>{description}</small>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                {(active || challenge || daily) && (
+                  <p className={menuStyles.note}>
+                    {active
+                      ? 'Return to the title screen to change mode.'
+                      : 'Leave this challenge to choose a different mode.'}
+                  </p>
+                )}
+                <section
+                  className={menuStyles.group}
+                  aria-labelledby="menu-play-heading"
+                >
+                  <h3 id="menu-play-heading">Explore the tower</h3>
+                  <Button
+                    className={menuStyles.row}
+                    variant="ghost"
+                    render={
+                      // oxlint-disable-next-line next/no-html-link-for-pages -- Vinext's client router fails in the static Netlify export.
+                      <a href="/race" aria-label="Race a friend" />
+                    }
+                    nativeButton={false}
+                  >
+                    <Users aria-hidden="true" />
+                    <span>
+                      Race a friend<small>A private, two-player climb</small>
+                    </span>
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                  <Button
+                    className={menuStyles.row}
+                    variant="ghost"
+                    onClick={() =>
+                      fromMenu(() => {
+                        setDailyChoice(daily ?? todayDailyTower());
+                        setDailyOpen(true);
+                      })
+                    }
+                  >
+                    <CalendarDays aria-hidden="true" />
+                    <span>
+                      Daily tower
+                      <small>One shared route. A fresh start every day.</small>
+                    </span>
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                  <Button
+                    className={menuStyles.row}
+                    variant="ghost"
+                    disabled={!ready}
+                    onClick={() => fromMenu(guidedPractice)}
+                  >
+                    <Footprints aria-hidden="true" />
+                    <span>
+                      Guided practice
+                      <small>Learn the jumps, one step at a time</small>
+                    </span>
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                  <Button
+                    className={menuStyles.row}
+                    variant="ghost"
+                    onClick={() => fromMenu(() => setHelp(true))}
+                  >
+                    <CircleHelp aria-hidden="true" />
+                    <span>
+                      How to play
+                      <small>Controls, combos, and the art of the ascent</small>
+                    </span>
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                </section>
+              </TabsContent>
+              <TabsContent value="progress" className={menuStyles.panel}>
+                <section
+                  className={menuStyles.group}
+                  aria-labelledby="menu-progress-heading"
+                >
+                  <h3 id="menu-progress-heading">Your climb</h3>
+                  <Button
+                    className={menuStyles.row}
+                    variant="ghost"
+                    onClick={() => fromMenu(() => setChallengesOpen(true))}
+                  >
+                    <Target aria-hidden="true" />
+                    <span>
+                      Skill goals
+                      <small>Small challenges. Stronger climbs.</small>
+                    </span>
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                  <Button
+                    className={menuStyles.row}
+                    variant="ghost"
+                    onClick={() => fromMenu(openWardrobe)}
+                  >
+                    <Shirt aria-hidden="true" />
+                    <span>
+                      Outfits <small>Make your climber your own</small>
+                      {newOutfits.length > 0 && (
+                        <span className={menuStyles.newLabel}>New</span>
+                      )}
+                    </span>
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                  {newOutfits.length > 0 && (
+                    <p className={menuStyles.unlockDetails}>
+                      Unlocked: {newOutfits.join(', ')}. Open Outfits to try
+                      them on.
+                    </p>
+                  )}
+                  <Button
+                    className={menuStyles.row}
+                    variant="ghost"
+                    onClick={() => fromMenu(openLeaderboard)}
+                  >
+                    <Trophy aria-hidden="true" />
+                    <span>
+                      Leaderboard<small>See how high you can go</small>
+                    </span>
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                  {ghostFloor !== null && (
+                    <p className={menuStyles.ghost}>
+                      <Ghost aria-hidden="true" />
+                      <span>Classic ghost</span>
+                      <strong>Floor {ghostFloor}</strong>
+                    </p>
+                  )}
+                </section>
+              </TabsContent>
+              <TabsContent value="settings" className={menuStyles.panel}>
+                <section
+                  className={menuStyles.settingGroup}
+                  aria-labelledby="menu-audio-heading"
+                >
+                  <h3 id="menu-audio-heading">Audio</h3>
+                  <div className={menuStyles.settingRow}>
+                    <Volume2 aria-hidden="true" />
+                    <span>
+                      <label id="setting-sound-label" htmlFor="setting-sound">
+                        Sound
+                      </label>
+                      <small>All game audio, including music</small>
+                    </span>
+                    <Switch
+                      className={menuStyles.switch}
+                      id="setting-sound"
+                      aria-labelledby="setting-sound-label"
+                      checked={sound}
+                      onCheckedChange={changeSound}
+                    />
+                  </div>
+                  <div className={menuStyles.settingRow}>
+                    <Music2 aria-hidden="true" />
+                    <span>
+                      <label id="setting-music-label" htmlFor="setting-music">
+                        Background music
+                      </label>
+                      <small>
+                        {sound
+                          ? 'A soundtrack for your ascent'
+                          : 'Unmute sound to hear music'}
+                      </small>
+                    </span>
+                    <Switch
+                      className={menuStyles.switch}
+                      id="setting-music"
+                      aria-labelledby="setting-music-label"
+                      checked={music}
+                      onCheckedChange={(enabled) => {
+                        trackEvent('setting_changed', {
+                          surface: 'solo',
+                          setting: 'music',
+                          previous_value: music,
+                          value: enabled,
+                          source: 'user',
+                        });
+                        setMusic(enabled);
+                        audio.current ??= new TowerAudio();
+                        audio.current.setMusicEnabled(enabled);
+                      }}
+                    />
+                  </div>
+                </section>
+                <section
+                  className={menuStyles.settingGroup}
+                  aria-labelledby="menu-display-heading"
+                >
+                  <h3 id="menu-display-heading">Display & comfort</h3>
+                  <div className={menuStyles.settingRow}>
+                    <Wind aria-hidden="true" />
+                    <span>
+                      <label id="setting-motion-label" htmlFor="setting-motion">
+                        Reduce motion
+                      </label>
+                      <small>Less camera shake and movement</small>
+                    </span>
+                    <Switch
+                      className={menuStyles.switch}
+                      id="setting-motion"
+                      aria-labelledby="setting-motion-label"
+                      checked={reducedMotion}
+                      onCheckedChange={changeMotion}
+                    />
+                  </div>
+                  <div className={menuStyles.settingRow}>
+                    <Sparkles aria-hidden="true" />
+                    <span>
+                      <label
+                        id="setting-quality-label"
+                        htmlFor="setting-quality"
+                      >
+                        High quality effects
+                      </label>
+                      <small>
+                        Richer lighting. Turn off for smoother play.
+                      </small>
+                    </span>
+                    <Switch
+                      className={menuStyles.switch}
+                      id="setting-quality"
+                      aria-labelledby="setting-quality-label"
+                      checked={quality}
+                      onCheckedChange={(enabled) => {
+                        trackEvent('setting_changed', {
+                          surface: 'solo',
+                          setting: 'quality',
+                          previous_value: quality,
+                          value: enabled,
+                          source: 'user',
+                        });
+                        setQuality(enabled);
+                        world.current?.setQuality(enabled);
+                      }}
+                    />
+                  </div>
+                </section>
+                <div className={menuStyles.fullscreen}>
+                  <Button
+                    className={menuStyles.row}
+                    variant="ghost"
+                    onClick={() => {
+                      const request = document.fullscreenElement
+                        ? document.exitFullscreen()
+                        : document.documentElement.requestFullscreen?.();
+                      if (!request)
+                        trackEvent('fullscreen_failed', {
+                          surface: 'solo',
+                          error_code: 'unavailable',
+                        });
+                      void request?.catch(() => {
+                        trackEvent('fullscreen_failed', {
+                          surface: 'solo',
+                          error_code: 'rejected',
+                        });
+                        setToast('Fullscreen is unavailable in this view.');
+                        setTimeout(() => setToast(''), 3500);
+                      });
+                    }}
+                  >
+                    <Maximize2 aria-hidden="true" />
+                    <span>
+                      Toggle fullscreen
+                      <small>Give the tower a little more room</small>
+                    </span>
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                </div>
+              </TabsContent>
+            </div>
+          </Tabs>
+          <footer className={menuStyles.footer}>
+            <span>
+              {menuTab === 'settings'
+                ? 'Changes apply instantly'
+                : active
+                  ? 'Your climb is paused'
+                  : 'The tower is waiting'}
+            </span>
+            <Button onClick={() => setMenuOpen(false)}>
+              Done
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </footer>
         </DialogContent>
       </Dialog>
       <Dialog open={dailyOpen} onOpenChange={setDailyOpen}>
@@ -1912,181 +2116,91 @@ export default function Home() {
         </DialogContent>
       </Dialog>
       <Dialog open={challengesOpen} onOpenChange={setChallengesOpen}>
-        <DialogContent className="result-card help-card challenges-dialog">
-          <DialogTitle>Find your next challenge.</DialogTitle>
-          <DialogDescription>
-            Learn one skill at a time. Completed milestones stay with you across
-            climbs.
-          </DialogDescription>
-          <SkillGoalProgression
-            profile={skills}
-            snapshot={game}
-            onSelect={(id) => {
-              const next = selectSkillGoal(skillsRef.current, id);
-              if (next !== skillsRef.current)
-                telemetry.current.event('skill_goal_selected', {
-                  goal_id: id,
-                  previous_goal_id: skillsRef.current.featuredId,
-                });
-              saveSkills(next);
-            }}
-          />
-          <details className="advanced-challenges">
-            <summary>Expert challenges · per run</summary>
-            <QuickChallenges challenges={game.challenges} preview />
-          </details>
-          <Button
-            className="start-button"
-            disabled={!ready || !!error}
-            onClick={() => begin()}
-          >
-            BEGIN THE ASCENT <ArrowRight size={18} />
-          </Button>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={help} onOpenChange={setHelp}>
-        <DialogContent className="result-card help-card">
-          <span className="eyebrow">THE ART OF THE ASCENT</span>
-          <DialogTitle>Find your rhythm.</DialogTitle>
-          <div className="game-settings">
-            <Button variant="ghost" disabled={!ready} onClick={guidedPractice}>
-              Replay guidance in Practice
+        <DialogContent
+          className={skillGoalStyles.dialog}
+          initialFocus={goalsTitle}
+        >
+          <header className={skillGoalStyles.header}>
+            <span className={skillGoalStyles.eyebrow}>
+              <Target aria-hidden="true" /> ONE CLIMB AT A TIME
+            </span>
+            <DialogTitle
+              className={skillGoalStyles.title}
+              ref={goalsTitle}
+              tabIndex={-1}
+            >
+              Your climbing goals.
+            </DialogTitle>
+            <DialogDescription className={skillGoalStyles.description}>
+              Small steps. Higher places.
+            </DialogDescription>
+          </header>
+          <div className={skillGoalStyles.body}>
+            <SkillGoalProgression
+              profile={skills}
+              snapshot={game}
+              onSelect={(id) => {
+                const next = selectSkillGoal(skillsRef.current, id);
+                if (next !== skillsRef.current)
+                  telemetry.current.event('skill_goal_selected', {
+                    goal_id: id,
+                    previous_goal_id: skillsRef.current.featuredId,
+                  });
+                saveSkills(next);
+              }}
+            />
+            <details className={skillGoalStyles.expert}>
+              <summary>
+                <span>Extra challenges</span>
+                <small>Reset each run</small>
+                <ChevronRight aria-hidden="true" />
+              </summary>
+              <div>
+                <QuickChallenges challenges={game.challenges} preview />
+              </div>
+            </details>
+          </div>
+          <footer className={skillGoalStyles.footer}>
+            <Button variant="ghost" onClick={() => setChallengesOpen(false)}>
+              Done
             </Button>
             <Button
-              variant="ghost"
+              className={skillGoalStyles.primary}
+              disabled={!ready || !!error}
               onClick={() => {
-                setHelp(false);
-                setMeasurementsOpen(true);
+                if (active) {
+                  setChallengesOpen(false);
+                  return;
+                }
+                if (skills.completed.length === SKILL_GOALS.length) {
+                  setChallengesOpen(false);
+                  setDailyChoice(daily ?? todayDailyTower());
+                  setDailyOpen(true);
+                } else begin();
               }}
             >
-              Playtest measurements
+              {active
+                ? 'Back to climb'
+                : skills.completed.length === SKILL_GOALS.length
+                  ? 'Try the daily tower'
+                  : 'Start climbing'}{' '}
+              <ArrowRight size={18} />
             </Button>
-          </div>
-          <DialogDescription className="sr-only">
-            Controls and rules for climbing the tower.
-          </DialogDescription>
-          <div className="instruction">
-            <span>
-              <kbd>A</kbd>
-              <kbd>D</kbd>
-            </span>
-            <div>
-              <strong>Move with momentum</strong>
-              <p>
-                Hold the left or right touch button, or use A / D or the arrow
-                keys. Slide across the direction pad to turn. Ice is slippery —
-                steer early.
-              </p>
-            </div>
-          </div>
-          <div className="instruction">
-            <kbd>SPACE</kbd>
-            <div>
-              <strong>Jump. Land. Repeat.</strong>
-              <p>
-                Tap JUMP with your other thumb while holding a direction.
-                Release and tap again for the next jump. On a keyboard, use
-                Space, W or ↑. Build speed for higher jumps and star-shaped
-                spins.
-              </p>
-            </div>
-          </div>
-          <div className="instruction">
-            <ArrowRight size={25} />
-            <div>
-              <strong>Jump from the walls</strong>
-              <p>
-                While airborne beside a wall, release and tap JUMP to push up
-                and away, even at low speed. Land or jump from the opposite wall
-                before boosting from that wall again. Fast automatic rebounds
-                still work. Older friend challenges use their original rules.
-              </p>
-            </div>
-          </div>
-          <div className="instruction">
-            <Diamond size={25} />
-            <div>
-              <strong>Keep your chain alive</strong>
-              <p>
-                Land on higher floors within 3.8 seconds. Keep a combo going to
-                leave a colorful star trail. Collect crystals and skip floors to
-                raise your score.
-              </p>
-            </div>
-          </div>
-          <div className="instruction">
-            <ArrowUp size={25} />
-            <div>
-              <strong>Stay above the frost</strong>
-              <p>
-                The frost starts rising at floor 5 and gets faster every 30
-                seconds, with an extra speed increase every 50 floors. Each
-                50-floor milestone also brings narrower regular ledges; the
-                full-width stages give you room to prepare. Time and pace appear
-                below your score. Pausing freezes both. Practice removes
-                automatic scrolling; older friend challenges keep their original
-                pace.
-              </p>
-            </div>
-          </div>
-          <div className="instruction">
-            <Snowflake size={25} />
-            <div>
-              <strong>Read the danger</strong>
-              <p>
-                Cracked ledges crumble about a second after landing — jump away.
-                Icicles drop without landing markers, and bats enter without
-                spawn warnings. Both appear more often as you climb and can
-                arrive together. Land on a bat from above for a powerful bounce
-                and bonus points. Side hits knock you back, with a brief
-                recovery window.
-              </p>
-            </div>
-          </div>
-          <div className="instruction">
-            <Diamond size={25} />
-            <div>
-              <strong>Earn a frenzy. Ride out the rush.</strong>
-              <p>
-                Chain 10 new floors to earn six seconds of boosted jumps and
-                bonus crystal trails. Keep your combo alive to recharge after it
-                ends. Higher up, brief ice showers and collapsing stair
-                sequences test your reflexes, followed by breathing room. These
-                mechanics arrive gradually in new climbs; older friend
-                challenges and dated towers keep their original rules. Your move
-                and jump controls stay the same.
-              </p>
-            </div>
-          </div>
-          <div className="instruction">
-            <Diamond size={25} />
-            <div>
-              <strong>Party mode</strong>
-              <p>
-                Float in low gravity. Pink spring platforms launch you
-                automatically. Collect a pink crystal for 8 seconds of double
-                jumps: press jump again in midair, once per landing. Party has
-                its own rankings and personal best.
-              </p>
-            </div>
-          </div>
-          <div className="instruction">
-            <Ghost size={25} />
-            <div>
-              <strong>Race your ghost</strong>
-              <p>
-                Your highest completed Classic climb returns as a translucent
-                rival on the same tower. Score, then time, break floor ties.
-                Ghosts are saved in this browser; Party and Practice runs do not
-                replace them.
-              </p>
-            </div>
-          </div>
-          <Button className="start-button" onClick={() => begin()}>
-            LET’S CLIMB <ArrowRight size={18} />
-          </Button>
+          </footer>
         </DialogContent>
       </Dialog>
+      <HowToPlayDialog
+        open={help}
+        onOpenChange={setHelp}
+        ready={ready && !error}
+        active={active}
+        onPractice={guidedPractice}
+        onPlay={() => begin()}
+        onMeasurements={() => {
+          setHelp(false);
+          setMeasurementsOpen(true);
+        }}
+      />
       {sharedRun && (
         <FriendChallengeDialog
           runId={remoteRunId}
