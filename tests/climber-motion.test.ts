@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { Box3, type Object3D } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ClimberMotion } from '../lib/climber-motion.ts';
-import { TowerEngine, freshControls } from '../lib/tower-engine.ts';
+import { TowerEngine, WALL, freshControls } from '../lib/tower-engine.ts';
 
 void test('slow jumps stay upright; fast jumps spread into a full forward loop', () => {
   const motion = new ClimberMotion(); const state = { time: 10.34, grounded: false, status: 'playing' as const };
@@ -45,6 +45,47 @@ void test('a real running jump emits takeoff speed and finishes its flip before 
   }
   assert.ok(seenUpsideDown); assert.ok(uprightBeforeLanding); assert.equal(engine.grounded, true);
   assert.deepEqual(motion.pose(engine), { roll: 0, spread: 0 });
+});
+
+void test('stationary double jumps spin in the facing direction and still allow only one boost', () => {
+  for (const facing of [-1, 1]) {
+    const engine = new TowerEngine(17), motion = new ClimberMotion(); engine.start('party');
+    engine.platforms = [engine.platforms[0]];
+    engine.tick(1 / 120, { ...freshControls(), jump: true });
+    for (let i = 0; i < 20; i++) engine.tick(1 / 120, freshControls());
+    engine.drainEvents(); engine.facing = facing; engine.doubleJumpTime = 5;
+    engine.tick(1 / 120, { ...freshControls(), jump: true });
+    const jump = engine.drainEvents().find(event => event.type === 'jump'); assert.ok(jump);
+    assert.equal(jump.value, 0); assert.equal(jump.spinDirection, facing);
+    motion.event(jump, engine.time);
+    assert.ok(Math.abs(motion.pose({ time: engine.time + .34, grounded: engine.grounded, status: engine.status }).roll + facing * Math.PI) < 1e-8);
+    engine.tick(1 / 120, freshControls()); engine.tick(1 / 120, { ...freshControls(), jump: true });
+    assert.equal(engine.drainEvents().some(event => event.type === 'jump'), false);
+  }
+});
+
+void test('manual wall jumps and low-speed airborne wall rebounds start spins away from either wall', () => {
+  for (const side of [-1, 1]) for (const manual of [false, true]) {
+    const engine = new TowerEngine(17), motion = new ClimberMotion(); engine.start('practice');
+    engine.platforms = [engine.platforms[0]];
+    engine.tick(1 / 120, { ...freshControls(), jump: true });
+    for (let i = 0; i < 20; i++) engine.tick(1 / 120, freshControls());
+    engine.drainEvents(); engine.x = side * (WALL - .29); engine.vx = manual ? 0 : side * 4.5;
+    engine.tick(1 / 120, { ...freshControls(), jump: manual });
+    const events = engine.drainEvents(), spin = events.find(event => event.spinDirection !== undefined);
+    assert.ok(spin); assert.equal(spin.type, manual ? 'jump' : 'wall'); assert.equal(spin.spinDirection, -side);
+    for (const event of events) motion.event(event, engine.time);
+    assert.ok(Math.abs(motion.pose({ time: engine.time + .34, grounded: engine.grounded, status: engine.status }).roll - side * Math.PI) < 1e-8);
+  }
+});
+
+void test('a grounded wall rebound stays upright', () => {
+  const engine = new TowerEngine(17), motion = new ClimberMotion(); engine.start('practice');
+  engine.x = WALL - .29; engine.vx = 5;
+  engine.tick(1 / 120, freshControls());
+  const wall = engine.drainEvents().find(event => event.type === 'wall'); assert.ok(wall);
+  assert.equal(wall.spinDirection, undefined); motion.event(wall, engine.time);
+  assert.deepEqual(motion.pose({ time: engine.time + .34, grounded: engine.grounded, status: engine.status }), { roll: 0, spread: 0 });
 });
 
 void test('the shipped Harold model opens all four limbs into a star and returns to standing', async () => {

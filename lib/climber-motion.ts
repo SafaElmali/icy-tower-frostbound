@@ -1,12 +1,17 @@
 import type { Object3D } from 'three';
-import type { GameStatus } from './tower-engine';
+import type { GameEvent, GameStatus } from './tower-engine';
 
 /** Harold's spread-limb spin uses simulation time, so pausing freezes the pose. */
 export class ClimberMotion {
   private takeoff: { time: number; direction: number } | null = null;
 
-  jump(velocityX: number, time: number) {
-    this.takeoff = Math.abs(velocityX) >= 6 ? { time, direction: Math.sign(velocityX) } : null;
+  event(event: GameEvent, time: number) {
+    if (event.type === 'jump' || (event.type === 'wall' && event.spinDirection !== undefined))
+      this.jump(event.value ?? 0, time, event.spinDirection);
+  }
+
+  jump(velocityX: number, time: number, spinDirection?: number) {
+    this.takeoff = spinDirection || Math.abs(velocityX) >= 6 ? { time, direction: spinDirection || Math.sign(velocityX) } : null;
   }
 
   pose(state: { time: number; grounded: boolean; status: GameStatus }) {

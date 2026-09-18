@@ -325,11 +325,13 @@
   }
   .menu {
     /* Width-based typography must also fit the available vertical space. */
-    top: max(10%, calc(24px + var(--safe-top, 0px)));
+    top: 50%;
     left: 50%;
-    translate: -50% 0;
+    translate: -50% -50%;
     width: min(88%, 72dvh);
-    max-height: calc(90% - 92px);
+    max-height: calc(
+      100% - 160px - var(--safe-top, 0px) - var(--safe-bottom, 0px)
+    );
   }
   .heading h1 {
     font-size: 15cqi;
@@ -377,22 +379,12 @@
   .utilities {
     gap: 4px;
   }
-  .invited {
-    top: max(5%, var(--safe-top, 0px));
-    max-height: calc(95% - 88px);
-  }
   .invited .actions {
     margin-top: 6cqi;
   }
 }
 
 @media (orientation: portrait) and (max-height: 700px) {
-  .menu {
-    top: calc(24px + var(--safe-top, 0px));
-    max-height: calc(
-      100% - 104px - var(--safe-top, 0px) - var(--safe-bottom, 0px)
-    );
-  }
   .actions {
     margin-top: min(15cqi, 7dvh);
   }

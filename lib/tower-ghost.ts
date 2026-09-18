@@ -66,7 +66,7 @@ export class TowerGhost {
       }
       this.engine.tick(1 / 120, { left: !!(mask & 1), right: !!(mask & 2), jump: !!(mask & 4) });
       for (const event of this.engine.drainEvents()) {
-        if (event.type === 'jump') this.motion.jump(event.value ?? 0, this.engine.time);
+        this.motion.event(event, this.engine.time);
       }
       // Clear landed spins even when several simulation steps share a render frame.
       this.motion.pose(this.engine);

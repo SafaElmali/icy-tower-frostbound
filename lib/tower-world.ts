@@ -302,7 +302,7 @@ export class TowerWorld {
 
   }
   effect(e: GameEvent, time: number) {
-    if (e.type === 'jump') this.motion.jump(e.value ?? 0, time);
+    this.motion.event(e, time);
     if (e.type === 'land' && !this.reducedMotion) this.squish = .22;
     if (e.type === 'over' && !this.reducedMotion) this.shake = .24;
     if (e.type === 'wall' && !this.reducedMotion) this.shake = .055;

@@ -11,7 +11,7 @@ export type QuickChallenge = {
   progress: number; target: number; status: 'active' | 'complete' | 'failed' | 'missed';
 };
 export type Platform = { floor?: number; route?: 'approach' | 'safe' | 'shortcut' | 'merge'; id: number; x: number; y: number; width: number; gem: boolean; collected: boolean; moving: boolean; spring: boolean; origin: number; phase: number; crumble?: CrumbleState };
-export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over' | 'icicle-warning' | 'bat-warning' | 'crumble' | 'collapse' | 'hurt' | 'stomp' | 'dodge' | 'frenzy' | 'frenzy-end' | 'encounter'; x: number; y: number; value?: number };
+export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over' | 'icicle-warning' | 'bat-warning' | 'crumble' | 'collapse' | 'hurt' | 'stomp' | 'dodge' | 'frenzy' | 'frenzy-end' | 'encounter'; x: number; y: number; value?: number; spinDirection?: number };
 export type FailureEvidence = { kind: 'left-ledge'; floor: number } | { kind: 'frost-on-ledge' | 'fell' | 'frost' };
 export const FLOOR_HEIGHT = 2.35;
 export const WALL = 6.4;
@@ -209,7 +209,7 @@ export class TowerEngine {
     const step = 1 / 120;
     while (this.accumulator >= step && this.status === 'playing') { this.step(step, input); this.accumulator -= step; }
   }
-  private emit(type: GameEvent['type'], value?: number) { this.events.push({ type, x: this.x, y: this.y, value }); }
+  private emit(type: GameEvent['type'], value?: number, spinDirection?: number) { this.events.push({ type, x: this.x, y: this.y, value, ...(spinDirection === undefined ? {} : { spinDirection }) }); }
   private step(dt: number, input: Controls) {
     if (this.recordReplay && this.mode !== 'practice' && this.replay) {
       const mask = Number(input.left) | (Number(input.right) << 1) | (Number(input.jump) << 2);
@@ -259,19 +259,19 @@ export class TowerEngine {
       this.vy = 15.9 * this.jumpMultiplier; this.facing = -this.lastWallJumpSide;
       this.coyote = this.jumpBuffer = 0; this.standingId = -1; this.wallControlTime = .18;
       this.walkedOff = null;
-      this.wallJumps++; this.emit('wall'); this.emit('jump', this.vx);
+      this.wallJumps++; this.emit('wall'); this.emit('jump', this.vx, this.facing);
     } else if (jumpPressed && !this.grounded && this.mode === 'party' && this.doubleJumpTime > 0 && !this.doubleJumpUsed) {
       this.vy = (12.6 + Math.abs(this.vx) * .47) * this.jumpMultiplier;
       this.doubleJumpUsed = true; this.jumpBuffer = 0;
       this.walkedOff = null;
-      this.emit('jump', this.vx);
+      this.emit('jump', this.vx, Math.sign(this.vx) || this.facing);
     }
     const oldY = this.y;
     this.x += this.vx * dt;
     if (Math.abs(this.x) > WALL - .28) {
       this.x = Math.sign(this.x) * (WALL - .28);
       if (Math.abs(this.vx) > 4) {
-        this.vx *= -.83; this.emit('wall');
+        this.vx *= -.83; this.emit('wall', undefined, this.grounded ? undefined : Math.sign(this.vx));
         if (!this.grounded) this.wallJumps++;
       }
       else this.vx = 0;
