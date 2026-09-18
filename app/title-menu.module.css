@@ -2,8 +2,7 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: #07141e url('/assets/menu/frostbound-tower.webp') center / cover
-    no-repeat;
+  background: linear-gradient(90deg, #04101a99, #04101a33 46%, transparent 72%);
   pointer-events: none;
 }
 
@@ -190,6 +189,15 @@
   background: #b9edff0b;
 }
 
+.links small {
+  display: block;
+  margin-top: 3px;
+  font-size: max(10px, 2.2cqi);
+  line-height: 1.3;
+  color: #a5bcc8;
+  font-weight: 400;
+}
+
 .links > button[data-slot='button'] svg {
   width: 4.7cqi;
   height: 4.7cqi;
@@ -315,13 +323,7 @@
 
 @media (orientation: portrait) {
   .backdrop {
-    background-position: 65% center;
-  }
-  .backdrop::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, #04101acc, #04101a99 60%, #04101a33);
+    background: linear-gradient(180deg, #04101a99, #04101a55 55%, transparent 82%);
   }
   .menu {
     /* Width-based typography must also fit the available vertical space. */

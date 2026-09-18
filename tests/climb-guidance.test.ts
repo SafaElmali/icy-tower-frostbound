@@ -69,3 +69,57 @@ void test('retries begin with no accumulated movement or lingering frost warning
   assert.equal(retry.groundTravel, 0);
   assert.equal(retry.frostStartedAt, null);
 });
+
+void test('holding jump after landing offers release help, and a release immediately clears it', () => {
+  const engine = new TowerEngine();
+  engine.start('practice');
+  let state = { profile: { ...replayGuidance(), completed: ['move', 'jump', 'momentum'] as ('move' | 'jump' | 'momentum')[] }, run: freshGuidanceRun() };
+  const controls = { ...freshControls(), jump: true };
+  let jumps = 0;
+  for (let i = 0; i < 240; i++) {
+    engine.tick(1 / 60, controls);
+    const events = engine.drainEvents();
+    jumps += events.filter(event => event.type === 'jump').length;
+    state = advanceGuidance(state.profile, state.run, engine, events, controls);
+  }
+  assert.equal(jumps, 1, 'holding jump does not trigger a second takeoff');
+  assert.equal(getGuidanceCue(state.profile, state.run, engine)?.id, 'release');
+  controls.jump = false;
+  engine.tick(1 / 60, controls);
+  state = advanceGuidance(state.profile, state.run, engine, engine.drainEvents(), controls);
+  assert.equal(getGuidanceCue(state.profile, state.run, engine), null);
+  controls.jump = true;
+  engine.tick(1 / 60, controls);
+  assert.ok(engine.drainEvents().some(event => event.type === 'jump'), 'a fresh press restores jumping');
+});
+
+void test('recovery waits for a stalled grounded climb and retires after the first minute', () => {
+  const profile = { ...replayGuidance(), completed: ['move', 'jump', 'momentum'] as ('move' | 'jump' | 'momentum')[] };
+  let run = freshGuidanceRun();
+  const observe = (values: Partial<GuidanceObservation>) => {
+    const obs = observation(values);
+    run = advanceGuidance(profile, run, obs, [], freshControls()).run;
+    return getGuidanceCue(profile, run, obs);
+  };
+  assert.equal(observe({ time: 6.9 }), null);
+  assert.equal(observe({ time: 7 })?.id, 'stuck');
+  assert.equal(observe({ time: 8, grounded: false }), null);
+  assert.equal(observe({ time: 9, maxY: 2 }), null, 'upward progress resets the stall timer');
+  assert.equal(observe({ time: 15.9, maxY: 2 }), null);
+  assert.equal(observe({ time: 16, maxY: 2 })?.id, 'stuck');
+  assert.equal(observe({ time: 61, maxY: 2 }), null);
+  assert.equal(getGuidanceCue(skipGuidance(profile), run, observation({ time: 16 })), null);
+});
+
+void test('release detection ignores airtime, stale frames and paused observations', () => {
+  const profile = replayGuidance();
+  const controls = { ...freshControls(), jump: true };
+  let run = advanceGuidance(profile, freshGuidanceRun(), observation({ time: .5 }), [], controls).run;
+  for (const obs of [observation({ time: .5 }), observation({ status: 'paused', time: 4 })]) {
+    assert.equal(advanceGuidance(profile, run, obs, [], controls).run, run);
+  }
+  run = advanceGuidance(profile, run, observation({ time: 1, grounded: false }), [], controls).run;
+  assert.equal(run.heldJumpGroundTime, 0);
+  run = advanceGuidance(profile, run, observation({ time: 2 }), [], controls).run;
+  assert.equal(run.heldJumpGroundTime, 0, 'landing does not count the preceding airtime');
+});

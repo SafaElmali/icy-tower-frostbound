@@ -109,6 +109,7 @@ import { PlaytestReport } from '@/components/playtest-report';
 import { RunFeedback } from '@/components/run-feedback';
 import { GraphicsRecovery } from '@/lib/graphics-recovery';
 import { PersonalProgressResults } from '@/components/personal-progress';
+import { NextClimb } from '@/components/next-climb';
 import {
   readPersonalProgress,
   personalRunBaseline,
@@ -365,6 +366,10 @@ export default function Home() {
   }, []);
 
   function startRun(e: TowerEngine, selectedMode: GameMode, source = 'button') {
+    const retrySeed =
+      e.status === 'over' && e.floor < 5 && e.mode === selectedMode
+        ? e.seed
+        : undefined;
     const reason =
       e.status === 'over'
         ? 'retry'
@@ -386,7 +391,13 @@ export default function Home() {
     if (dailyRef.current) startDailyRun(e, dailyRef.current);
     else if (challengeRef.current)
       startChallengeRun(e, challengeRef.current, selectedMode);
-    else ghost.current = startGhostRun(e, ghostBest.current, selectedMode);
+    else
+      ghost.current = startGhostRun(
+        e,
+        ghostBest.current,
+        selectedMode,
+        retrySeed,
+      );
     startGoalCount.current = skillsRef.current.completed.length;
     if (source === 'game_tool') lastInput.current = 'game_tool';
     startBest.current = { ...bestRef.current[e.mode] };
@@ -414,9 +425,7 @@ export default function Home() {
       target_floor: challengeRef.current?.floor,
       target_score: challengeRef.current?.score,
       ghost_enabled: !!ghost.current,
-      guidance_enabled:
-        !guidanceProfile.current.skipped &&
-        guidanceProfile.current.completed.length < 3,
+      guidance_enabled: !guidanceProfile.current.skipped,
     });
     setRemoteRunId(telemetry.current.runId ?? undefined);
     const baseline = personalRunBaseline(personalProgress.current, e.mode);
@@ -532,12 +541,12 @@ export default function Home() {
     url.searchParams.delete('daily');
     window.history.replaceState(window.history.state, '', url);
   }
-  function playDaily(selected: DailyTower) {
+  function playDaily(selected: DailyTower, source = 'daily_panel') {
     if (!ready) return;
     leaveChallenge();
     telemetry.current.event('daily_tower_selected', {
       daily_date: selected.date,
-      selection_source: 'daily_panel',
+      selection_source: source,
     });
     dailyRef.current = selected;
     setDaily(selected);
@@ -802,6 +811,8 @@ export default function Home() {
           w.setQuality(high);
           w.setReducedMotion(reducedMotionRef.current);
           setQuality(high);
+          // Show the real tower while the optional character model loads.
+          w.render(e, 0, performance.now() / 1000);
           await w.load();
           if (disposed) {
             w.dispose();
@@ -1364,7 +1375,15 @@ export default function Home() {
                 </span>
               </Button>
               <span className={titleStyles.hint}>
-                Press <kbd>ENTER</kbd> to begin
+                {touchGuidance ? (
+                  <>Hold an arrow to run. Tap JUMP, release, then tap again.</>
+                ) : (
+                  <>
+                    Move with ← / → · Jump with Space
+                    <br />
+                    Press <kbd>ENTER</kbd> to begin
+                  </>
+                )}
               </span>
               <nav className={titleStyles.links} aria-label="Game options">
                 <Button
@@ -1396,6 +1415,21 @@ export default function Home() {
                   <span>How to play</span>
                   <ChevronRight aria-hidden="true" />
                 </Button>
+                {!challenge &&
+                  !daily &&
+                  (skills.completed.length > 0 || bests.arcade.floor >= 5) && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => playDaily(todayDailyTower(), 'title')}
+                      disabled={!ready || !!error}
+                    >
+                      <CalendarDays aria-hidden="true" />
+                      <span>
+                        Today’s tower<small>New climb every day</small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                  )}
               </nav>
               {best.floor > 0 && (
                 <p className={titleStyles.record}>
@@ -1517,20 +1551,29 @@ export default function Home() {
                 ? `${game.score.toLocaleString()} points`
                 : `${game.bestCombo}× best combo`}
             </p>
+            {game.status === 'over' &&
+              (challenge || game.floor > 0 || runBaseline.floor > 0) && (
+                <p
+                  className={`run-highlight ${(challenge ? game.floor > challenge.floor : game.floor > runBaseline.floor) ? 'is-record' : ''}`}
+                >
+                  {challenge
+                    ? game.floor > challenge.floor
+                      ? 'Challenge beaten!'
+                      : `Challenge target · Floor ${challenge.floor + 1}`
+                    : game.floor > runBaseline.floor
+                      ? 'New personal best!'
+                      : `Personal best · ${runBaseline.floor} floors`}
+                </p>
+              )}
             {game.status === 'over' && (
-              <p
-                className={`run-highlight ${(challenge ? game.floor > challenge.floor : game.floor > runBaseline.floor) ? 'is-record' : ''}`}
-              >
-                {challenge
-                  ? game.floor > challenge.floor
-                    ? 'Challenge beaten!'
-                    : `Challenge target · Floor ${challenge.floor + 1}`
-                  : game.floor > runBaseline.floor
-                    ? 'New personal best!'
-                    : `Personal best · ${runBaseline.floor} floors`}
-              </p>
+              <NextClimb
+                snapshot={game}
+                baseline={runBaseline}
+                skills={skills}
+                challengeFloor={challenge?.floor}
+                daily={!!daily}
+              />
             )}
-            {game.status === 'over' && <RunFeedback snapshot={game} compact />}
             <Button
               className="start-button"
               onClick={() => (game.status === 'paused' ? pause() : begin())}
@@ -1553,6 +1596,40 @@ export default function Home() {
               <span className="retry-hint">
                 or press <kbd>ENTER</kbd>
               </span>
+            )}
+            {game.status === 'over' && newOutfits.length > 0 && (
+              <Button
+                variant="ghost"
+                className="run-unlock"
+                onClick={openWardrobe}
+              >
+                <Shirt size={18} aria-hidden="true" />
+                <span>
+                  Unlocked: {newOutfits.join(', ')}
+                  <small>Try on your reward</small>
+                </span>
+                <ChevronRight size={16} aria-hidden="true" />
+              </Button>
+            )}
+            {game.status === 'over' &&
+              !challenge &&
+              !daily &&
+              game.mode !== 'practice' &&
+              game.floor < 5 &&
+              runBaseline.floor < 5 && (
+                <Button
+                  variant="ghost"
+                  className="run-practice"
+                  onClick={guidedPractice}
+                >
+                  <Footprints size={16} aria-hidden="true" />
+                  Practice without rising frost
+                </Button>
+              )}
+            {game.status === 'over' && daily && (
+              <p className="run-return-note">
+                A new shared tower every day at 00:00 UTC.
+              </p>
             )}
             <div className="run-summary-actions">
               {game.status === 'over' && (

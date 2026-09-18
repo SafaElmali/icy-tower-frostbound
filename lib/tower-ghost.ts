@@ -80,9 +80,9 @@ export class TowerGhost {
   }
 }
 
-/** Choose the rematch layout once when a run starts. */
-export function startGhostRun(engine: TowerEngine, best: GhostRecord | null, mode: GameMode) {
+/** A compatible ghost takes priority; early retries can otherwise repeat their opening. */
+export function startGhostRun(engine: TowerEngine, best: GhostRecord | null, mode: GameMode, retrySeed?: number) {
   const ghost = mode === 'arcade' && best?.replay.version === CURRENT_RULES_VERSION ? new TowerGhost(best) : null;
-  engine.start(mode, ghost?.record.replay.seed ?? Math.floor(Math.random() * 2 ** 30), CURRENT_RULES_VERSION);
+  engine.start(mode, ghost?.record.replay.seed ?? retrySeed ?? Math.floor(Math.random() * 2 ** 30), CURRENT_RULES_VERSION);
   return ghost;
 }

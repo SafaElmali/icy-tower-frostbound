@@ -320,6 +320,8 @@ export class TowerWorld {
     }
   }
   render(e: TowerEngine, dt: number, t: number, ghost: ClimberView | null = null) {
+    // Ambient snow, lighting and the menu idle pose honor reduced motion too.
+    if (this.reducedMotion) t = 0;
     const menu = e.status === 'ready';
     const simulationDt = e.status === 'playing' ? dt : 0;
     if (menu || e.time < this.lastEngineTime) { for (const fleck of this.flecks) this.root.remove(fleck.mesh); this.flecks.length = 0; this.shake = this.squish = 0; }

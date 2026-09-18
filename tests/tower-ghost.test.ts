@@ -113,3 +113,31 @@ void test('old ghosts cannot pin new runs to older rules and are replaced by a c
     assert.equal(bestGhost({ ...legacy, floor: 950 }, current)?.replay.version, 8);
   }
 });
+
+void test('an explicit retry seed repeats the opening and resets the run without a compatible ghost', () => {
+  const legacy = recordClimb(7).record;
+  for (const best of [null, legacy]) {
+    for (const mode of ['arcade', 'party', 'practice'] as const) {
+      const player = new TowerEngine(0); player.start(mode);
+      const opening = structuredClone(player.platforms);
+      player.tick(.1, { ...freshControls(), right: true, jump: true });
+      assert.ok(player.time > 0);
+      assert.equal(startGhostRun(player, best, mode, 0), null);
+      assert.equal(player.seed, 0);
+      assert.equal(player.time, 0);
+      assert.equal(player.x, 0);
+      assert.equal(player.floor, 0);
+      assert.equal(player.rulesVersion, 8);
+      assert.deepEqual(player.platforms, opening);
+    }
+  }
+});
+
+void test('a compatible ghost retains priority over an explicit retry seed', () => {
+  const { record } = recordClimb();
+  const player = new TowerEngine(99);
+  const ghost = startGhostRun(player, record, 'arcade', 0);
+  assert.ok(ghost);
+  assert.equal(player.seed, record.replay.seed);
+  assert.deepEqual(player.platforms, ghost.engine.platforms);
+});

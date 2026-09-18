@@ -11,11 +11,12 @@ export type GuidanceObservation = {
 export type GuidanceRun = {
   previousTime: number; previousX: number; previousGrounded: boolean;
   groundTravel: number; frostStartedAt: number | null;
+  bestHeight: number; lastProgressAt: number; heldJumpGroundTime: number;
 };
-export type GuidanceCue = { id: GuidanceStep | 'frost'; title: string; text: string; skippable: boolean };
+export type GuidanceCue = { id: GuidanceStep | 'frost' | 'release' | 'stuck'; title: string; text: string; skippable: boolean };
 
 export const replayGuidance = (): GuidanceProfile => ({ version: 1, completed: [], skipped: false });
-export const freshGuidanceRun = (): GuidanceRun => ({ previousTime: 0, previousX: 0, previousGrounded: true, groundTravel: 0, frostStartedAt: null });
+export const freshGuidanceRun = (): GuidanceRun => ({ previousTime: 0, previousX: 0, previousGrounded: true, groundTravel: 0, frostStartedAt: null, bestHeight: 0, lastProgressAt: 0, heldJumpGroundTime: 0 });
 export const skipGuidance = (profile: GuidanceProfile): GuidanceProfile => profile.skipped ? profile : { ...profile, skipped: true };
 
 export function readGuidanceProfile(raw: string | null): GuidanceProfile {
@@ -53,6 +54,12 @@ export function advanceGuidance(
     previousX: observation.x,
     previousGrounded: observation.grounded,
     groundTravel: run.groundTravel + travel,
+    // Compare against a height milestone, not the last frame: slow upward progress
+    // must still count, while tiny apex changes must not hide a stalled climb.
+    bestHeight: observation.maxY >= run.bestHeight + .5 ? observation.maxY : run.bestHeight,
+    lastProgressAt: observation.maxY >= run.bestHeight + .5 ? observation.time : run.lastProgressAt,
+    heldJumpGroundTime: controls.jump && observation.grounded && run.previousGrounded
+      ? run.heldJumpGroundTime + elapsed : 0,
     // Keep the normal game's existing floor-five trigger (FLOOR_HEIGHT = 2.35).
     frostStartedAt: run.frostStartedAt ?? (observation.mode !== 'practice' && observation.maxY >= 5 * 2.35 ? observation.time : null),
   };
@@ -70,9 +77,17 @@ export function getGuidanceCue(profile: GuidanceProfile, run: GuidanceRun, obser
     return { id: 'frost', title: 'The frost is rising', text: 'Keep climbing. The frost now advances even when you stand still.', skippable: false };
   }
   if (profile.skipped) return null;
+  // Jump is edge-triggered. Help a player holding the button after landing before
+  // asking for more momentum; a fresh press is needed for the next jump.
+  if (run.heldJumpGroundTime >= .8 && observation.time <= 60) {
+    return { id: 'release', title: 'Ready for the next jump', text: 'Release jump, then press it again. Keep holding a direction to carry your speed.', skippable: true };
+  }
+  if (observation.grounded && observation.time <= 60 && observation.time - run.lastProgressAt >= 7 && profile.completed.includes('move')) {
+    return { id: 'stuck', title: 'Make room for a run-up', text: 'Turn back along the ledge, build speed, then jump toward a higher ledge.', skippable: true };
+  }
   const step = STEPS.find(id => !profile.completed.includes(id));
   if (step === 'move') return { id: step, title: 'Get moving', text: 'Hold ← or → (A / D), or a direction button, to run along the ledge.', skippable: true };
-  if (step === 'jump') return { id: step, title: 'Your first jump', text: 'Press Space, ↑, W, or the jump button. Steer toward the next wide ledge.', skippable: true };
+  if (step === 'jump') return { id: step, title: 'Your first jump', text: 'Keep holding a direction and tap Space or JUMP. Release jump between presses.', skippable: true };
   if (step === 'momentum') return { id: step, title: 'Run, then jump', text: 'Build speed along a ledge before jumping. A faster takeoff sends you higher.', skippable: true };
   return null;
 }

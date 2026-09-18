@@ -34,7 +34,7 @@ For race-specific checks, see [multiplayer verification](multiplayer.md#verifica
 
 ## Art and sound
 
-- The cathedral interior is real 3D geometry: deep window bays, Gothic arches, masonry, side aisles, vault ribs, lanterns, and icicles. A fixed pool of architecture extends the tower as you climb. Perspective, drifting window light, light shafts, and snow provide depth and movement during gameplay. The title menu uses a separate decorative [background illustration](menu-art.md) with responsive HTML controls.
+- The cathedral interior is real 3D geometry: deep window bays, Gothic arches, masonry, side aisles, vault ribs, lanterns, and icicles. A fixed pool of architecture extends the tower as you climb. Perspective, drifting window light, light shafts, and snow provide depth and movement. The [title menu](menu-art.md) uses this same live scene behind responsive HTML controls.
 - [public/assets/harold.glb](../public/assets/harold.glb): custom 3D recreation of the original Harold look: oversized blue beanie, green crown sweater, olive trousers, brown shoes, and a broad grin. Separate limb pivots support running, jumping, and star-shaped spins.
 - [scripts/climber.blend](../scripts/climber.blend): editable Blender source.
 - [scripts/build-climber.py](../scripts/build-climber.py): rebuilds the character asset with Blender 5.2.

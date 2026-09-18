@@ -8,13 +8,17 @@ import styles from './game-hud.module.css';
 
 const keyboardTips = {
   move: 'Hold ← or → to run',
-  jump: 'Space / JUMP to reach the next ledge',
+  jump: 'Hold a direction + tap Space to jump',
+  release: 'Release Space, then press again to jump',
+  stuck: 'Turn back, build speed, then jump higher',
   momentum: 'Run, then jump to go higher',
   frost: 'Frost is rising — keep climbing',
 };
 const touchTips = {
   move: 'Hold an arrow with your left thumb',
-  jump: 'Keep holding an arrow + tap JUMP',
+  jump: 'Hold an arrow + tap JUMP with your right thumb',
+  release: 'Lift your right thumb, then tap JUMP again',
+  stuck: 'Switch arrows, build speed, then tap JUMP',
   momentum: 'Build speed, then tap JUMP to go higher',
   frost: keyboardTips.frost,
 };
@@ -71,9 +75,11 @@ export function GameHud({
           max={8.4}
         />
       </div>
-      <div className={styles.goal}>
-        <FeaturedSkillGoal profile={skills} snapshot={game} compact />
-      </div>
+      {!guidance && (
+        <div className={styles.goal}>
+          <FeaturedSkillGoal profile={skills} snapshot={game} compact />
+        </div>
+      )}
       {frenzy ? (
         <span className={styles.context}>
           <Sparkles size={12} /> Frenzy · {Math.ceil(game.action.frenzyTime)}s

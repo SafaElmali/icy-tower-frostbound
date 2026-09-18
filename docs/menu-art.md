@@ -1,6 +1,10 @@
 # Frostbound title screen
 
-The title screen matches the approved September 18, 2026 menu concept. Its decorative background is `public/assets/menu/frostbound-tower.webp` (1672 × 941), optimized to WebP at quality 90. Text, buttons, focus states, dialogs, and responsive layouts are implemented in `app/game.tsx` and `app/title-menu.module.css`. The artwork is shown only in the ready state; the existing Three.js scene remains the gameplay renderer.
+The title screen displays the live Three.js tower: actual ledges, crystals, the equipped climber, lighting, and drifting snow. It reuses the gameplay canvas and renderer, with a right-offset tower composition on landscape screens and a centered tower on portrait screens. Transparent gradients keep the HTML menu readable. Ambient movement respects Reduced motion, and mobile uses the existing performance quality setting. The scene is painted before the optional character model finishes loading.
+
+Text, buttons, focus states, dialogs, and responsive layouts remain in `app/game.tsx` and `app/title-menu.module.css`. Starting a climb transitions the same scene into gameplay without a background image swap.
+
+The previous decorative image, `public/assets/menu/frostbound-tower.webp` (1672 × 941), is retained as an unused artwork asset. Its original generation prompt is recorded below.
 
 Created using the built-in image generation tool, using the approved concept image as an edit target. Final prompt:
 

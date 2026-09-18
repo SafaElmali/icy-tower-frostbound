@@ -68,6 +68,8 @@
 .touch-controls, .touch-move { border: 0; margin: 0; min-width: 0; padding: 0; }
 .touch-controls[data-guidance="move"] .touch-move button,
 .touch-controls[data-guidance="jump"] .touch-jump,
+.touch-controls[data-guidance="release"] .touch-jump,
+.touch-controls[data-guidance="stuck"] button,
 .touch-controls[data-guidance="momentum"] button {
   outline: 2px solid #d9f6c4;
   outline-offset: 3px;
@@ -342,6 +344,11 @@
 .run-summary > .retry-hint { margin: 10px 0 0; font-size: 11px; color: #8eabb6; }
 .run-summary-actions { display: flex; justify-content: center; gap: 12px; margin-top: 12px; }
 .run-summary-actions > button { min-height: 44px; font-size: 13px; padding: 0 8px; font-weight: 400; color: #b1cbd0; gap: 4px; }
+.run-summary > .run-practice { width: 100%; margin-top: 8px; color: #bbd8df; font-size: 12px; gap: 8px; }
+.run-summary > .run-unlock { display: flex; width: 100%; gap: 10px; margin-top: 12px; border: 1px solid #b4db9c44; background: #b4db9c0b; color: #d4edc4; text-align: left; font-size: 12px; }
+.run-unlock > span { flex: 1; }
+.run-unlock small { display: block; margin-top: 3px; color: #a8c2b3; font-size: 11px; }
+.run-summary > .run-return-note { margin: 12px 0 0; color: #a5bdc6; font-size: 11px; line-height: 1.5; }
 .run-details-dialog [data-slot=dialog-title] { margin-bottom: 10px; }
 .run-details-content { display: grid; gap: 16px; margin: 24px 0; }
 .run-details-content > section { margin: 0; }
