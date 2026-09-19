@@ -22,9 +22,9 @@ export const publicPages = [
   },
   {
     path: '/race',
-    title: 'Race a Friend | Icy Tower — Frostbound',
+    title: 'Multiplayer Lobbies | Icy Tower — Frostbound',
     description:
-      'Play a private 2–4 player tower race in your browser. Invite a friend, choose a finish floor, and climb with checkpoints and optional shoves.',
+      'Host a public or private lobby, join other climbers, and race up the tower with 2–4 players. Choose a finish floor, checkpoints, and optional shoves.',
   },
 ] as const;
 

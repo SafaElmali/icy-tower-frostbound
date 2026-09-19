@@ -15,9 +15,29 @@ export const checkedBlobFetch: typeof fetch = async (input, init) => {
     throw new Error(`Race storage returned HTTP ${response.status}.`);
   return response;
 };
-export const raceBlobStore = () =>
-  getStore({
+export const raceBlobStore = () => {
+  const store = getStore({
     name: 'frostbound-races',
     consistency: 'strong',
     fetch: checkedBlobFetch,
   });
+  return Object.assign(store, {
+    async publishLobby(id: string, expiresAt: number) {
+      await store.setJSON(
+        `lobbies/${id}`,
+        { id },
+        {
+          onlyIfNew: true,
+          metadata: { expiresAt },
+        },
+      );
+    },
+    async *listPublicRooms() {
+      for await (const page of store.list({
+        prefix: 'lobbies/',
+        paginate: true,
+      }))
+        yield page.blobs.map(({ key }) => key.slice('lobbies/'.length));
+    },
+  });
+};

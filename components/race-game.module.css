@@ -945,6 +945,207 @@
 .profileForm {
   padding-bottom: 18px;
 }
+
+/* Matchmaking keeps the kit and host action beside the live room directory. */
+.card.directory {
+  width: min(900px, calc(100% - 32px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px;
+  text-align: left;
+  top: calc(50% + 22px);
+  max-height: calc(100dvh - 116px);
+}
+.hostPanel {
+  min-width: 0;
+}
+.hostPanel > p:not(.kicker) {
+  color: #a9c0c6;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0 0 20px;
+}
+.hostPanel > small {
+  display: block;
+  margin-top: 14px;
+  color: #93adb8;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.directory .emblem {
+  margin: 0 0 18px;
+}
+.visibility {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 0 0 16px;
+  text-align: left;
+}
+.visibility legend {
+  padding: 0 0 12px;
+  font-size: 13px;
+  color: #c3d8db;
+}
+.visibility label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 12px 10px;
+  border: 1px solid #b4d6e025;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.visibility label:has(input:checked) {
+  border-color: #86d7bd65;
+  background: #86d7bd0c;
+}
+.visibility input {
+  accent-color: #a9dacb;
+  margin-top: 2px;
+}
+.visibility small {
+  display: block;
+  color: #93adb8;
+  font-size: 10px;
+  line-height: 1.5;
+  margin-top: 5px;
+}
+.browser {
+  min-width: 0;
+  border-left: 1px solid #b4d6e025;
+  padding-left: 28px;
+}
+.browser header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.browser h2 {
+  font:
+    400 27px Georgia,
+    serif;
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+.browser .kicker {
+  margin-bottom: 10px;
+}
+.refreshLobbies {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  background: #17323c;
+  border: 1px solid #b4d6e025;
+  border-radius: 8px;
+  color: #c3d8db;
+  flex-shrink: 0;
+}
+.browserHint,
+.browserFootnote {
+  color: #93adb8;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.browserHint {
+  margin: 12px 0 20px;
+}
+.browserFootnote {
+  display: block;
+  margin-top: 16px;
+}
+.browserEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 18px;
+  border: 1px dashed #b4d6e025;
+  border-radius: 10px;
+  color: #9fb9c2;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+.browserEmpty strong {
+  color: #d5e4e2;
+  font-size: 15px;
+  font-weight: 500;
+}
+.lobbyList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.lobbyList li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 16px 12px;
+  background: #94bfc007;
+  border: 1px solid #b4d6e025;
+  border-radius: 10px;
+}
+.lobbySummary {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.lobbySummary strong {
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.lobbySummary span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  color: #a9dacb;
+  font-size: 10px;
+}
+.lobbySummary i {
+  font-style: normal;
+}
+.lobbySummary small {
+  font-size: 10px;
+  color: #93adb8;
+  line-height: 1.5;
+}
+.lobbyList button {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: #d1e8e5;
+  color: #173138;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+@media (max-width: 720px) {
+  .card.directory {
+    grid-template-columns: 1fr;
+    width: min(470px, calc(100% - 24px));
+    gap: 28px;
+    padding: 24px;
+  }
+  .browser {
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid #b4d6e025;
+  }
+}
 .profileForm .saveRules {
   width: 100%;
 }

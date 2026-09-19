@@ -1999,13 +1999,13 @@ export default function Home() {
                       variant="ghost"
                       render={
                         // oxlint-disable-next-line next/no-html-link-for-pages -- Vinext's client router fails in the static Netlify export.
-                        <a href="/race" aria-label="Race a friend" />
+                        <a href="/race" aria-label="Multiplayer lobbies" />
                       }
                       nativeButton={false}
                     >
                       <Users aria-hidden="true" />
                       <span>
-                        Race a friend<small>A private, 2–4 player climb</small>
+                        Multiplayer lobbies<small>Host or join a 2–4 player climb</small>
                       </span>
                       <ChevronRight aria-hidden="true" />
                     </Button>

@@ -25,6 +25,14 @@ export const RACE_BUMP_COOLDOWN_MS = 1_500;
 export const RACE_API = '/.netlify/functions/race';
 export const RACE_SLOTS = ['host', 'guest', 'guest2', 'guest3'] as const;
 export const RACE_MAX_PLAYERS = RACE_SLOTS.length;
+export type RaceVisibility = 'public' | 'private';
+export type RaceLobby = {
+  id: string;
+  hostName: string;
+  players: number;
+  settings: RaceSettings;
+};
+export type RaceLobbyList = { lobbies: RaceLobby[]; limited: boolean };
 export type RaceSlot = (typeof RACE_SLOTS)[number];
 export const racePlayerLabel = (slot: RaceSlot) =>
   `Player ${RACE_SLOTS.indexOf(slot) + 1}`;
@@ -89,6 +97,7 @@ export type RaceRecording = {
 };
 export type RaceView = {
   id: string;
+  visibility?: RaceVisibility;
   revision: number;
   round: number;
   seed: number;
@@ -121,6 +130,7 @@ export type RaceAction = {
     | 'rematch'
     | 'leave';
   room: string;
+  visibility?: RaceVisibility;
   round?: number;
   ready?: boolean;
   seq?: number;

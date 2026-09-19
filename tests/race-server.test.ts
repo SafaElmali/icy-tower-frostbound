@@ -454,10 +454,13 @@ void test('separate service instances share real Blob rooms and conditional join
         };
       },
       setJSON: (key, value, options) => store.setJSON(key, value, options),
+      publishLobby: (id, expiresAt) => store.publishLobby(id, expiresAt),
+      listPublicRooms: () => store.listPublicRooms(),
     };
     const a = new RaceService(localStore),
       b = new RaceService(localStore);
-    await a.act({ action: 'create', room }, host);
+    await a.act({ action: 'create', room, visibility: 'public' }, host);
+    assert.equal((await b.listLobbies()).lobbies[0].id, room);
     const joined = await b.act({ action: 'join', room }, guest);
     assert.equal(joined.you, 'guest');
     assert.equal(joined.players.length, 2);
@@ -467,6 +470,7 @@ void test('separate service instances share real Blob rooms and conditional join
     );
     const raw = await store.getWithMetadata(`rooms/${room}`, { type: 'json' });
     assert.equal(raw!.metadata.expiresAt, joined.expiresAt);
+    assert.equal((await store.getMetadata(`lobbies/${room}`))!.metadata.expiresAt, joined.expiresAt);
   } finally {
     await server.stop();
     await rm(directory, { recursive: true, force: true });

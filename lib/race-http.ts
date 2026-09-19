@@ -44,6 +44,13 @@ export function createRaceHandler(service: () => RaceService) {
       } catch {
         return json({ error: 'Invalid race request.' }, 400);
       }
+      if (
+        body &&
+        typeof body === 'object' &&
+        'action' in body &&
+        body.action === 'list'
+      )
+        return json(await service().listLobbies());
       const token =
         request.headers
           .get('authorization')

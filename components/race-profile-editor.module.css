@@ -2,6 +2,20 @@
   text-align: left;
   margin: 20px 0;
 }
+.kitDetails {
+  margin-top: 14px;
+  border-block: 1px solid #b4d6e025;
+}
+.kitDetails summary {
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+  color: #b3c8cd;
+  font-size: 12px;
+}
+.kitDetails[open] {
+  padding-bottom: 12px;
+}
 .name {
   display: grid;
   gap: 8px;

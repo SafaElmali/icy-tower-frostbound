@@ -31,7 +31,7 @@ Run to jump higher, use wall jumps to recover, and land on new floors within 3.8
 - **Party:** lower gravity, spring platforms, and timed double jumps, with separate rankings.
 - **Practice:** learn with guided tips and no automatic frost chase; runs are unranked.
 - **Daily tower:** a shared Classic tower for each UTC date, with unlimited retries.
-- **Race a friend:** private 2–4 player races with names, customizable climbers, bats, falling ice, checkpoint shields, configurable goals, and optional shoves.
+- **Multiplayer lobbies:** host public or private 2–4 player races, browse open rooms, and join other climbers; races come with names, customizable climbers, bats, falling ice, checkpoint shields, configurable goals, and optional shoves.
 
 Open **Menu** for modes, daily towers, skill goals, unlockable outfits, and leaderboards. Race your saved ghost or share a friend challenge after a run. Personal progress is stored in your browser.
 

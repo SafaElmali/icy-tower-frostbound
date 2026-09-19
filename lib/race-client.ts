@@ -4,6 +4,7 @@ import {
   type RaceAction,
   type RaceSession,
   type RaceView,
+  type RaceLobbyList,
 } from './race-protocol.ts';
 
 export class RaceRequestError extends Error {
@@ -12,6 +13,43 @@ export class RaceRequestError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+export async function listRaceLobbies(
+  signal: AbortSignal,
+  transport: typeof fetch = fetch,
+): Promise<RaceLobbyList> {
+  const response = await transport(RACE_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'list' }),
+    cache: 'no-store',
+    signal,
+  });
+  const data = (await response.json()) as RaceLobbyList & { error?: unknown };
+  if (!response.ok)
+    throw new RaceRequestError(
+      typeof data?.error === 'string' ? data.error : 'Could not load lobbies.',
+      response.status,
+    );
+  if (
+    !Array.isArray(data?.lobbies) ||
+    typeof data.limited !== 'boolean' ||
+    !data.lobbies.every(
+      (lobby: RaceLobbyList['lobbies'][number]) =>
+        lobby &&
+        validRaceId(lobby.id) &&
+        typeof lobby.hostName === 'string' &&
+        Number.isInteger(lobby.players) &&
+        lobby.players >= 1 &&
+        lobby.players < 4 &&
+        Number.isInteger(lobby.settings?.targetFloor) &&
+        Number.isFinite(lobby.settings?.durationMs) &&
+        typeof lobby.settings?.bumping === 'boolean',
+    )
+  )
+    throw new RaceRequestError('Unexpected lobby response.', 502);
+  return data;
 }
 const randomHex = (bytes: number) =>
   Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) =>

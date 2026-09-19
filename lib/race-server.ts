@@ -23,6 +23,8 @@ import {
   type RaceSignal,
   type RaceSlot,
   type RaceView,
+  type RaceVisibility,
+  type RaceLobbyList,
 } from './race-protocol.ts';
 import { replayRaceRecording } from './race-simulation.ts';
 import { normalizeRaceProfile } from './race-profile.ts';
@@ -41,6 +43,7 @@ type StoredPlayer = RacePlayer & {
   lastBumpAt: number;
 };
 export type StoredRace = {
+  visibility?: RaceVisibility;
   protocolVersion: typeof RACE_PROTOCOL_VERSION;
   id: string;
   revision: number;
@@ -58,6 +61,8 @@ export type StoredRace = {
   reason: RaceView['reason'];
 };
 export type RaceStore = {
+  listPublicRooms?(): AsyncIterable<string[]>;
+  publishLobby?(id: string, expiresAt: number): Promise<void>;
   getWithMetadata(
     key: string,
     options: { type: 'json' },
@@ -304,6 +309,7 @@ function advanceRoom(room: StoredRace, now: number) {
 function view(room: StoredRace, you: RaceSlot, now: number): RaceView {
   return {
     id: room.id,
+    visibility: room.visibility ?? 'private',
     revision: room.revision,
     round: room.round,
     seed: room.seed,
@@ -434,6 +440,58 @@ export class RaceService {
     this.onFinished = onFinished;
   }
 
+  async listLobbies(): Promise<RaceLobbyList> {
+    if (!this.store.listPublicRooms)
+      throw new RaceError(
+        'The lobby browser is unavailable. Try again shortly.',
+        503,
+      );
+    const lobbies: RaceLobbyList['lobbies'] = [];
+    let scanned = 0;
+    for await (const keys of this.store.listPublicRooms()) {
+      // Bound reads and concurrency even when many expired listings await cleanup.
+      for (let offset = 0; offset < keys.length; offset += 20) {
+        const rooms = await Promise.all(
+          keys
+            .slice(offset, offset + Math.min(20, 500 - scanned))
+            .map((id) =>
+              this.store.getWithMetadata(`rooms/${id}`, { type: 'json' }),
+            ),
+        );
+        for (const entry of rooms) {
+          scanned++;
+          const room = entry?.data;
+          const now = this.clock();
+          const host = room?.players.find((p) => p.slot === 'host');
+          if (
+            room &&
+            host &&
+            room.visibility === 'public' &&
+            room.protocolVersion === RACE_PROTOCOL_VERSION &&
+            room.expiresAt > now &&
+            !room.finished &&
+            room.startAt === null &&
+            now - host.lastSeen < RACE_DISCONNECT_MS
+          ) {
+            const players = room.players.filter(
+              (p) => now - p.lastSeen < RACE_DISCONNECT_MS,
+            ).length;
+            if (players < RACE_MAX_PLAYERS)
+              lobbies.push({
+                id: room.id,
+                hostName: normalizeRaceProfile(host.profile, 'host').name,
+                players,
+                settings: { ...room.settings },
+              });
+          }
+          if (lobbies.length >= 50 || scanned >= 500)
+            return { lobbies, limited: true };
+        }
+      }
+    }
+    return { lobbies, limited: false };
+  }
+
   async act(input: unknown, token: string): Promise<RaceView> {
     if (!/^[a-f0-9]{64}$/.test(token))
       throw new RaceError(
@@ -443,6 +501,11 @@ export class RaceService {
     if (!input || typeof input !== 'object')
       throw new RaceError('Invalid race request.');
     const body = input as RaceAction;
+    if (
+      body.visibility !== undefined &&
+      !['private', 'public'].includes(body.visibility)
+    )
+      throw new RaceError('Choose a public or private lobby.');
     if (
       !validRaceId(body.room) ||
       ![
@@ -475,6 +538,7 @@ export class RaceService {
       const room: StoredRace = current
         ? structuredClone(current.data)
         : {
+            visibility: body.visibility ?? 'private',
             protocolVersion: RACE_PROTOCOL_VERSION,
             id: body.room,
             revision: 0,
@@ -501,6 +565,35 @@ export class RaceService {
           'The race rules have been updated. Create a new room.',
           410,
         );
+      // Waiting public rooms release abandoned seats; active races retain their
+      // existing forfeit behavior. A host must remain present to admit guests.
+      if (
+        room.visibility === 'public' &&
+        room.startAt === null &&
+        !room.finished
+      ) {
+        const host = room.players.find((p) => p.slot === 'host')!;
+        if (
+          body.action === 'join' &&
+          tokenHash !== host.tokenHash &&
+          now - host.lastSeen >= RACE_DISCONNECT_MS
+        )
+          throw new RaceError(
+            'The host has left this lobby. Choose another room.',
+            409,
+          );
+        const members = room.players.filter(
+          (p) =>
+            p.slot === 'host' ||
+            p.tokenHash === tokenHash ||
+            now - p.lastSeen < RACE_DISCONNECT_MS,
+        );
+        if (members.length !== room.players.length) {
+          room.players = members;
+          room.signals = {};
+          for (const member of members) member.ready = false;
+        }
+      }
       let player = room.players.find((p) => p.tokenHash === tokenHash);
       if (!player && body.action === 'join') {
         if (
@@ -509,7 +602,7 @@ export class RaceService {
           room.finished
         )
           throw new RaceError(
-            'This four-player room is full. Ask for a new invite.',
+            'This lobby is full or has already started. Choose another room.',
             409,
           );
         player = makePlayer(
@@ -529,7 +622,10 @@ export class RaceService {
       const sameRound = body.round === room.round;
       if (sameRound && body.action === 'profile') {
         if (player.ready || room.startAt !== null || room.finished)
-          throw new RaceError('Choose your name and outfit before you ready up.', 409);
+          throw new RaceError(
+            'Choose your name and outfit before you ready up.',
+            409,
+          );
         player.profile = normalizeRaceProfile(body.profile, player.slot);
       }
       if (sameRound && body.action === 'configure') {
@@ -659,6 +755,16 @@ export class RaceService {
         room.startAt = now + RACE_COUNTDOWN_MS;
       advanceRoom(room, now);
       room.revision++;
+      if (!current && room.visibility === 'public') {
+        if (!this.store.publishLobby)
+          throw new RaceError(
+            'Public lobbies are unavailable. Try a private lobby.',
+            503,
+          );
+        // Publish the pointer first. Discovery only returns committed room records,
+        // so a failed room write cannot expose a phantom lobby.
+        await this.store.publishLobby(room.id, room.expiresAt);
+      }
       const result = await this.store.setJSON(key, room, {
         ...(current ? { onlyIfMatch: current.etag! } : { onlyIfNew: true }),
         metadata: { expiresAt: room.expiresAt },

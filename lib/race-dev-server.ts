@@ -7,6 +7,15 @@ import { RACE_API } from './race-protocol.ts';
 export class MemoryRaceStore implements RaceStore {
   private rooms = new Map<string, { data: StoredRace; etag: string }>();
   private revision = 0;
+  private listings = new Map<string, number>();
+  async publishLobby(id: string, expiresAt: number) {
+    this.listings.set(id, expiresAt);
+  }
+  async *listPublicRooms() {
+    for (const [id, expiresAt] of this.listings)
+      if (expiresAt <= Date.now()) this.listings.delete(id);
+    yield [...this.listings.keys()];
+  }
   async getWithMetadata(key: string) {
     return structuredClone(this.rooms.get(key) ?? null);
   }

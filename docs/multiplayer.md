@@ -9,7 +9,7 @@
 
 ## How to race
 
-Open **Menu → Race a friend**, choose your name and climbing kit, create a private lobby, and share its invite. Guests choose their own name and kit before joining. Private races offer all existing hat and sweater colors; this does not change solo wardrobe unlocks. Your choice is saved in this browser and can be edited in the lobby before you ready up. Names are limited to 20 characters. The host chooses a finish floor from 5–100, a one-, two-, three-, or five-minute limit, and optional shoving. Everyone in the room readies up on the same static tower. Falls return you to the last five-floor checkpoint so you can keep racing. The default is floor 30 with a three-minute clock.
+Open **Menu → Multiplayer lobbies**, choose your name, and host a **Public** or **Private** lobby. Public rooms appear under **Open lobbies**, where other players can see the host name, player count, finish floor, time limit, and shove setting, then select **Join**. The browser refreshes every five seconds. Private rooms are only accessible through their invite link; existing rooms remain private by default. Both kinds support shared invites and 2–4 players. Expand **Customize your climber** to choose your kit before hosting or joining. Multiplayer races offer all existing hat and sweater colors; this does not change solo wardrobe unlocks. Your choice is saved in this browser and can be edited in the lobby before you ready up. Names are limited to 20 characters. The host chooses a finish floor from 5–100, a one-, two-, three-, or five-minute limit, and optional shoving. Everyone in the room readies up on the same static tower. Falls return you to the last five-floor checkpoint so you can keep racing. The default is floor 30 with a three-minute clock.
 
 The goal or timer ends the race; higher verified floors win, and ties for the highest verified floor draw. Goal scores stop at the selected finish floor. Results use verified final scores instead of stale rival positions, and finished climbers rest on a ledge. All players can accept a rematch using the same lobby rules.
 
@@ -23,10 +23,13 @@ Rivals appear as solid, fully colored climbers wearing their chosen kits, with n
 
 All players begin on one shared countdown. Reaching the goal opens a three-second result settlement window; race mode leaves saved solo replays unchanged.
 
+Public listings disappear when full, counting down, racing, finished, expired, or when the host has been offline for 15 seconds. Abandoned guest seats in waiting public rooms are reclaimed on the next room update. If a room fills or starts while you are joining, a message lets you choose another lobby. Everyone still needs to ready up before a race begins.
+
 ## Acceptance criteria
 
 | Feature              | Acceptance criteria                                                                                                                                                                                                                                                                                                                                                  |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public discovery | Public rooms can be discovered without a session; the response contains only room ID, normalized host name, player count, and rules. Private rooms, credentials, poses, and signaling are excluded. Joins still use authenticated sessions and atomic capacity checks. |
 | Private lobby        | Create a room and share a link with no player credentials in it. Four independent browsers can join. Simultaneous joins beyond the four-player cap are rejected.                                                                                                                                                                                                                    |
 | Player identity      | Each member chooses a name (up to 20 characters), hat, and sweater. Profiles are shared with every member, editable only before readiness, and retained for rematches. Malformed cosmetics fall back to catalog defaults. Rival materials and outfits are independent from the local character and other rivals; solo replay ghosts stay translucent. |
 | Host rules           | The host chooses an integer finish floor from 5–100, a one-, two-, three-, or five-minute limit, and whether shoving is enabled. The guest sees the same saved rules. Invalid settings and guest edits are rejected.                                                                                                                                                 |
@@ -42,11 +45,13 @@ All players begin on one shared countdown. Reaching the goal opens a three-secon
 | Controls and layout  | Keyboard and touch movement/jumping remain available. Shoving has its own control when enabled. Losing focus releases held inputs while the shared clock continues. Lobby, HUD, and results fit narrow screens.                                                                                                                                                      |
 | Connection loss      | Temporary request failures retry without restarting the climb. Fifteen seconds without contact forfeits. Explicit departure is reported immediately. Reloading an active round forfeits; ordinary falls recover in the current round.                                                                                                                                |
 | Rematch              | All players must agree. One new seed and countdown start in the same room with the saved rules. Old-round actions cannot affect the next round. Existing direct-connection signaling survives the rematch, while shove events reset.                                                                                                                                |
-| Lifetime and privacy | Rooms expire after an hour and are swept hourly. Only authenticated members can access a room. Tokens are stored as hashes and excluded from public views. Rooms created with an incompatible older protocol return a clear request to create a new room.                                                                                                            |
+| Lifetime and privacy | Rooms expire after an hour and are swept hourly. Only authenticated members can access full room state; public lobby summaries are discoverable. Tokens are stored as hashes and excluded from public views. Rooms created with an incompatible older protocol return a clear request to create a new room.                                                                                                            |
 
 ## Backend and deployment
 
 `netlify/functions/race.ts` uses strongly consistent, site-wide [Netlify Blobs](https://docs.netlify.com/build/data-and-storage/netlify-blobs/) with conditional writes. Each bounded room record includes membership, rules, readiness, connection signaling, shove events, and results. Compare-and-swap retries resolve simultaneous joins and updates. Public replies explicitly exclude token hashes and internal sequence and cooldown state.
+
+Public discovery uses a `list` action on the same endpoint. A `lobbies/` pointer is written before a public room is created; discovery reads the committed canonical `rooms/` record and filters availability. Orphaned pointers cannot expose a lobby. Each request reads at most 500 indexed room records with concurrency capped at 20 and returns at most 50 available rooms, with a visible partial-results notice when capped. This bounded directory is intended for the current small multiplayer population; larger deployments should use a paginated, queryable lobby index. Both room records and listing pointers are swept after their one-hour expiry.
 
 The function accepts same-origin JSON POST requests, bounds request and signaling sizes, and limits request volume. Each pair negotiates independently: the lower player slot sends offers and the higher slot answers the matching generation. New offers discard stale answers for that pair. The application does not request camera or microphone access.
 
@@ -54,21 +59,21 @@ The function accepts same-origin JSON POST requests, bounds request and signalin
 
 Direct rival poses use a 20 Hz WebRTC data channel and Google STUN. There is no TURN relay configured; networks that cannot connect directly use the HTTP fallback, which waits 500 ms after each response. Direct connections keep room heartbeats at one second. Buffered interpolation smooths both paths, though fallback movement carries more delay.
 
-The immediate local simulation and direct rival updates suit private casual races. The server verifies results and authenticates shove events, but shove proximity depends on recent client-reported poses. Competitive ranked combat would need a server that continuously simulates all players and an explicit latency policy.
+The immediate local simulation and direct rival updates suit casual multiplayer races. The server verifies results and authenticates shove events, but shove proximity depends on recent client-reported poses. Competitive ranked combat would need a server that continuously simulates all players and an explicit latency policy.
 
 ## Verification
 
 Run affected tests with:
 
 ```sh
-node --test tests/race-profile.test.ts tests/race-appearance.test.ts tests/race-client.test.ts tests/race-server.test.ts tests/race-simulation.test.ts tests/race-peer.test.ts tests/race-rival-shield.test.ts tests/tower-engine.test.ts tests/tower-ghost.test.ts tests/leaderboard.test.ts tests/tower-routes.test.ts tests/tower-input.test.ts
+node --test tests/race-lobbies.test.ts tests/race-profile.test.ts tests/race-appearance.test.ts tests/race-client.test.ts tests/race-server.test.ts tests/race-simulation.test.ts tests/race-peer.test.ts tests/race-rival-shield.test.ts tests/tower-engine.test.ts tests/tower-ghost.test.ts tests/leaderboard.test.ts tests/tower-routes.test.ts tests/tower-input.test.ts
 npm run typecheck
 npm run build:netlify
 ```
 
 The multiplayer checks cover independently connected clients, countdowns, configurable rules, checkpoint replay, tied finishes, terminal score synchronization, static high-floor courses, deterministic obstacle warnings and collisions, shield synchronization and expiry, signaling, authenticated shove events, malformed requests, stale rounds, rematches, disconnects, expiration, and real local Blobs storage. The Blobs emulator omits ETags on GET; its storage test reads the same ETag from a list response before conditional writes.
 
-Manual checks: create a lobby, change the finish floor, join from another browser, ready all players, climb past floor 20 in a taller race, fall and recover, observe the moving rival, enable shoves in a fresh lobby, compare all result screens, and accept a rematch. Repeat at a narrow viewport and on separate networks.
+Manual checks: host a public lobby and discover/join it from another browser; verify a private lobby is absent from the directory and joins by invite; verify full, started, and abandoned rooms disappear. Check the host controls and scrollable directory on a narrow screen. Create a lobby, change the finish floor, join from another browser, ready all players, climb past floor 20 in a taller race, fall and recover, observe the moving rival, enable shoves in a fresh lobby, compare all result screens, and accept a rematch. Repeat at a narrow viewport and on separate networks.
 
 Obstacle checks: watch ice fall and bats cross the tower without landing guides or spawn markers. Take a hit, confirm the local and rival shields, and verify the next obstacle or shove cannot knock you back during protection. Recover at a checkpoint and confirm its shield clears. End the race during protection and confirm shields disappear. Check that guides remain hidden and shields stay readable with reduced motion enabled.
 

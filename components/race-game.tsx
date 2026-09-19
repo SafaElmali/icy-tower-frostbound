@@ -44,6 +44,7 @@ import {
   type RaceSession,
   type RaceSettings,
   type RaceView,
+  type RaceVisibility,
 } from '@/lib/race-protocol';
 import { TowerEngine, type Controls } from '@/lib/tower-engine';
 import { TowerInput } from '@/lib/tower-input';
@@ -53,6 +54,7 @@ import { GraphicsRecovery } from '@/lib/graphics-recovery';
 import { DEFAULT_OUTFIT } from '@/lib/outfits';
 import { normalizeRaceProfile } from '@/lib/race-profile';
 import { RaceProfileEditor } from './race-profile-editor';
+import { RaceLobbyBrowser } from './race-lobby-browser';
 import type { TowerWorld } from '@/lib/tower-world';
 import { trackEvent, analyticsId } from '@/lib/analytics';
 import { RaceAnalyticsTransitions } from '@/lib/race-analytics';
@@ -156,6 +158,7 @@ export function RaceGame() {
   const [room, setRoom] = useState<RaceView | null>(null);
   const [session, setSession] = useState<RaceSession | null>(null);
   const [inviteRoom, setInviteRoom] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<RaceVisibility>('public');
   const [loaded, setLoaded] = useState(false);
   const [renderError, setRenderError] = useState('');
   const [networkError, setNetworkError] = useState('');
@@ -348,21 +351,35 @@ export function RaceGame() {
     }
   }
 
-  async function connect(join: boolean, restored?: RaceSession | null) {
+  async function connect(
+    join: boolean,
+    restored?: RaceSession | null,
+    targetRoom?: string,
+  ) {
     if (busy) return;
     const requestedProfile = draftProfileRef.current;
     const applyRequestedProfile = profileEdited.current;
     const attemptId = analyticsId();
     const startedAt = performance.now();
-    const operation = restored ? 'restore' : join ? 'join' : 'create';
     trackLeave('replaced');
     setBusy(true);
     setNetworkError('');
     setBlocked(false);
     setSession(null);
     setCopied(false);
+    const joinRoom = targetRoom ?? inviteRoom;
+    if (join && joinRoom && !restored) {
+      try {
+        restored = readRaceSession(
+          sessionStorage.getItem(sessionKey(joinRoom)),
+        );
+      } catch {
+        /* A fresh session works without browser storage. */
+      }
+    }
+    const operation = restored ? 'restore' : join ? 'join' : 'create';
     const next =
-      restored ?? newRaceSession(join && inviteRoom ? inviteRoom : undefined);
+      restored ?? newRaceSession(join && joinRoom ? joinRoom : undefined);
     closePeer();
     setPeerState('connecting');
     const previous = connection.current;
@@ -391,7 +408,8 @@ export function RaceGame() {
     try {
       const view = await client.send({
         action: join ? 'join' : 'create',
-        ...(restored ? {} : { profile: requestedProfile }),
+        ...(!join && !restored ? { visibility } : {}),
+        profile: requestedProfile,
       });
       try {
         sessionStorage.setItem(sessionKey(next.room), JSON.stringify(next));
@@ -998,7 +1016,9 @@ export function RaceGame() {
               );
               setFriendPose(friendPoseRef.current);
               setRespawnFloor(local?.respawning ? local.checkpointFloor : null);
-              setShielded(!!local?.protected && !local.respawning && !local.recording);
+              setShielded(
+                !!local?.protected && !local.respawning && !local.recording,
+              );
               setShoveReady(
                 !shovePending.current &&
                   !local?.protected &&
@@ -1197,58 +1217,117 @@ export function RaceGame() {
       )}
 
       {!room && (
-        <section className={styles.card} aria-labelledby="race-heading">
-          <Flag className={styles.emblem} size={30} />
-          <p className={styles.kicker}>ONE TOWER. UP TO FOUR CLIMBERS.</p>
-          <h1 id="race-heading">Race your friends.</h1>
-          <p>
-            Climb together. Dodge bats and falling ice.
-            <br />
-            Fall? Return to a checkpoint and keep going.
-          </p>
-          <RaceProfileEditor
-            profile={draftProfile}
-            onChange={(profile) => {
-              profileEdited.current = true;
-              updateDraftProfile(profile);
-            }}
-            disabled={busy}
-          />
-          <button
-            className={styles.primary}
-            disabled={!loaded || busy || !!renderError}
-            onClick={() => {
-              let saved: RaceSession | null = null;
-              try {
-                if (inviteRoom)
-                  saved = readRaceSession(
-                    sessionStorage.getItem(sessionKey(inviteRoom)),
-                  );
-              } catch {
-                /* Start a fresh guest session. */
-              }
-              void connect(!!inviteRoom, saved);
-            }}
-          >
-            {busy
-              ? 'Connecting…'
-              : !loaded
-                ? 'Loading tower…'
-                : inviteRoom
-                  ? 'Join race'
-                  : 'Create a race'}
-            <ArrowRight size={18} />
-          </button>
-          {inviteRoom && (
+        <section
+          className={`${styles.card} ${!inviteRoom ? styles.directory : ''}`}
+          aria-labelledby="race-heading"
+        >
+          <div className={styles.hostPanel}>
+            <Flag className={styles.emblem} size={30} />
+            <p className={styles.kicker}>ONE TOWER. UP TO FOUR CLIMBERS.</p>
+            <h1 id="race-heading">
+              {inviteRoom ? 'Your rivals await.' : 'Find your next rivals.'}
+            </h1>
+            <p>
+              Climb together. Dodge bats and falling ice.
+              <br />
+              Fall? Return to a checkpoint and keep going.
+            </p>
+            <RaceProfileEditor
+              compact={!inviteRoom}
+              profile={draftProfile}
+              onChange={(profile) => {
+                profileEdited.current = true;
+                updateDraftProfile(profile);
+              }}
+              disabled={busy}
+            />
+            {!inviteRoom && (
+              <fieldset className={styles.visibility} disabled={busy}>
+                <legend>Host a lobby</legend>
+                <label>
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="public"
+                    checked={visibility === 'public'}
+                    onChange={() => setVisibility('public')}
+                  />
+                  <span>
+                    Public<small>Anyone can find and join</small>
+                  </span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="private"
+                    checked={visibility === 'private'}
+                    onChange={() => setVisibility('private')}
+                  />
+                  <span>
+                    Private<small>Only people with your invite</small>
+                  </span>
+                </label>
+              </fieldset>
+            )}
             <button
-              className={styles.textButton}
-              disabled={busy || !loaded}
-              onClick={() => void connect(false)}
+              className={styles.primary}
+              disabled={!loaded || busy || !!renderError}
+              onClick={() => {
+                let saved: RaceSession | null = null;
+                try {
+                  if (inviteRoom)
+                    saved = readRaceSession(
+                      sessionStorage.getItem(sessionKey(inviteRoom)),
+                    );
+                } catch {
+                  /* Start a fresh guest session. */
+                }
+                void connect(!!inviteRoom, saved);
+              }}
             >
-              Create your own race
+              {busy
+                ? 'Connecting…'
+                : !loaded
+                  ? 'Loading tower…'
+                  : inviteRoom
+                    ? 'Join race'
+                    : visibility === 'public'
+                      ? 'Host public lobby'
+                      : 'Host private lobby'}
+              <ArrowRight size={18} />
             </button>
+            {inviteRoom && (
+              <button
+                className={styles.textButton}
+                disabled={busy || !loaded}
+                onClick={() => {
+                  setInviteRoom(null);
+                  setNetworkError('');
+                  window.history.replaceState(
+                    window.history.state,
+                    '',
+                    '/race',
+                  );
+                }}
+              >
+                Browse or host a lobby
+              </button>
+            )}
+            <small>
+              {inviteRoom
+                ? 'Join with your name and climbing kit.'
+                : visibility === 'public'
+                  ? 'Your name and race rules will appear in open lobbies.'
+                  : 'Share an invite link with up to three friends.'}
+            </small>
+          </div>
+          {!inviteRoom && (
+            <RaceLobbyBrowser
+              disabled={!loaded || busy || !!renderError}
+              onJoin={(id) => void connect(true, null, id)}
+            />
           )}
-          <small>A private invite. No account needed.</small>
         </section>
       )}
 
@@ -1259,7 +1338,11 @@ export function RaceGame() {
         >
           <div className={styles.lobbyBody}>
             <header className={styles.lobbyHeading}>
-              <p className={styles.kicker}>YOUR PRIVATE RACE</p>
+              <p className={styles.kicker}>
+                {room.visibility === 'public'
+                  ? 'YOUR PUBLIC LOBBY'
+                  : 'YOUR PRIVATE LOBBY'}
+              </p>
               <h1 id="lobby-heading">
                 {friendOnline ? 'Ready, set, climb.' : 'Better with a rival.'}
               </h1>
@@ -1268,11 +1351,13 @@ export function RaceGame() {
                   ? 'Invite up to three friends, then everyone ready up.'
                   : friend
                     ? 'Your friend disconnected. Waiting for them to return.'
-                    : 'Invite a friend. See who reaches the top first.'}
+                    : room.visibility === 'public'
+                      ? 'Your lobby is listed. Other climbers can join, or you can share an invite.'
+                      : 'Invite a friend. See who reaches the top first.'}
               </p>
               <p className={styles.hazardHint}>
-                Dodge bats and falling ice. Your shield briefly blocks hits
-                and shoves after a hit or checkpoint recovery.
+                Dodge bats and falling ice. Your shield briefly blocks hits and
+                shoves after a hit or checkpoint recovery.
               </p>
             </header>
             {room.players.length < RACE_MAX_PLAYERS && (
@@ -1320,7 +1405,7 @@ export function RaceGame() {
                 <output>
                   {copied
                     ? 'Link copied. Send it to your friends.'
-                    : 'Send this private link. No account needed.'}
+                    : 'Share this invite link. No account needed.'}
                 </output>
               </div>
             )}
@@ -1574,9 +1659,7 @@ export function RaceGame() {
         >
           <span>RACE TO FLOOR {settings.targetFloor}</span>
           <strong>{countdown}</strong>
-          <p>
-            Watch for falling ice and incoming bats.
-          </p>
+          <p>Watch for falling ice and incoming bats.</p>
         </section>
       )}
       {active && (
