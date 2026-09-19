@@ -1,4 +1,4 @@
-![Icy Tower — Frostbound cover: Harold jumping through a frozen cathedral with a colorful star trail](docs/images/frostbound-cover.png)
+![Frostbound multiplayer cover: four colorful couriers racing through a frozen cathedral](docs/images/frostbound-multiplayer-landscape.png)
 
 # Icy Tower — Frostbound
 
@@ -8,9 +8,9 @@ A playable 2.5D arcade tower climber built with Three.js. Build momentum, chain 
 
 ## Gameplay trailer
 
-Wall jumps, Party double jumps, crumbling floors, falling icicles, frost bats, and a race with a friend — in 18 seconds.
+Four named climbers race through one frozen tower — a six-second multiplayer preview.
 
-https://github.com/user-attachments/assets/95bce11a-1ef0-41e0-ac6b-309b7eed7533
+[Watch the six-second multiplayer trailer](docs/videos/frostbound-multiplayer-6s.mp4)
 
 ## Play
 
@@ -62,7 +62,7 @@ Open [localhost:5188](http://localhost:5188). Race rooms work locally; the leade
 
 Production builds send anonymous gameplay and feature events to the Frostbound PostHog project. Names, input recordings, and raw invitation links are excluded; the detailed playtest report remains local. Development capture is off by default. See the analytics guide for configuration and disabling capture.
 
-An independent Icy Tower-inspired browser prototype with no original game assets or affiliation. See [asset credits](public/assets/ATTRIBUTION.md), [audio credits](public/audio/ATTRIBUTION.md), and [cover artwork details](docs/cover-prompt.md).
+An independent Icy Tower-inspired browser prototype with no original game assets or affiliation. See [asset credits](public/assets/ATTRIBUTION.md), [audio credits](public/audio/ATTRIBUTION.md), and [cover artwork details](docs/multiplayer-cover-prompt.md).
 
 ## Jev AI player (local development only)
 
