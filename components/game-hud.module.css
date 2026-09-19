@@ -174,3 +174,69 @@
     font-size: 11px;
   }
 }
+
+.tipCopy {
+  min-width: 0;
+}
+.demonstration {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 4px 0 6px;
+}
+.demonstration kbd,
+.landingKey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 27px;
+  padding: 3px 6px;
+  border: 1px solid #75999070;
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  color: #b1c9cc;
+  background: #112d36;
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.demonstration small {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+.sequenceArrow {
+  color: #789c9b;
+}
+.demonstration[data-phase='move'] .directionKey,
+.demonstration[data-phase='jump'] .jumpKey,
+.demonstration[data-phase='release'] .jumpKey,
+.demonstration[data-phase='airborne'] .landingKey {
+  border-color: #a5ead8;
+  background: #a5ead824;
+  color: #e0fff4;
+}
+.demonstration[data-phase='jump'] .jumpKey {
+  animation: jumpPrompt 1.2s ease-in-out 3;
+}
+@keyframes jumpPrompt {
+  50% {
+    box-shadow: 0 0 0 3px #a5ead830;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .demonstration[data-phase='jump'] .jumpKey {
+    animation: none;
+  }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .demonstration {
+    margin: 1px 0 3px;
+  }
+  .demonstration kbd,
+  .landingKey {
+    min-height: 23px;
+    padding: 1px 4px;
+  }
+}

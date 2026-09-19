@@ -108,8 +108,16 @@ import {
 import { PlaytestReport } from '@/components/playtest-report';
 import { RunFeedback } from '@/components/run-feedback';
 import { GraphicsRecovery } from '@/lib/graphics-recovery';
+import { graphicsFailureCode } from '@/lib/graphics-diagnostics';
+import {
+  graphicsFailureMessage,
+  graphicsRetryUrl,
+  usesPerformanceGraphics,
+} from '@/lib/graphics-retry';
 import { PersonalProgressResults } from '@/components/personal-progress';
 import { NextClimb } from '@/components/next-climb';
+import { DailyReturn } from '@/components/daily-return';
+import { getFirstJumpGuidance, shouldStartFirstJumpGuidance, type FirstJumpGuidance } from '@/lib/first-jump-guidance';
 import {
   readPersonalProgress,
   personalRunBaseline,
@@ -171,6 +179,8 @@ export default function Home() {
   const [game, setGame] = useState<Snapshot>(initial);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
+  const [graphicsReconnecting, setGraphicsReconnecting] = useState(false);
+  const [performanceRetry, setPerformanceRetry] = useState(false);
   const [mode, setMode] = useState<GameMode>('arcade');
   const [sound, setSound] = useState(true);
   const [music, setMusic] = useState(true);
@@ -222,6 +232,9 @@ export default function Home() {
   const guidanceRun = useRef(freshGuidanceRun());
   const guidanceCueId = useRef<string | null>(null);
   const [guidanceCue, setGuidanceCue] = useState<GuidanceCue | null>(null);
+  const firstJumpEnabled = useRef(false);
+  const firstJumpRef = useRef<FirstJumpGuidance | null>(null);
+  const [firstJump, setFirstJump] = useState<FirstJumpGuidance | null>(null);
   const [daily, setDaily] = useState<DailyTower | null>(null);
   const dailyRef = useRef<DailyTower | null>(null);
   const [dailyChoice, setDailyChoice] = useState(todayDailyTower);
@@ -383,6 +396,9 @@ export default function Home() {
     setMenuOpen(false);
     setRunDetailsOpen(false);
     guidanceRun.current = freshGuidanceRun();
+    firstJumpEnabled.current = shouldStartFirstJumpGuidance(guidanceProfile.current, profileRef.current.progress.floor);
+    firstJumpRef.current = null;
+    setFirstJump(null);
     comboFeedback.current.reset();
     guidanceCueId.current = null;
     guidanceShownAt.current = {};
@@ -632,6 +648,8 @@ export default function Home() {
     const loadStarted = performance.now();
     let recoveryStarted = 0;
     let readyReported = false;
+    let loadStage = 'world_initialize';
+    const performanceMode = usesPerformanceGraphics(window.location.search);
     const reportReady = () => {
       if (readyReported || !loaded || graphics?.blocked) return;
       readyReported = true;
@@ -757,7 +775,7 @@ export default function Home() {
             'This challenge link is invalid or from an unsupported game version. You can still start a new climb.',
           );
         try {
-          const w = new TowerWorld(canvas.current);
+          const w = new TowerWorld(canvas.current, performanceMode);
           world.current = w;
           const stopGraphics = (message: string) => {
             resetInput();
@@ -772,13 +790,15 @@ export default function Home() {
           };
           graphics = new GraphicsRecovery(canvas.current, {
             lost: () => {
+              setGraphicsReconnecting(true);
+              setPerformanceRetry(false);
               recoveryStarted = performance.now();
               telemetry.current.event('graphics_context_lost', {
                 load_id: loadId,
                 phase: e.status,
               });
               stopGraphics(
-                'Graphics were interrupted. Your climb is paused while they reconnect.',
+                'Graphics were interrupted. Your climb is paused while they reconnect (up to 12 seconds).',
               );
             },
             restored: () => {
@@ -791,33 +811,40 @@ export default function Home() {
               });
               w.setQuality(false);
               setQuality(false);
+              setGraphicsReconnecting(false);
               setReady(loaded);
               setError('');
               reportReady();
             },
             failed: (cause) => {
+              const code = graphicsFailureCode(cause, 'render_failed');
+              setGraphicsReconnecting(false);
+              setPerformanceRetry(
+                !performanceMode && code !== 'webgl_unavailable' && code !== 'network_failed',
+              );
               telemetry.current.event('graphics_failed', {
                 load_id: loadId,
-                error_code: 'render_failed',
+                error_code: code,
                 phase: e.status,
               });
               console.error('Frostbound rendering stopped.', cause);
-              stopGraphics(
-                'The graphics stopped working. Reload to try again.',
-              );
+              stopGraphics(graphicsFailureMessage(code, performanceMode));
             },
           });
-          const high = !window.matchMedia('(pointer: coarse)').matches;
+          const high =
+            !performanceMode && !window.matchMedia('(pointer: coarse)').matches;
           w.setQuality(high);
           w.setReducedMotion(reducedMotionRef.current);
           setQuality(high);
           // Show the real tower while the optional character model loads.
           w.render(e, 0, performance.now() / 1000);
+          loadStage = 'world_assets';
           await w.load();
           if (disposed) {
             w.dispose();
             return;
           }
+          loadStage = 'world_ready';
           w.setOutfit(profileRef.current.equipped);
           loaded = true;
           setReady(!graphics.blocked);
@@ -1052,10 +1079,18 @@ export default function Home() {
                     });
                 }
               }
-              w.render(e, dt, now / 1000, ghost.current);
+              if (e.status === 'playing') {
+                firstJumpRef.current = getFirstJumpGuidance(
+                  e, input.current.controls, firstJumpRef.current,
+                  firstJumpEnabled.current && !guidanceProfile.current.skipped,
+                );
+              }
+              const landingGuide = e.status === 'playing' ? firstJumpRef.current : null;
+              w.render(e, dt, now / 1000, ghost.current, landingGuide);
               if (now - sync > 65 || events.length) {
                 setGame(e.snapshot());
                 setRace(ghost.current?.snapshot(e) ?? null);
+                setFirstJump(landingGuide);
                 sync = now;
               }
             });
@@ -1064,28 +1099,38 @@ export default function Home() {
           frame = requestAnimationFrame(animate);
         } catch (cause) {
           if (disposed) return;
+          const code = graphicsFailureCode(cause, 'world_load_failed');
           trackEvent('game_load_failed', {
             surface: 'solo',
             load_id: loadId,
-            stage: 'world',
-            error_code: 'world_load_failed',
+            stage: loadStage,
+            error_code: code,
             load_duration_ms: Math.round(performance.now() - loadStarted),
           });
-          console.error(cause);
-          setError(
-            'The 3D world could not load. Please reload in a browser with WebGL enabled.',
+          graphics?.dispose();
+          world.current?.dispose();
+          world.current = null;
+          loaded = false;
+          setReady(false);
+          setGraphicsReconnecting(false);
+          setPerformanceRetry(
+            !performanceMode && code !== 'webgl_unavailable' && code !== 'network_failed',
           );
+          console.error(cause);
+          setError(graphicsFailureMessage(code, performanceMode));
         }
       })
-      .catch(() => {
+      .catch((cause) => {
         if (disposed) return;
         trackEvent('game_load_failed', {
           surface: 'solo',
           load_id: loadId,
           stage: 'import',
-          error_code: 'import_failed',
+          error_code: graphicsFailureCode(cause, 'import_failed'),
           load_duration_ms: Math.round(performance.now() - loadStarted),
         });
+        setGraphicsReconnecting(false);
+        setPerformanceRetry(false);
         setError('The game could not load. Check your connection and reload.');
       });
     const key = (event: KeyboardEvent, down: boolean) => {
@@ -1478,6 +1523,7 @@ export default function Home() {
             guidance={game.status === 'playing' ? guidanceCue : null}
             ghost={race}
             touch={touchGuidance}
+            firstJump={game.status === 'playing' ? firstJump : null}
             onSkip={() => saveGuidance(skipGuidance(guidanceProfile.current))}
           />
           {game.status === 'playing' && (
@@ -1485,6 +1531,8 @@ export default function Home() {
               className="touch-controls"
               aria-label="Touch game controls"
               data-guidance={guidanceCue?.id}
+              data-guidance-direction={firstJump?.direction ?? undefined}
+              data-guidance-phase={firstJump?.phase}
             >
               <fieldset className="touch-move" aria-label="Movement">
                 <Button
@@ -1570,6 +1618,7 @@ export default function Home() {
                 snapshot={game}
                 baseline={runBaseline}
                 skills={skills}
+                achievementProgress={profile.progress}
                 challengeFloor={challenge?.floor}
                 daily={!!daily}
               />
@@ -1626,11 +1675,13 @@ export default function Home() {
                   Practice without rising frost
                 </Button>
               )}
-            {game.status === 'over' && daily && (
-              <p className="run-return-note">
-                A new shared tower every day at 00:00 UTC.
-              </p>
-            )}
+            {game.status === 'over' && !challenge && game.mode !== 'practice' &&
+              (daily || Math.max(game.floor, runBaseline.floor) >= 5) && newOutfits.length === 0 && (
+                <DailyReturn
+                  daily={daily}
+                  onStartToday={() => playDaily(todayDailyTower(), 'results')}
+                />
+              )}
             <div className="run-summary-actions">
               {game.status === 'over' && (
                 <Button variant="ghost" onClick={() => setRunDetailsOpen(true)}>
@@ -2304,9 +2355,41 @@ export default function Home() {
         storageAvailable={storageAvailable}
       />
       {error && (
-        <div className="error-message" role="alert">
-          {error}
-          <Button onClick={() => location.reload()}>Reload game</Button>
+        <div
+          className="error-message"
+          role="alert"
+          style={{ maxHeight: 'calc(var(--visible-height, 100dvh) - 32px)', overflowY: 'auto' }}
+        >
+          <p>{error}</p>
+          {!graphicsReconnecting && (
+            <>
+              <p className="text-xs opacity-80">
+                Reloading ends the current climb. Previously saved records and
+                unlocks stay saved.
+              </p>
+              {performanceRetry && (
+                <Button
+                  onClick={() => {
+                    telemetry.current.event('graphics_retry', { performance_mode: true });
+                    location.replace(graphicsRetryUrl(location.href));
+                  }}
+                >
+                  Reload in performance mode
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  telemetry.current.event('graphics_retry', {
+                    performance_mode: usesPerformanceGraphics(location.search),
+                  });
+                  location.reload();
+                }}
+              >
+                Reload game
+              </Button>
+            </>
+          )}
         </div>
       )}
       {toast && <output className="toast">{toast}</output>}

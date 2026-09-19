@@ -13,6 +13,7 @@ import { ComboStarTrail } from './combo-star-trail';
 import { cosmeticFor, normalizeOutfit, type Outfit } from './outfits';
 import { TowerInterior } from './tower-interior';
 import { PersonalBestMarker } from './personal-best-marker';
+import { LandingGuideWorld, type LandingGuideTarget } from './landing-guide-world';
 import { getTowerSection } from './tower-sections';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 import { TowerActionWorld, type CrumbleVisual } from './tower-action-world';
@@ -56,6 +57,7 @@ export class TowerWorld {
   private lastEngineTime = 0;
   private interior: TowerInterior;
   private bestMarker = new PersonalBestMarker();
+  private landingGuide = new LandingGuideWorld();
   private sectionColor = new THREE.Color();
   private rim: THREE.DirectionalLight;
   private routeMat = new THREE.MeshStandardMaterial({ color: 0xe0b762, roughness: .55, emissive: 0x75511a, emissiveIntensity: .18 });
@@ -84,9 +86,9 @@ export class TowerWorld {
   private frenzyFleckMat = new THREE.MeshBasicMaterial({ color: 0x8affd5, transparent: true, toneMapped: false });
   private groundShadow: THREE.Mesh;
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.65));
+  constructor(canvas: HTMLCanvasElement, performanceMode = false) {
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !performanceMode, alpha: true, powerPreference: performanceMode ? 'low-power' : 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, performanceMode ? 1 : 1.65));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -106,7 +108,7 @@ export class TowerWorld {
     this.scene.add(this.key, this.key.target);
     this.rim = new THREE.DirectionalLight(0x58cfff, 3.5); this.rim.position.set(6, 8, -6); this.scene.add(this.rim);
     this.glow = new THREE.PointLight(0xffc692, 5, 8, 1.3); this.scene.add(this.glow);
-    this.scene.add(this.root); this.root.add(this.tumble, this.columns, this.starTrail.mesh, this.bestMarker.group, this.actionWorld.group); this.tumble.add(this.character);
+    this.scene.add(this.root); this.root.add(this.tumble, this.columns, this.starTrail.mesh, this.bestMarker.group, this.actionWorld.group, this.landingGuide.group); this.tumble.add(this.character);
     this.camera.position.set(0, 5.2, 26); this.camera.lookAt(0, 5.2, 0);
     const stoneNoise = this.makeNoiseTexture();
     this.stone = new THREE.MeshStandardMaterial({ color: 0x405a65, roughness: .89, metalness: .08, bumpMap: stoneNoise, bumpScale: .12, roughnessMap: stoneNoise });
@@ -319,7 +321,7 @@ export class TowerWorld {
       }
     }
   }
-  render(e: TowerEngine, dt: number, t: number, ghost: ClimberView | null = null) {
+  render(e: TowerEngine, dt: number, t: number, ghost: ClimberView | null = null, landingTarget: LandingGuideTarget | null = null) {
     // Ambient snow, lighting and the menu idle pose honor reduced motion too.
     if (this.reducedMotion) t = 0;
     const menu = e.status === 'ready';
@@ -343,6 +345,7 @@ export class TowerWorld {
     this.rim.color.lerp(this.sectionColor.setHex(section.palette.rimLight), blend);
     this.interior.update(this.cameraY, menu ? t : e.time, this.high, section, this.reducedMotion ? 10 : dt);
     this.bestMarker.update(e, this.reducedMotion);
+    this.landingGuide.update(e.status === 'playing' ? landingTarget : null, e.time, this.reducedMotion);
     const keep = new Set<number>();
     for (const p of e.platforms) {
       if (p.y < this.cameraY - 15 || p.y > this.cameraY + 18) continue;
@@ -408,6 +411,8 @@ export class TowerWorld {
     for (const ledge of this.ledges.values()) ledge.crumble?.group.removeFromParent();
     this.actionWorld.dispose();
     this.bestMarker.dispose();
+    this.root.remove(this.landingGuide.group);
+    this.landingGuide.dispose();
     const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>([this.springMat, this.partyGemMat, this.gemMat, this.routeMat, this.crackedIceMat, this.impactFleckMat, this.frenzyFleckMat]), textures = new Set<THREE.Texture>();
     this.scene.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Points) { geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m); } });
     for (const m of materials) { for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value); m.dispose(); }

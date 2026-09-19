@@ -1,5 +1,9 @@
 import { Ghost, Sparkles, X } from 'lucide-react';
 import type { GuidanceCue } from '@/lib/climb-guidance';
+import {
+  firstJumpInstruction,
+  type FirstJumpGuidance,
+} from '@/lib/first-jump-guidance';
 import type { SkillProgress } from '@/lib/skill-goals';
 import type { Snapshot } from '@/lib/tower-engine';
 import type { TowerGhost } from '@/lib/tower-ghost';
@@ -28,6 +32,7 @@ export function GameHud({
   game,
   skills,
   guidance,
+  firstJump = null,
   ghost,
   onSkip,
   touch = false,
@@ -35,11 +40,16 @@ export function GameHud({
   game: Snapshot;
   skills: SkillProgress;
   guidance: GuidanceCue | null;
+  firstJump?: FirstJumpGuidance | null;
   ghost: ReturnType<TowerGhost['snapshot']> | null;
   onSkip: () => void;
   touch?: boolean;
 }) {
-  const tip = guidance ? (touch ? touchTips : keyboardTips)[guidance.id] : null;
+  const tip = firstJump
+    ? firstJumpInstruction(firstJump, touch)
+    : guidance
+      ? (touch ? touchTips : keyboardTips)[guidance.id]
+      : null;
   const frenzy = game.rulesVersion >= 6 && game.action.frenzyTime > 0;
   const ghostText = ghost
     ? ghost.beaten
@@ -75,7 +85,7 @@ export function GameHud({
           max={8.4}
         />
       </div>
-      {!guidance && (
+      {!guidance && !firstJump && (
         <div className={styles.goal}>
           <FeaturedSkillGoal profile={skills} snapshot={game} compact />
         </div>
@@ -95,10 +105,39 @@ export function GameHud({
       ) : null}
       {tip && (
         <div className={styles.tip}>
-          <output aria-live="polite" aria-atomic="true">
-            {tip}
-          </output>
-          {guidance?.skippable && (
+          <div className={styles.tipCopy}>
+            {firstJump && (
+              <div
+                className={styles.demonstration}
+                aria-hidden="true"
+                data-phase={firstJump.phase}
+              >
+                <kbd className={styles.directionKey}>
+                  {firstJump.direction === 'left'
+                    ? '←'
+                    : firstJump.direction === 'right'
+                      ? '→'
+                      : '↔'}{' '}
+                  <small>HOLD</small>
+                </kbd>
+                <span className={styles.sequenceArrow}>›</span>
+                <kbd className={styles.jumpKey}>
+                  {touch ? 'JUMP' : 'Space'}{' '}
+                  <small>
+                    {firstJump.phase === 'release' ? 'RELEASE' : 'TAP'}
+                  </small>
+                </kbd>
+                <span className={styles.sequenceArrow}>›</span>
+                <span className={styles.landingKey}>
+                  ⌄ <small>LAND</small>
+                </span>
+              </div>
+            )}
+            <output aria-live="polite" aria-atomic="true">
+              {tip}
+            </output>
+          </div>
+          {(guidance?.skippable || firstJump) && (
             <button
               type="button"
               onClick={onSkip}

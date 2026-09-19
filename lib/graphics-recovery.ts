@@ -1,3 +1,12 @@
+export const GRAPHICS_RECOVERY_TIMEOUT_MS = 12_000;
+
+export class GraphicsRecoveryTimeoutError extends Error {
+  constructor() {
+    super('Graphics context did not recover in time.');
+    this.name = 'GraphicsRecoveryTimeoutError';
+  }
+}
+
 type GraphicsCallbacks = {
   lost: () => void;
   restored: () => void;
@@ -8,6 +17,7 @@ type GraphicsCallbacks = {
 export class GraphicsRecovery {
   blocked = false;
   private failed = false;
+  private timeout: ReturnType<typeof setTimeout> | undefined;
   private canvas: EventTarget;
   private callbacks: GraphicsCallbacks;
 
@@ -22,20 +32,32 @@ export class GraphicsRecovery {
     event.preventDefault();
     if (this.blocked) return;
     this.blocked = true;
+    this.timeout = setTimeout(() => {
+      this.timeout = undefined;
+      this.fail(new GraphicsRecoveryTimeoutError());
+    }, GRAPHICS_RECOVERY_TIMEOUT_MS);
     this.callbacks.lost();
   };
 
   private onRestored = () => {
     if (!this.blocked || this.failed) return;
+    this.clearTimeout();
     try {
-      this.callbacks.restored();
       this.blocked = false;
+      this.callbacks.restored();
     } catch (error) {
       this.fail(error);
     }
   };
 
+  private clearTimeout() {
+    if (this.timeout !== undefined) clearTimeout(this.timeout);
+    this.timeout = undefined;
+  }
+
   private fail(error: unknown) {
+    if (this.failed) return;
+    this.clearTimeout();
     this.failed = true;
     this.blocked = true;
     this.callbacks.failed(error);
@@ -51,6 +73,7 @@ export class GraphicsRecovery {
   }
 
   dispose() {
+    this.clearTimeout();
     this.blocked = true;
     this.failed = true;
     this.canvas.removeEventListener('webglcontextlost', this.onLost);

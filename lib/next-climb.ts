@@ -6,6 +6,7 @@ import {
   type SkillProgress,
 } from './skill-goals.ts';
 import { getRunFeedback } from './run-feedback.ts';
+import { COSMETICS, type AchievementProgress } from './outfits.ts';
 
 export type NextClimbInput = {
   snapshot: Pick<
@@ -22,6 +23,7 @@ export type NextClimbInput = {
   skills: SkillProgress;
   challengeFloor?: number;
   daily?: boolean;
+  achievementProgress?: AchievementProgress;
 };
 export type NextClimbGoal = {
   title: string;
@@ -32,6 +34,29 @@ export type NextClimbGoal = {
 const count = (value: number) =>
   Number.isSafeInteger(value) && value >= 0 ? value : 0;
 
+/** Read the real wardrobe catalog and personal bests; runs never add together. */
+export function nextCosmeticReward(
+  progress: AchievementProgress,
+): string | null {
+  const locked = COSMETICS.filter(
+    (item) => count(progress[item.metric]) < item.target,
+  ).sort(
+    (a, b) =>
+      count(progress[b.metric]) / b.target -
+      count(progress[a.metric]) / a.target,
+  );
+  const item = locked[0];
+  if (!item) return null;
+  const best = count(progress[item.metric]);
+  const requirement =
+    item.metric === 'floor'
+      ? `reach floor ${item.target}`
+      : item.metric === 'score'
+        ? `score ${item.target.toLocaleString('en-US')} in one run`
+        : `land a ${item.target}× combo`;
+  return `Next reward: ${item.name} · ${requirement} (best ${best.toLocaleString('en-US')}${item.metric === 'combo' ? '×' : ''}).`;
+}
+
 /** One reachable next step, using existing milestones rather than another save system. */
 export function getNextClimb({
   snapshot: run,
@@ -39,6 +64,7 @@ export function getNextClimb({
   skills,
   challengeFloor,
   daily = false,
+  achievementProgress,
 }: NextClimbInput): NextClimbGoal | null {
   if (run.status !== 'over') return null;
   const floor = count(run.floor);
@@ -52,11 +78,17 @@ export function getNextClimb({
       ? 'Hold a direction and tap jump. Steer toward the center of the first ledge.'
       : feedback.suggestion.replace(/^Next climb: /, '');
   const profile = advanceSkillProgress(skills, run);
-  const note = daily
-    ? 'Retry the same layout and learn each landing.'
-    : profile.completed.length === 0
-      ? 'First skill milestone: reach floor 5.'
-      : `${profile.completed.length} skill milestone${profile.completed.length === 1 ? '' : 's'} earned · kept between climbs`;
+  const reward =
+    best >= 5 && achievementProgress
+      ? nextCosmeticReward(achievementProgress)
+      : null;
+  const note =
+    reward ??
+    (daily
+      ? 'Retry the same layout and learn each landing.'
+      : profile.completed.length === 0
+        ? 'First skill milestone: reach floor 5.'
+        : `${profile.completed.length} skill milestone${profile.completed.length === 1 ? '' : 's'} earned · kept between climbs`);
   const floorGoal = (
     target: number,
     title = `Reach floor ${target}`,

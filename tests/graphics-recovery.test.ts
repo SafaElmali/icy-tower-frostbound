@@ -88,3 +88,54 @@ void test('failed restoration remains blocked and disposed canvases cannot updat
   assert.equal(losses, 1);
   assert.equal(failures, 1);
 });
+
+void test('context loss stops waiting after 12 seconds and a late restore cannot restart play', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const canvas = new EventTarget();
+  const errors: unknown[] = [];
+  const recovery = new GraphicsRecovery(canvas, {
+    lost: () => {},
+    restored: () =>
+      assert.fail('Late restore must not resume a failed renderer'),
+    failed: (error) => errors.push(error),
+  });
+  canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }));
+  t.mock.timers.tick(11_999);
+  assert.equal(errors.length, 0);
+  t.mock.timers.tick(1);
+  assert.equal((errors[0] as Error).name, 'GraphicsRecoveryTimeoutError');
+  assert.equal(recovery.blocked, true);
+  canvas.dispatchEvent(new Event('webglcontextrestored'));
+  t.mock.timers.tick(12_000);
+  assert.equal(errors.length, 1);
+  recovery.dispose();
+});
+
+void test('restoration and disposal cancel pending recovery timeouts', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const canvas = new EventTarget();
+  let restored = 0;
+  const recovery = new GraphicsRecovery(canvas, {
+    lost: () => {},
+    restored: () => {
+      restored++;
+      assert.equal(
+        recovery.blocked,
+        false,
+        'ready reporting can observe recovery',
+      );
+    },
+    failed: () =>
+      assert.fail('The cancelled timeout must not report a failure'),
+  });
+  canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }));
+  t.mock.timers.tick(6_000);
+  canvas.dispatchEvent(new Event('webglcontextrestored'));
+  t.mock.timers.tick(12_000);
+  assert.equal(restored, 1);
+  assert.equal(recovery.blocked, false);
+  canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }));
+  recovery.dispose();
+  t.mock.timers.tick(12_000);
+  assert.equal(recovery.blocked, true);
+});

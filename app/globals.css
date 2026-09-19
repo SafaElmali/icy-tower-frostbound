@@ -74,6 +74,16 @@
   outline: 2px solid #d9f6c4;
   outline-offset: 3px;
 }
+.touch-controls[data-guidance-phase] .touch-move button,
+.touch-controls[data-guidance-phase] .touch-jump { outline: none; }
+.touch-controls[data-guidance-phase][data-guidance-direction="left"] [data-control="left"],
+.touch-controls[data-guidance-phase][data-guidance-direction="right"] [data-control="right"],
+.touch-controls[data-guidance-phase="jump"] .touch-jump,
+.touch-controls[data-guidance-phase="release"] .touch-jump {
+  outline: 2px solid #d9f6c4;
+  outline-offset: 3px;
+  box-shadow: 0 0 16px #d9f6c438;
+}
 .overlay {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
