@@ -1,5 +1,7 @@
 import {
   RACE_API,
+  RACE_RULES_VERSION,
+  isRaceMode,
   validRaceId,
   type RaceAction,
   type RaceSession,
@@ -43,6 +45,7 @@ export async function listRaceLobbies(
         Number.isInteger(lobby.players) &&
         lobby.players >= 1 &&
         lobby.players < 4 &&
+        isRaceMode(lobby.settings?.mode) &&
         Number.isInteger(lobby.settings?.targetFloor) &&
         Number.isFinite(lobby.settings?.durationMs) &&
         typeof lobby.settings?.bumping === 'boolean',
@@ -128,6 +131,14 @@ export class RaceConnection {
         !Array.isArray(data.players)
       )
         throw new RaceRequestError('Unexpected race response.', 502);
+      if (
+        data.rulesVersion !== RACE_RULES_VERSION ||
+        !isRaceMode(data.settings?.mode)
+      )
+        throw new RaceRequestError(
+          'The race rules have changed. Reload the game to join.',
+          409,
+        );
       const received = this.clock(),
         latency = received - sent;
       if (latency < this.bestLatency) {

@@ -17,6 +17,7 @@ import {
   Music2,
   RotateCcw,
   ShieldCheck,
+  Sparkles,
   Users,
   Volume2,
   VolumeX,
@@ -31,6 +32,8 @@ import { RaceRival, RaceRunner } from '@/lib/race-runner';
 import { RaceMesh } from '@/lib/race-peer';
 import {
   DEFAULT_RACE_SETTINGS,
+  RACE_MODE_LABELS,
+  RACE_MODE_DESCRIPTIONS,
   RACE_API,
   RACE_DISCONNECT_MS,
   RACE_POLL_MS,
@@ -54,7 +57,9 @@ import { GraphicsRecovery } from '@/lib/graphics-recovery';
 import { DEFAULT_OUTFIT } from '@/lib/outfits';
 import { normalizeRaceProfile } from '@/lib/race-profile';
 import { RaceProfileEditor } from './race-profile-editor';
-import { RaceLobbyBrowser } from './race-lobby-browser';
+import { RaceEntry } from './race-entry';
+import { RaceModePicker } from './race-mode-picker';
+import { preventTouchContextMenu } from '@/lib/game-touch';
 import type { TowerWorld } from '@/lib/tower-world';
 import { trackEvent, analyticsId } from '@/lib/analytics';
 import { RaceAnalyticsTransitions } from '@/lib/race-analytics';
@@ -82,6 +87,7 @@ const seconds = (value: number) =>
     .toString()
     .padStart(2, '0')}`;
 const sameSettings = (a: RaceSettings, b: RaceSettings) =>
+  a.mode === b.mode &&
   a.targetFloor === b.targetFloor &&
   a.durationMs === b.durationMs &&
   a.bumping === b.bumping;
@@ -179,6 +185,7 @@ export function RaceGame() {
   >('connecting');
   const [shoveReady, setShoveReady] = useState(true);
   const [shielded, setShielded] = useState(false);
+  const [doubleJump, setDoubleJump] = useState({ seconds: 0, ready: false });
   const [draftSettings, setDraftSettings] = useState<RaceSettings>({
     ...DEFAULT_RACE_SETTINGS,
   });
@@ -408,7 +415,7 @@ export function RaceGame() {
     try {
       const view = await client.send({
         action: join ? 'join' : 'create',
-        ...(!join && !restored ? { visibility } : {}),
+        ...(!join && !restored ? { visibility, settings: draftSettings } : {}),
         profile: requestedProfile,
       });
       try {
@@ -1026,6 +1033,10 @@ export function RaceGame() {
               );
               setClimbEnded(!!local?.recording);
               setFinishKind(local?.finished ?? null);
+              setDoubleJump({
+                seconds: Math.ceil(local?.engine.doubleJumpTime ?? 0),
+                ready: local?.engine.snapshot().doubleJumpReady ?? false,
+              });
             }
           });
           frame = requestAnimationFrame(animate);
@@ -1142,7 +1153,11 @@ export function RaceGame() {
   );
 
   return (
-    <main className={styles.screen}>
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Prevent native touch callouts; this does not add an interactive action to the landmark.
+    <main
+      className={`${styles.screen} game-touch-surface`}
+      onContextMenu={preventTouchContextMenu}
+    >
       <canvas
         ref={canvas}
         className={styles.canvas}
@@ -1157,7 +1172,10 @@ export function RaceGame() {
           <ArrowLeft size={16} /> {active ? 'Leave race' : 'Back to tower'}
         </button>
         <span>
-          <Users size={16} /> 2–4 PLAYER RACE
+          <Users size={16} />{' '}
+          {room
+            ? `${RACE_MODE_LABELS[settings.mode].toUpperCase()} RACE`
+            : '2–4 PLAYER RACE'}
         </span>
         <div className={styles.audioControls}>
           <button
@@ -1217,118 +1235,39 @@ export function RaceGame() {
       )}
 
       {!room && (
-        <section
-          className={`${styles.card} ${!inviteRoom ? styles.directory : ''}`}
-          aria-labelledby="race-heading"
-        >
-          <div className={styles.hostPanel}>
-            <Flag className={styles.emblem} size={30} />
-            <p className={styles.kicker}>ONE TOWER. UP TO FOUR CLIMBERS.</p>
-            <h1 id="race-heading">
-              {inviteRoom ? 'Your rivals await.' : 'Find your next rivals.'}
-            </h1>
-            <p>
-              Climb together. Dodge bats and falling ice.
-              <br />
-              Fall? Return to a checkpoint and keep going.
-            </p>
-            <RaceProfileEditor
-              compact={!inviteRoom}
-              profile={draftProfile}
-              onChange={(profile) => {
-                profileEdited.current = true;
-                updateDraftProfile(profile);
-              }}
-              disabled={busy}
-            />
-            {!inviteRoom && (
-              <fieldset className={styles.visibility} disabled={busy}>
-                <legend>Host a lobby</legend>
-                <label>
-                  <input
-                    type="radio"
-                    name="visibility"
-                    value="public"
-                    checked={visibility === 'public'}
-                    onChange={() => setVisibility('public')}
-                  />
-                  <span>
-                    Public<small>Anyone can find and join</small>
-                  </span>
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="visibility"
-                    value="private"
-                    checked={visibility === 'private'}
-                    onChange={() => setVisibility('private')}
-                  />
-                  <span>
-                    Private<small>Only people with your invite</small>
-                  </span>
-                </label>
-              </fieldset>
-            )}
-            <button
-              className={styles.primary}
-              disabled={!loaded || busy || !!renderError}
-              onClick={() => {
-                let saved: RaceSession | null = null;
-                try {
-                  if (inviteRoom)
-                    saved = readRaceSession(
-                      sessionStorage.getItem(sessionKey(inviteRoom)),
-                    );
-                } catch {
-                  /* Start a fresh guest session. */
-                }
-                void connect(!!inviteRoom, saved);
-              }}
-            >
-              {busy
-                ? 'Connecting…'
-                : !loaded
-                  ? 'Loading tower…'
-                  : inviteRoom
-                    ? 'Join race'
-                    : visibility === 'public'
-                      ? 'Host public lobby'
-                      : 'Host private lobby'}
-              <ArrowRight size={18} />
-            </button>
-            {inviteRoom && (
-              <button
-                className={styles.textButton}
-                disabled={busy || !loaded}
-                onClick={() => {
-                  setInviteRoom(null);
-                  setNetworkError('');
-                  window.history.replaceState(
-                    window.history.state,
-                    '',
-                    '/race',
-                  );
-                }}
-              >
-                Browse or host a lobby
-              </button>
-            )}
-            <small>
-              {inviteRoom
-                ? 'Join with your name and climbing kit.'
-                : visibility === 'public'
-                  ? 'Your name and race rules will appear in open lobbies.'
-                  : 'Share an invite link with up to three friends.'}
-            </small>
-          </div>
-          {!inviteRoom && (
-            <RaceLobbyBrowser
-              disabled={!loaded || busy || !!renderError}
-              onJoin={(id) => void connect(true, null, id)}
-            />
-          )}
-        </section>
+        <RaceEntry
+          mode={draftSettings.mode}
+          onModeChange={(mode) => setDraftSettings({ ...draftSettings, mode })}
+          profile={draftProfile}
+          onProfileChange={(profile) => {
+            profileEdited.current = true;
+            updateDraftProfile(profile);
+          }}
+          visibility={visibility}
+          onVisibilityChange={setVisibility}
+          invited={!!inviteRoom}
+          busy={busy}
+          loaded={loaded}
+          failed={!!renderError}
+          onConnect={() => {
+            let saved: RaceSession | null = null;
+            try {
+              if (inviteRoom)
+                saved = readRaceSession(
+                  sessionStorage.getItem(sessionKey(inviteRoom)),
+                );
+            } catch {
+              /* Start a fresh guest session. */
+            }
+            void connect(!!inviteRoom, saved);
+          }}
+          onJoin={(id) => void connect(true, null, id)}
+          onBrowse={() => {
+            setInviteRoom(null);
+            setNetworkError('');
+            window.history.replaceState(window.history.state, '', '/race');
+          }}
+        />
       )}
 
       {waiting && (
@@ -1510,9 +1449,9 @@ export function RaceGame() {
                     {settingsDirty && room.you === 'host' && <em>Unsaved</em>}
                   </strong>
                   <small>
-                    Floor {settings.targetFloor} ·{' '}
-                    {settings.durationMs / 60_000} min · Shoves{' '}
-                    {settings.bumping ? 'on' : 'off'}
+                    {RACE_MODE_LABELS[settings.mode]} · Floor{' '}
+                    {settings.targetFloor} · {settings.durationMs / 60_000} min
+                    · Shoves {settings.bumping ? 'on' : 'off'}
                   </small>
                 </span>
                 <ChevronDown size={18} className={styles.ruleChevron} />
@@ -1525,6 +1464,13 @@ export function RaceGame() {
                     void configure();
                   }}
                 >
+                  <RaceModePicker
+                    value={draftSettings.mode}
+                    onChange={(mode) =>
+                      setDraftSettings({ ...draftSettings, mode })
+                    }
+                    disabled={busy || me?.ready}
+                  />
                   <div className={styles.ruleFields}>
                     <label htmlFor="target-floor">
                       Finish floor
@@ -1604,6 +1550,10 @@ export function RaceGame() {
               ) : (
                 <div className={styles.agreedRules}>
                   <span>
+                    <Sparkles size={15} /> {RACE_MODE_LABELS[settings.mode]}
+                  </span>
+                  <small>{RACE_MODE_DESCRIPTIONS[settings.mode]}</small>
+                  <span>
                     <Flag size={15} /> Finish at floor {settings.targetFloor}
                   </span>
                   <span>
@@ -1657,9 +1607,16 @@ export function RaceGame() {
           aria-live="polite"
           aria-atomic="true"
         >
-          <span>RACE TO FLOOR {settings.targetFloor}</span>
+          <span>
+            {RACE_MODE_LABELS[settings.mode].toUpperCase()} · RACE TO FLOOR{' '}
+            {settings.targetFloor}
+          </span>
           <strong>{countdown}</strong>
-          <p>Watch for falling ice and incoming bats.</p>
+          <p>
+            {settings.mode === 'party'
+              ? 'Ride the springs. Collect crystals for double jumps.'
+              : 'Watch for falling ice and incoming bats.'}
+          </p>
         </section>
       )}
       {active && (
@@ -1738,6 +1695,16 @@ export function RaceGame() {
                           ? 'Player reconnecting…'
                           : ''}
             </output>
+            {settings.mode === 'party' &&
+              !climbEnded &&
+              respawnFloor === null && (
+                <span className={styles.partyState}>
+                  <Sparkles size={13} aria-hidden="true" />
+                  {doubleJump.seconds > 0
+                    ? `${doubleJump.ready ? 'Double jump ready' : 'Land to recharge'} · ${doubleJump.seconds}s`
+                    : 'Collect a crystal for double jumps'}
+                </span>
+              )}
             {shielded && (
               <span className={styles.shieldState}>
                 <ShieldCheck size={13} aria-hidden="true" /> Shielded
@@ -1785,7 +1752,13 @@ export function RaceGame() {
                       <small>{shoveReady ? 'Shove' : 'Wait'}</small>
                     </button>
                   )}
-                  {touch('jump', 'Jump', <ArrowUp />)}
+                  {touch(
+                    'jump',
+                    doubleJump.ready && settings.mode === 'party'
+                      ? 'Double jump'
+                      : 'Jump',
+                    <ArrowUp />,
+                  )}
                 </div>
               </div>
             </>
@@ -1795,7 +1768,9 @@ export function RaceGame() {
       {finished && (
         <section className={styles.card} aria-labelledby="race-result-heading">
           <Flag className={styles.emblem} size={30} />
-          <p className={styles.kicker}>ROUND {room.round}</p>
+          <p className={styles.kicker}>
+            {RACE_MODE_LABELS[settings.mode].toUpperCase()} · ROUND {room.round}
+          </p>
           <h1 id="race-result-heading">{resultTitle}</h1>
           <p>{resultText}</p>
           <div className={styles.results}>

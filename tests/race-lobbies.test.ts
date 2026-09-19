@@ -82,7 +82,7 @@ void test('public discovery exposes only safe summaries; private and legacy room
 void test('listed rooms update rules, hide at capacity, and admit only three concurrent guests', async () => {
   const h = setup();
   await h.create();
-  const settings = { targetFloor: 50, durationMs: 60_000, bumping: true };
+  const settings = { mode: 'arcade' as const, targetFloor: 50, durationMs: 60_000, bumping: true };
   await h.service.act(
     { action: 'configure', room: h.room, round: 1, settings },
     h.host,

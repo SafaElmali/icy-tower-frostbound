@@ -4,14 +4,17 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, RotateCcw, Users } from 'lucide-react';
 import { listRaceLobbies } from '@/lib/race-client';
 import type { RaceLobbyList } from '@/lib/race-protocol';
-import styles from './race-game.module.css';
+import { RACE_MODE_LABELS } from '@/lib/race-protocol';
+import styles from './race-entry.module.css';
 
 export function RaceLobbyBrowser({
   disabled,
   onJoin,
+  onHost,
 }: {
   disabled: boolean;
   onJoin: (id: string) => void;
+  onHost: () => void;
 }) {
   const [result, setResult] = useState<RaceLobbyList | null>(null);
   const [error, setError] = useState('');
@@ -59,7 +62,7 @@ export function RaceLobbyBrowser({
     <section className={styles.browser} aria-labelledby="open-lobbies-heading">
       <header>
         <div>
-          <p className={styles.kicker}>MEET AT THE TOWER</p>
+          <p className={styles.kicker}>FIND YOUR RIVALS</p>
           <h2 id="open-lobbies-heading">Open lobbies</h2>
         </div>
         <button
@@ -81,11 +84,22 @@ export function RaceLobbyBrowser({
       ) : !result ? (
         <output className={styles.browserEmpty}>Finding open lobbies…</output>
       ) : result.lobbies.length === 0 ? (
-        <output className={styles.browserEmpty}>
+        <div className={styles.browserEmpty}>
           <Users size={28} />
           <strong>The tower is quiet.</strong>
-          <span>Host a public lobby to get the next race going.</span>
-        </output>
+          <span>
+            Be the first to plant a flag.
+            <br />
+            Open a lobby and let the others come to you.
+          </span>
+          <button
+            className={styles.emptyAction}
+            onClick={onHost}
+            disabled={disabled}
+          >
+            Host a lobby <ArrowRight size={16} aria-hidden="true" />
+          </button>
+        </div>
       ) : (
         <ul className={styles.lobbyList}>
           {result.lobbies.map((lobby) => (
@@ -97,7 +111,8 @@ export function RaceLobbyBrowser({
                   {4 - lobby.players} open
                 </span>
                 <small>
-                  Floor {lobby.settings.targetFloor} ·{' '}
+                  {RACE_MODE_LABELS[lobby.settings.mode]} · Floor{' '}
+                  {lobby.settings.targetFloor} ·{' '}
                   {lobby.settings.durationMs / 60_000} min · Shoves{' '}
                   {lobby.settings.bumping ? 'on' : 'off'}
                 </small>

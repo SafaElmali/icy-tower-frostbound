@@ -1,6 +1,7 @@
 import { type Controls, type Platform, platformFloor } from './tower-engine.ts';
 import {
   createRaceEngine,
+  isRaceMode,
   DEFAULT_RACE_SETTINGS,
   RACE_DURATIONS,
   RACE_RULES_VERSION,
@@ -37,6 +38,7 @@ export class RaceSimulation {
       !Number.isInteger(seed) ||
       seed < 0 ||
       seed > 0xffff_ffff ||
+      !isRaceMode(settings.mode) ||
       !Number.isInteger(settings.targetFloor) ||
       settings.targetFloor < 5 ||
       settings.targetFloor > 100 ||
@@ -45,7 +47,7 @@ export class RaceSimulation {
     )
       throw new Error('Invalid race simulation settings.');
     this.settings = { ...settings };
-    this.engine = createRaceEngine(seed);
+    this.engine = createRaceEngine(seed, settings.mode);
     this.checkpoint = { ...this.engine.platforms[0] };
     this.checkpointLedges = this.engine.platforms.map((platform) => ({
       ...platform,
@@ -186,6 +188,7 @@ export class RaceSimulation {
   getRecording(): RaceRecording {
     return {
       version: 1,
+      mode: this.settings.mode,
       rulesVersion: RACE_RULES_VERSION,
       seed: this.engine.seed,
       moves: this.moves.map(([frames, mask]) => [frames, mask]),
@@ -205,6 +208,7 @@ export function replayRaceRecording(
     !recording ||
     recording.version !== 1 ||
     recording.rulesVersion !== RACE_RULES_VERSION ||
+    recording.mode !== settings.mode ||
     !Array.isArray(recording.moves) ||
     recording.moves.length > MAX_RACE_RECORDING_SEGMENTS ||
     !Array.isArray(recording.bumps) ||

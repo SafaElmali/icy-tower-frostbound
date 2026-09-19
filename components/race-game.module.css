@@ -7,6 +7,7 @@
   font-family: var(--font-geist-sans), Arial, sans-serif;
 }
 .canvas {
+  touch-action: none;
   display: block;
   width: 100%;
   height: 100%;
@@ -40,7 +41,7 @@
   padding: 8px 12px;
   background: #10252b80;
   border: 1px solid #cae8ea20;
-  border-radius: 8px;
+  border-radius: 3px;
   color: #d5e4e2;
   font-size: 12px;
 }
@@ -73,8 +74,9 @@
   overflow-y: auto;
   padding: 34px;
   border: 1px solid #9cc4ce2e;
-  border-radius: 18px;
-  background: linear-gradient(150deg, #172f38f5, #0a1c26f5);
+  border-radius: 3px;
+  background: var(--menu-panel);
+  border-top-color: #cdb78e66;
   box-shadow: 0 24px 100px #0007;
   text-align: center;
   backdrop-filter: blur(18px);
@@ -84,7 +86,7 @@
   margin: 0 auto 18px;
 }
 .kicker {
-  color: #98b8c3;
+  color: #cdb78e;
   font-size: 9px;
   letter-spacing: 2.4px;
   margin: 0 0 14px;
@@ -119,8 +121,8 @@
   min-height: 52px;
   padding: 12px 20px;
   border: 0;
-  border-radius: 6px;
-  background: #d1e8e5;
+  border-radius: 2px;
+  background: linear-gradient(110deg, #e5eee6, #c0d7d6);
   color: #173138;
   font-size: 13px;
   font-weight: 600;
@@ -161,7 +163,7 @@
   padding: 10px 12px;
   background: #081b24;
   border: 1px solid #b8d8e02a;
-  border-radius: 6px;
+  border-radius: 2px;
   color: #e0ebe7;
   font: inherit;
   font-size: 13px;
@@ -227,7 +229,7 @@
 .saveRules {
   min-height: 44px;
   border: 1px solid #b3d2da40;
-  border-radius: 6px;
+  border-radius: 2px;
   background: #2c4850;
   color: #e0eae4;
   font-size: 12px;
@@ -346,7 +348,7 @@
 .invite > div {
   display: flex;
   border: 1px solid #b8d8e02a;
-  border-radius: 6px;
+  border-radius: 2px;
   overflow: hidden;
 }
 .invite input {
@@ -370,7 +372,7 @@
   padding: 0 14px;
   flex-shrink: 0;
   border: 0;
-  background: #d1e8e5;
+  background: linear-gradient(110deg, #e5eee6, #c0d7d6);
   color: #203f48;
   font-size: 12px;
   font-weight: 600;
@@ -501,6 +503,15 @@
   color: #a8edff;
   font-size: 10px;
 }
+.partyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 0 auto 7px;
+  color: #cfefba;
+  font-size: 11px;
+}
 .lobbyHeading .hazardHint {
   margin-top: 10px;
   color: #a9c4ca;
@@ -619,7 +630,7 @@
   border: 1px solid #edc87b4a;
   background: #28302bee;
   color: #f5e4be;
-  border-radius: 8px;
+  border-radius: 3px;
   padding: 12px 16px;
   font-size: 12px;
   line-height: 1.6;
@@ -846,7 +857,7 @@
 }
 .lobbyFooter .primary {
   min-height: 48px;
-  border-radius: 8px;
+  border-radius: 3px;
 }
 .lobbyFooter small {
   display: block;
@@ -946,206 +957,6 @@
   padding-bottom: 18px;
 }
 
-/* Matchmaking keeps the kit and host action beside the live room directory. */
-.card.directory {
-  width: min(900px, calc(100% - 32px));
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 32px;
-  text-align: left;
-  top: calc(50% + 22px);
-  max-height: calc(100dvh - 116px);
-}
-.hostPanel {
-  min-width: 0;
-}
-.hostPanel > p:not(.kicker) {
-  color: #a9c0c6;
-  font-size: 13px;
-  line-height: 1.7;
-  margin: 0 0 20px;
-}
-.hostPanel > small {
-  display: block;
-  margin-top: 14px;
-  color: #93adb8;
-  font-size: 11px;
-  line-height: 1.6;
-}
-.directory .emblem {
-  margin: 0 0 18px;
-}
-.visibility {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  border: 0;
-  padding: 0;
-  margin: 0 0 16px;
-  text-align: left;
-}
-.visibility legend {
-  padding: 0 0 12px;
-  font-size: 13px;
-  color: #c3d8db;
-}
-.visibility label {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  padding: 12px 10px;
-  border: 1px solid #b4d6e025;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 12px;
-}
-.visibility label:has(input:checked) {
-  border-color: #86d7bd65;
-  background: #86d7bd0c;
-}
-.visibility input {
-  accent-color: #a9dacb;
-  margin-top: 2px;
-}
-.visibility small {
-  display: block;
-  color: #93adb8;
-  font-size: 10px;
-  line-height: 1.5;
-  margin-top: 5px;
-}
-.browser {
-  min-width: 0;
-  border-left: 1px solid #b4d6e025;
-  padding-left: 28px;
-}
-.browser header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.browser h2 {
-  font:
-    400 27px Georgia,
-    serif;
-  letter-spacing: -0.5px;
-  margin: 0;
-}
-.browser .kicker {
-  margin-bottom: 10px;
-}
-.refreshLobbies {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  background: #17323c;
-  border: 1px solid #b4d6e025;
-  border-radius: 8px;
-  color: #c3d8db;
-  flex-shrink: 0;
-}
-.browserHint,
-.browserFootnote {
-  color: #93adb8;
-  font-size: 11px;
-  line-height: 1.6;
-}
-.browserHint {
-  margin: 12px 0 20px;
-}
-.browserFootnote {
-  display: block;
-  margin-top: 16px;
-}
-.browserEmpty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 40px 18px;
-  border: 1px dashed #b4d6e025;
-  border-radius: 10px;
-  color: #9fb9c2;
-  font-size: 12px;
-  line-height: 1.6;
-  text-align: center;
-}
-.browserEmpty strong {
-  color: #d5e4e2;
-  font-size: 15px;
-  font-weight: 500;
-}
-.lobbyList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 10px;
-}
-.lobbyList li {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 16px 12px;
-  background: #94bfc007;
-  border: 1px solid #b4d6e025;
-  border-radius: 10px;
-}
-.lobbySummary {
-  display: grid;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
-.lobbySummary strong {
-  font-size: 13px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-.lobbySummary span {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  color: #a9dacb;
-  font-size: 10px;
-}
-.lobbySummary i {
-  font-style: normal;
-}
-.lobbySummary small {
-  font-size: 10px;
-  color: #93adb8;
-  line-height: 1.5;
-}
-.lobbyList button {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 6px;
-  background: #d1e8e5;
-  color: #173138;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-@media (max-width: 720px) {
-  .card.directory {
-    grid-template-columns: 1fr;
-    width: min(470px, calc(100% - 24px));
-    gap: 28px;
-    padding: 24px;
-  }
-  .browser {
-    padding: 24px 0 0;
-    border-left: 0;
-    border-top: 1px solid #b4d6e025;
-  }
-}
 .profileForm .saveRules {
   width: 100%;
 }
@@ -1186,4 +997,14 @@
   .playerInfo {
     flex: 1;
   }
+}
+
+/* Shared race actions retain the menu's ivory and brass accents. */
+.primary {
+  border-radius: 2px;
+  min-height: 54px;
+  letter-spacing: 0.3px;
+}
+.card.lobby {
+  border-top-color: #cdb78e66;
 }

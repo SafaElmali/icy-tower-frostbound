@@ -1,0 +1,196 @@
+/* Touch holds belong to the game; text fields retain native selection/copy. */
+@media (any-pointer: coarse) {
+  .game-touch-surface,
+  [data-slot='dialog-content'],
+  [data-slot='dialog-overlay'] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :is(.game-touch-surface, [data-slot='dialog-content'])
+    :is(input, textarea, [contenteditable]:not([contenteditable='false'])) {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+}
+
+/* Shared visual language for game menus; gameplay HUD styling stays independent. */
+:root {
+  --menu-ink: #e4eeeb;
+  --menu-muted: #a2bac4;
+  --menu-gold: #cdb78e;
+  --menu-panel: linear-gradient(135deg, #192f39fa, #091a24fa);
+}
+body [data-slot='dialog-overlay'] {
+  background: #020a1280;
+  backdrop-filter: blur(14px);
+}
+body [data-slot='dialog-content'] {
+  border-top-color: #cdb78e66;
+  background: var(--menu-panel);
+  box-shadow: 0 40px 150px #0009;
+}
+body [data-slot='dialog-content'] [data-slot='dialog-close'] {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 2px;
+  color: #bacdd3;
+}
+body [data-slot='dialog-content'] [data-slot='dialog-title'] {
+  color: var(--menu-ink);
+}
+body .wardrobe-card[data-slot='dialog-content'],
+body .leaderboard-card[data-slot='dialog-content'],
+body .friend-share-card[data-slot='dialog-content'],
+body .daily-dialog[data-slot='dialog-content'],
+body .run-details-dialog[data-slot='dialog-content'] {
+  border-radius: 3px;
+  border-top-color: #cdb78e66;
+}
+body .wardrobe-heading .eyebrow,
+body .leaderboard-heading .eyebrow {
+  color: var(--menu-gold);
+  letter-spacing: 2px;
+  font-size: 10px;
+}
+body .wardrobe-heading [data-slot='dialog-title'],
+body .leaderboard-heading [data-slot='dialog-title'] {
+  font-size: 36px;
+  letter-spacing: -1px;
+}
+body .wardrobe-item {
+  border-radius: 2px;
+}
+body .wardrobe-item.is-equipped {
+  border-color: #cdb78e88;
+  background: linear-gradient(140deg, #2a414a, #162c36);
+}
+body .wardrobe-card [data-slot='dialog-close'],
+body .leaderboard-card [data-slot='dialog-close'] {
+  right: 14px;
+  top: 14px;
+}
+body .daily-dialog[data-slot='dialog-content'] {
+  padding: 32px;
+}
+body .daily-dialog [data-slot='dialog-title'] {
+  margin: 0 35px 12px 0;
+  font-size: 34px;
+}
+body .daily-dialog [data-slot='dialog-description'] {
+  margin-bottom: 20px;
+  color: var(--menu-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+body .overlay {
+  background: linear-gradient(90deg, #030d17e8, #030d1740);
+  backdrop-filter: blur(5px);
+  overflow-y: auto;
+}
+body .overlay .run-summary {
+  width: 480px;
+  max-height: calc(var(--visible-height, 100dvh) - 48px);
+  overflow-y: auto;
+  padding: 38px;
+  text-align: left;
+  border-radius: 3px;
+  background: var(--menu-panel);
+  border-top-color: #cdb78e66;
+}
+body .run-summary .run-context {
+  color: var(--menu-gold);
+  font-size: 10px;
+  letter-spacing: 2.5px;
+}
+body .run-summary h2 {
+  font-size: 50px;
+  max-width: 340px;
+  margin: 24px 0 16px;
+}
+body .overlay .run-summary > .start-button {
+  min-height: 56px;
+  border-radius: 2px;
+  justify-content: space-between;
+  background: linear-gradient(110deg, #e5eee6, #c0d7d6);
+  color: #17303a;
+  font-size: 12px;
+  letter-spacing: 1.2px;
+}
+body .run-summary-actions {
+  justify-content: flex-start;
+  border-top: 1px solid #a0c0c226;
+  padding-top: 10px;
+  margin-top: 20px;
+}
+.pause-options {
+  display: grid;
+  gap: 3px;
+  margin-top: 15px;
+}
+.pause-options > button[data-slot='button'] {
+  display: flex;
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: 48px;
+  width: 100%;
+  border-radius: 0;
+  border-bottom: 1px solid #a0c0c226;
+  padding: 10px 0;
+  font-size: 13px;
+  color: #b7cbd2;
+}
+.pause-options > button > svg:last-child {
+  margin-left: auto;
+}
+body .run-summary .retry-hint {
+  text-align: center;
+}
+@media (min-width: 1000px) {
+  body .state-paused .overlay {
+    justify-items: start;
+    padding-left: 8%;
+  }
+}
+@media (max-width: 540px) {
+  body .overlay {
+    padding: 16px;
+  }
+  body .overlay .run-summary {
+    padding: 26px;
+    max-height: calc(var(--visible-height, 100dvh) - 32px);
+  }
+  body .run-summary h2 {
+    font-size: 40px;
+  }
+  body .daily-dialog[data-slot='dialog-content'] {
+    padding: 24px 20px;
+  }
+  body .daily-dialog [data-slot='dialog-title'] {
+    font-size: 28px;
+  }
+  body .wardrobe-heading [data-slot='dialog-title'],
+  body .leaderboard-heading [data-slot='dialog-title'] {
+    font-size: 28px;
+    padding-right: 24px;
+  }
+}
+@media (max-height: 550px) {
+  body .overlay .run-summary {
+    padding: 20px 26px;
+  }
+  body .run-summary h2 {
+    font-size: 32px;
+    margin: 12px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body [data-slot='dialog-content'],
+  body [data-slot='dialog-overlay'] {
+    animation: none !important;
+    transition: none !important;
+  }
+}

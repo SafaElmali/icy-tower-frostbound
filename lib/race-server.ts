@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   DEFAULT_RACE_SETTINGS,
+  isRaceMode,
   RACE_BUMP_COOLDOWN_MS,
   RACE_COUNTDOWN_MS,
   RACE_DISCONNECT_MS,
@@ -102,6 +103,8 @@ function parseSettings(raw: unknown): RaceSettings {
   if (!raw || typeof raw !== 'object')
     throw new RaceError('Choose the race rules.');
   const s = raw as RaceSettings;
+  const mode = s.mode === undefined ? 'arcade' : s.mode;
+  if (!isRaceMode(mode)) throw new RaceError('Choose Classic or Party mode.');
   if (
     !Number.isInteger(s.targetFloor) ||
     s.targetFloor < 5 ||
@@ -111,6 +114,7 @@ function parseSettings(raw: unknown): RaceSettings {
   )
     throw new RaceError('Choose 5–100 floors and a supported race duration.');
   return {
+    mode,
     targetFloor: s.targetFloor,
     durationMs: s.durationMs,
     bumping: s.bumping,
@@ -193,6 +197,7 @@ export function verifyRaceFinish(
   if (
     replay.version !== 1 ||
     replay.rulesVersion !== RACE_RULES_VERSION ||
+    replay.mode !== room.settings.mode ||
     replay.seed !== room.seed ||
     !Array.isArray(replay.moves) ||
     replay.moves.length > maxFrames ||

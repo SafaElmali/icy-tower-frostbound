@@ -533,7 +533,7 @@ void test('storage HTTP failures cannot masquerade as successful conditional wri
 
 void test('the host chooses bounded rules and changes cancel both readiness and countdown', async () => {
   const h = harness();
-  const settings = { targetFloor: 55, durationMs: 300_000, bumping: true };
+  const settings = { mode: 'arcade' as const, targetFloor: 55, durationMs: 300_000, bumping: true };
   const created = await h.act(host, 'create', { settings });
   assert.deepEqual(created.settings, settings);
   await h.act(guest, 'join');

@@ -15,6 +15,8 @@ import {
   racePose,
   RACE_TARGET,
   RACE_DURATION_MS,
+  RACE_RULES_VERSION,
+  DEFAULT_RACE_SETTINGS,
   type RaceView,
 } from '../lib/race-protocol.ts';
 import { freshControls } from '../lib/tower-engine.ts';
@@ -132,6 +134,8 @@ void test('late HTTP responses cannot roll a rematch back to an earlier room rev
       round,
       serverNow: Date.now(),
       players: [],
+      rulesVersion: RACE_RULES_VERSION,
+      settings: DEFAULT_RACE_SETTINGS,
     });
   replies[1](response(5, 2));
   await newer;

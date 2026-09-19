@@ -136,6 +136,7 @@ void test('falling ice knocks a runner back once and its shield protects against
 
 void test('shove and checkpoint shields also prevent obstacle damage', () => {
   const pushed = new RaceSimulation(17, {
+    mode: 'arcade',
     targetFloor: 30,
     durationMs: 180000,
     bumping: true,
@@ -189,7 +190,7 @@ void test('a descending runner can stomp a race bat and it stays consumed', () =
 
 void test('finishing clears hazard and shield visuals, including the final peer pose', () => {
   for (const reason of ['time', 'goal'] as const) {
-    const simulation = new RaceSimulation(17, { targetFloor: 5, durationMs: 180000, bumping: false });
+    const simulation = new RaceSimulation(17, { mode: 'arcade', targetFloor: 5, durationMs: 180000, bumping: false });
     placeInFallingIce(simulation);
     simulation.step(freshControls());
     assert.equal(simulation.protected, true);

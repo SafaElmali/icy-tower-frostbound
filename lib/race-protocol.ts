@@ -1,15 +1,25 @@
 import { TowerEngine } from './tower-engine.ts';
 import type { Outfit } from './outfits.ts';
 
-export const RACE_RULES_VERSION = 6;
-export const RACE_PROTOCOL_VERSION = 4;
+export const RACE_RULES_VERSION = 7;
+export const RACE_PROTOCOL_VERSION = 5;
+export type RaceMode = 'arcade' | 'party';
+export const RACE_MODE_LABELS = { arcade: 'Classic', party: 'Party' } as const;
+export const RACE_MODE_DESCRIPTIONS = {
+  arcade: 'Standard gravity. Every jump counts.',
+  party: 'Low gravity, springs, and crystal double jumps.',
+} as const;
+export const isRaceMode = (value: unknown): value is RaceMode =>
+  value === 'arcade' || value === 'party';
 export type RaceSettings = {
+  mode: RaceMode;
   targetFloor: number;
   durationMs: number;
   bumping: boolean;
 };
 export const RACE_DURATIONS = [60_000, 120_000, 180_000, 300_000] as const;
 export const DEFAULT_RACE_SETTINGS: RaceSettings = {
+  mode: 'arcade',
   targetFloor: 30,
   durationMs: 180_000,
   bumping: false,
@@ -90,6 +100,7 @@ export type RaceBumpEvent = {
 };
 export type RaceRecording = {
   version: 1;
+  mode: RaceMode;
   rulesVersion: typeof RACE_RULES_VERSION;
   seed: number;
   moves: [number, number][];
@@ -146,9 +157,9 @@ export const validRaceId = (value: unknown): value is string =>
   typeof value === 'string' && /^[a-f0-9]{32}$/.test(value);
 export const otherSlot = (slot: RaceSlot): RaceSlot =>
   slot === 'host' ? 'guest' : 'host';
-export function createRaceEngine(seed: number) {
+export function createRaceEngine(seed: number, mode: RaceMode = 'arcade') {
   const engine = new TowerEngine(seed, false, 5);
-  engine.start('arcade');
+  engine.start(mode);
   engine.useStaticRacePlatforms();
   engine.useRaceHazards();
   return engine;

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/seo';
 import './globals.css';
+import './menu-system.css';
 import { AnalyticsProvider } from '@/components/analytics-provider';
 
 const geistSans = Geist({

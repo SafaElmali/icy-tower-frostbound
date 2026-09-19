@@ -1,0 +1,58 @@
+.picker {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0 0 22px;
+  text-align: left;
+}
+.picker legend {
+  padding: 0 0 10px;
+  color: #c6d9dc;
+  font-size: 12px;
+}
+.picker > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.picker label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 15px 12px;
+  border: 1px solid #b4d6e02e;
+  background: #07171d40;
+  cursor: pointer;
+}
+.picker label:has(input:checked) {
+  background: #b8e6ee12;
+  border-color: #b8e6ee99;
+}
+.picker label:has(input:focus-visible) {
+  outline: 2px solid #e9f9f4;
+  outline-offset: 3px;
+}
+.picker input {
+  flex-shrink: 0;
+  margin: 3px 0 0;
+  accent-color: #b8e6ee;
+}
+.picker strong {
+  display: block;
+  color: #e1eeee;
+  font-size: 14px;
+  font-weight: 500;
+}
+.picker small {
+  display: block;
+  margin-top: 6px;
+  color: #a1bcc5;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.picker:disabled {
+  opacity: 0.6;
+}
+.picker:disabled label {
+  cursor: default;
+}

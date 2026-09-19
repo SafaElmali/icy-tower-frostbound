@@ -121,7 +121,7 @@
   padding: 0;
   overflow: hidden;
   border: 1px solid #9fcbd43d;
-  border-radius: 18px;
+  border-radius: 3px;
   background:
     radial-gradient(ellipse at top left, #284b583d, transparent 65%), #0d202b;
   color: #e3f0ee;
@@ -138,7 +138,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #8bb8c5;
+  color: #c9b58e;
   font-size: 10px;
   letter-spacing: 1.8px;
   line-height: 1.5;
@@ -163,10 +163,10 @@
 .dialog [data-slot='dialog-close'] {
   top: 22px;
   right: 18px;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 1px solid #91bdcd26;
-  border-radius: 50%;
+  border-radius: 2px;
   background: #122b35;
   color: #9dbdc8;
 }
@@ -512,7 +512,7 @@
 @media (max-width: 480px) {
   .dialog[data-slot='dialog-content'] {
     width: calc(100vw - 24px);
-    border-radius: 14px;
+    border-radius: 3px;
   }
   .header {
     padding: 22px 52px 20px 20px;

@@ -22,7 +22,6 @@ export class TowerActionWorld {
   private transform = new THREE.Object3D();
   private previous: { x: number; y: number; time: number; active: boolean } | null = null;
   private emissionTime = 0;
-  private aura: THREE.Mesh;
   private shield: RecoveryShield;
   private encounter: THREE.Group;
   private disposed = false;
@@ -44,9 +43,6 @@ export class TowerActionWorld {
     const trailMaterial = this.material(new THREE.MeshBasicMaterial({ color: 0x8dffda, transparent: true, opacity: .72, depthWrite: false, toneMapped: false }));
     this.trail = new THREE.InstancedMesh(this.crystalGeometry, trailMaterial, TRAIL_CAPACITY);
     this.trail.name = 'Frenzy crystal trail'; this.trail.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.trail.frustumCulled = false; this.trail.count = 0; this.group.add(this.trail);
-    const auraMaterial = this.material(new THREE.MeshBasicMaterial({ color: 0x76ffcf, transparent: true, opacity: .4, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
-    this.aura = this.mesh(this.geometry(new THREE.RingGeometry(.79, .87, 48)), auraMaterial, this.group);
-    this.aura.name = 'Frenzy halo'; this.aura.visible = false;
     this.shield = new RecoveryShield(); this.group.add(this.shield.group);
     this.encounter = new THREE.Group(); this.encounter.name = 'Ice shower edge cue'; this.encounter.visible = false; this.group.add(this.encounter);
     const edgeMaterial = this.material(new THREE.MeshBasicMaterial({ color: 0xffbf5e, transparent: true, opacity: .13, depthWrite: false }));
@@ -191,8 +187,6 @@ export class TowerActionWorld {
       visual.rotation.y = reducedMotion ? Math.PI / 4 : time * 1.6 + crystal.id;
     });
     const frenzy = active && action.frenzyTime > 0;
-    this.aura.visible = frenzy; this.aura.position.set(state.x, state.y + .76, -.22);
-    this.aura.scale.setScalar(reducedMotion ? 1 : 1 + Math.sin(time * 3) * .035);
     this.shield.group.position.set(state.x, state.y + .78, .15);
     this.shield.update(active ? action.invulnerableTime : 0, time, reducedMotion);
     this.encounter.visible = active && action.encounter?.kind === 'ice-shower'; this.encounter.position.y = state.cameraY;

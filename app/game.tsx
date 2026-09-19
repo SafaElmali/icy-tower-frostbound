@@ -7,14 +7,11 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
-  BookOpen,
-  ChartNoAxesColumnIncreasing,
   CalendarDays,
   ChevronRight,
   CircleHelp,
   Footprints,
   Settings2,
-  Settings,
   Music2,
   Sparkles,
   Wind,
@@ -30,14 +27,14 @@ import {
   Trophy,
   Users,
   Volume2,
-  VolumeX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HowToPlayDialog } from '@/components/how-to-play-dialog';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import menuStyles from './game-menu.module.css';
-import titleStyles from './title-menu.module.css';
+import { TitleMenu } from '@/components/title-menu';
+import { preventTouchContextMenu } from '@/lib/game-touch';
 import skillGoalStyles from '@/components/skill-goals.module.css';
 import hudStyles from '@/components/game-hud.module.css';
 import { GameHud } from '@/components/game-hud';
@@ -203,6 +200,7 @@ export default function Home() {
   const [help, setHelp] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuTab, setMenuTab] = useState('play');
+  const returnToMenu = useRef(false);
   const [runDetailsOpen, setRunDetailsOpen] = useState(false);
   const [challengesOpen, setChallengesOpen] = useState(false);
   const goalsTitle = useRef<HTMLHeadingElement>(null);
@@ -392,6 +390,7 @@ export default function Home() {
   }, []);
 
   function startRun(e: TowerEngine, selectedMode: GameMode, source = 'button') {
+    returnToMenu.current = false;
     const retrySeed =
       e.status === 'over' && e.floor < 5 && e.mode === selectedMode
         ? e.seed
@@ -667,8 +666,17 @@ export default function Home() {
   }
 
   function fromMenu(action: () => void) {
+    returnToMenu.current = true;
     setMenuOpen(false);
     action();
+  }
+
+  function closeFeature(setOpen: (open: boolean) => void, open: boolean) {
+    setOpen(open);
+    if (!open && returnToMenu.current) {
+      returnToMenu.current = false;
+      setMenuOpen(true);
+    }
   }
 
   function changeMenuTab(tab: string) {
@@ -1217,7 +1225,8 @@ export default function Home() {
       )
         setTouchGuidance(false);
       const button =
-        event.target instanceof HTMLElement && event.target.closest('button');
+        event.target instanceof HTMLElement &&
+        event.target.closest('button, a, summary, [role="tab"]');
       const active = e.status === 'playing';
       if (
         ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'Space'].includes(event.code) &&
@@ -1399,7 +1408,9 @@ export default function Home() {
 
   return (
     <div className={JEV_ENABLED && jevMessage ? 'jev-layout' : undefined}>
+      {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Prevent native touch callouts; this does not add an interactive action to the landmark. */}
       <main
+        onContextMenu={preventTouchContextMenu}
         onPointerDownCapture={(event) => {
           lastInput.current =
             event.pointerType === 'touch' ? 'touch' : 'pointer';
@@ -1407,7 +1418,7 @@ export default function Home() {
         onKeyDownCapture={() => {
           lastInput.current = 'keyboard';
         }}
-        className={`game-shell state-${game.status} mode-${game.mode} ${active ? hudStyles.layout : ''} ${challenge ? 'friend-run' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}
+        className={`game-shell game-touch-surface state-${game.status} mode-${game.mode} ${active ? hudStyles.layout : ''} ${challenge ? 'friend-run' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}
       >
         <canvas
           className="world-canvas"
@@ -1429,20 +1440,46 @@ export default function Home() {
           )}
         </header>
         {game.status === 'ready' && (
-          <>
-            <div className={titleStyles.backdrop} aria-hidden="true" />
-            <section
-              className={`${titleStyles.menu} ${challenge || daily || challengeError ? titleStyles.invited : ''}`}
-              aria-label="Frostbound main menu"
-            >
-              <div className={titleStyles.heading}>
-                <h1>Frostbound</h1>
-                <div className={titleStyles.subtitle}>
-                  <i aria-hidden="true" /> THE ENDLESS ASCENT{' '}
-                  <i aria-hidden="true" />
-                </div>
-              </div>
-              {daily ? (
+          <TitleMenu
+            mode={mode}
+            ready={ready}
+            failed={!!error}
+            sound={sound}
+            touch={touchGuidance}
+            best={best}
+            skills={skills}
+            newOutfits={newOutfits.length}
+            invited={!!daily || !!challenge}
+            playLabel={
+              daily
+                ? 'Climb daily tower'
+                : challenge
+                  ? 'Accept challenge'
+                  : 'Begin ascent'
+            }
+            onPlay={() => begin()}
+            onModes={() => {
+              changeMenuTab('play');
+              setMenuOpen(true);
+            }}
+            onDaily={() => {
+              setDailyChoice(daily ?? todayDailyTower());
+              setDailyOpen(true);
+            }}
+            onProgress={() => {
+              changeMenuTab('progress');
+              setMenuOpen(true);
+            }}
+            onOutfits={openWardrobe}
+            onLeaderboard={openLeaderboard}
+            onHelp={() => setHelp(true)}
+            onSettings={() => {
+              changeMenuTab('settings');
+              setMenuOpen(true);
+            }}
+            onSound={() => changeSound(!sound)}
+            context={
+              daily ? (
                 <div className="friend-invite">
                   <span>DAILY TOWER · CLASSIC</span>
                   <strong>{daily.date}</strong>
@@ -1469,122 +1506,9 @@ export default function Home() {
                 <p className="friend-link-error" role="alert">
                   {challengeError}
                 </p>
-              ) : null}
-              <div className={titleStyles.actions}>
-                <Button
-                  className={titleStyles.play}
-                  onClick={() => begin()}
-                  disabled={!ready || !!error}
-                >
-                  <Play fill="currentColor" aria-hidden="true" />
-                  <span>
-                    {ready
-                      ? daily
-                        ? 'CLIMB DAILY TOWER'
-                        : challenge
-                          ? 'ACCEPT CHALLENGE'
-                          : `PLAY ${MODE_LABELS[mode].toUpperCase()}`
-                      : 'ENTERING THE TOWER…'}
-                  </span>
-                </Button>
-                <span className={titleStyles.hint}>
-                  {touchGuidance ? (
-                    <>
-                      Hold an arrow to run. Tap JUMP, release, then tap again.
-                    </>
-                  ) : (
-                    <>
-                      Move with ← / → · Jump with Space
-                      <br />
-                      Press <kbd>ENTER</kbd> to begin
-                    </>
-                  )}
-                </span>
-                <nav className={titleStyles.links} aria-label="Game options">
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      changeMenuTab('play');
-                      setMenuOpen(true);
-                    }}
-                    aria-haspopup="dialog"
-                    aria-expanded={menuOpen}
-                  >
-                    <ChartNoAxesColumnIncreasing aria-hidden="true" />
-                    <span>Game modes</span>
-                    <ChevronRight aria-hidden="true" />
-                    {newOutfits.length > 0 && (
-                      <i
-                        className={menuStyles.unlockDot}
-                        aria-label="New outfits available"
-                      />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setHelp(true)}
-                    aria-haspopup="dialog"
-                    aria-expanded={help}
-                  >
-                    <BookOpen aria-hidden="true" />
-                    <span>How to play</span>
-                    <ChevronRight aria-hidden="true" />
-                  </Button>
-                  {!challenge &&
-                    !daily &&
-                    (skills.completed.length > 0 ||
-                      bests.arcade.floor >= 5) && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => playDaily(todayDailyTower(), 'title')}
-                        disabled={!ready || !!error}
-                      >
-                        <CalendarDays aria-hidden="true" />
-                        <span>
-                          Today’s tower<small>New climb every day</small>
-                        </span>
-                        <ChevronRight aria-hidden="true" />
-                      </Button>
-                    )}
-                </nav>
-                {best.floor > 0 && (
-                  <p className={titleStyles.record}>
-                    Personal best · {best.floor} floors
-                  </p>
-                )}
-              </div>
-            </section>
-            <footer className={titleStyles.footer}>
-              <p>Chain jumps. Outrun the frost.</p>
-              <div className={titleStyles.utilities}>
-                <Button
-                  variant="ghost"
-                  aria-label={sound ? 'Mute sound' : 'Unmute sound'}
-                  aria-pressed={!sound}
-                  onClick={() => changeSound(!sound)}
-                >
-                  {sound ? (
-                    <Volume2 aria-hidden="true" />
-                  ) : (
-                    <VolumeX aria-hidden="true" />
-                  )}
-                </Button>
-                <span aria-hidden="true" />
-                <Button
-                  variant="ghost"
-                  aria-label="Settings"
-                  aria-haspopup="dialog"
-                  aria-expanded={menuOpen && menuTab === 'settings'}
-                  onClick={() => {
-                    changeMenuTab('settings');
-                    setMenuOpen(true);
-                  }}
-                >
-                  <Settings aria-hidden="true" />
-                </Button>
-              </div>
-            </footer>
-          </>
+              ) : null
+            }
+          />
         )}
         {active && (
           <>
@@ -1656,7 +1580,7 @@ export default function Home() {
               </span>
               <h2>
                 {game.status === 'paused' ? (
-                  'Take a breath.'
+                  'The tower can wait.'
                 ) : (
                   <>Floor {game.floor}.</>
                 )}
@@ -1715,7 +1639,7 @@ export default function Home() {
                 (game.status === 'over' || jev.current?.finished)
                   ? 'WATCH JEV AGAIN'
                   : game.status === 'paused'
-                    ? 'CONTINUE'
+                    ? 'RESUME CLIMB'
                     : daily
                       ? 'RETRY DAILY TOWER'
                       : challenge
@@ -1767,6 +1691,26 @@ export default function Home() {
                     onStartToday={() => playDaily(todayDailyTower(), 'results')}
                   />
                 )}
+              {game.status === 'paused' && (
+                <div className="pause-options">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      changeMenuTab('settings');
+                      setMenuOpen(true);
+                    }}
+                  >
+                    <Settings2 size={17} />
+                    Settings
+                    <ChevronRight size={16} />
+                  </Button>
+                  <Button variant="ghost" onClick={() => setHelp(true)}>
+                    <CircleHelp size={17} />
+                    How to play
+                    <ChevronRight size={16} />
+                  </Button>
+                </div>
+              )}
               <div className="run-summary-actions">
                 {game.status === 'over' && !aiRun.current && (
                   <Button
@@ -1880,10 +1824,18 @@ export default function Home() {
                 <Snowflake aria-hidden="true" /> FROSTBOUND
               </div>
               <DialogTitle className={menuStyles.title}>
-                Make it your climb.
+                {menuTab === 'play'
+                  ? 'Choose your ascent.'
+                  : menuTab === 'progress'
+                    ? 'Every climb counts.'
+                    : 'Make yourself at home.'}
               </DialogTitle>
               <DialogDescription className={menuStyles.description}>
-                A new challenge. A little fine-tuning. Your next ascent.
+                {menuTab === 'play'
+                  ? 'Find your rhythm. Then push a little further.'
+                  : menuTab === 'progress'
+                    ? 'Your milestones, your climbing kit, your place on the tower.'
+                    : 'Fine-tune the sound, atmosphere, and feel of your climb.'}
               </DialogDescription>
             </div>
             <Tabs
@@ -1898,7 +1850,7 @@ export default function Home() {
                 </TabsTrigger>
                 <TabsTrigger value="progress">
                   <Trophy aria-hidden="true" />
-                  Your climb
+                  Your ascent
                 </TabsTrigger>
                 <TabsTrigger value="settings">
                   <Settings2 aria-hidden="true" />
@@ -1918,19 +1870,22 @@ export default function Home() {
                           {
                             value: 'arcade',
                             label: 'Classic',
-                            description: 'Climb higher. Beat the frost.',
+                            description:
+                              'The original endless climb. Outrun the rising frost.',
                             Icon: Snowflake,
                           },
                           {
                             value: 'party',
                             label: 'Party',
-                            description: 'Low gravity. Bigger jumps.',
+                            description:
+                              'Low gravity, spring platforms, and double jumps.',
                             Icon: Sparkles,
                           },
                           {
                             value: 'practice',
                             label: 'Practice',
-                            description: 'Find your feet. No rush.',
+                            description:
+                              'Learn at your own pace. No rising frost. Unranked.',
                             Icon: Footprints,
                           },
                         ] as const
@@ -1972,7 +1927,9 @@ export default function Home() {
                     <p className={menuStyles.note}>
                       {active
                         ? 'Return to the title screen to change mode.'
-                        : 'Leave this challenge to choose a different mode.'}
+                        : daily
+                          ? 'Leave the daily tower to choose a different mode.'
+                          : 'Leave this challenge to choose a different mode.'}
                     </p>
                   )}
                   <section
@@ -2005,7 +1962,8 @@ export default function Home() {
                     >
                       <Users aria-hidden="true" />
                       <span>
-                        Multiplayer lobbies<small>Host or join a 2–4 player climb</small>
+                        Multiplayer lobbies
+                        <small>Host or join a 2–4 player climb</small>
                       </span>
                       <ChevronRight aria-hidden="true" />
                     </Button>
@@ -2062,7 +2020,25 @@ export default function Home() {
                     className={menuStyles.group}
                     aria-labelledby="menu-progress-heading"
                   >
-                    <h3 id="menu-progress-heading">Your climb</h3>
+                    <div className={menuStyles.progressOverview}>
+                      <div>
+                        <span>
+                          PERSONAL BEST · {MODE_LABELS[mode].toUpperCase()}
+                        </span>
+                        <strong>
+                          {best.floor}
+                          <small> floors</small>
+                        </strong>
+                      </div>
+                      <div>
+                        <span>MILESTONES EARNED</span>
+                        <strong>
+                          {skills.completed.length}
+                          <small> / {SKILL_GOALS.length}</small>
+                        </strong>
+                      </div>
+                    </div>
+                    <h3 id="menu-progress-heading">Continue your story</h3>
                     <Button
                       className={menuStyles.row}
                       variant="ghost"
@@ -2267,14 +2243,34 @@ export default function Home() {
                     ? 'Your climb is paused'
                     : 'The tower is waiting'}
               </span>
-              <Button onClick={() => setMenuOpen(false)}>
-                Done
+              <Button
+                disabled={menuTab === 'play' && !active && (!ready || !!error)}
+                onClick={() => {
+                  setMenuOpen(false);
+                  if (active && game.status === 'paused') pause();
+                  else if (menuTab === 'play' && !active) begin();
+                }}
+              >
+                {active
+                  ? 'Resume climb'
+                  : menuTab === 'play'
+                    ? daily
+                      ? 'Climb daily tower'
+                      : challenge
+                        ? 'Accept challenge'
+                        : `Play ${MODE_LABELS[mode]}`
+                    : game.status === 'over'
+                      ? 'Back to results'
+                      : 'Back to title'}
                 <ChevronRight aria-hidden="true" />
               </Button>
             </footer>
           </DialogContent>
         </Dialog>
-        <Dialog open={dailyOpen} onOpenChange={setDailyOpen}>
+        <Dialog
+          open={dailyOpen}
+          onOpenChange={(open) => closeFeature(setDailyOpen, open)}
+        >
           <DialogContent className="result-card help-card daily-dialog">
             <DialogTitle>A new route each day.</DialogTitle>
             <DialogDescription>
@@ -2352,7 +2348,10 @@ export default function Home() {
             <output aria-live="polite">{copyStatus}</output>
           </DialogContent>
         </Dialog>
-        <Dialog open={challengesOpen} onOpenChange={setChallengesOpen}>
+        <Dialog
+          open={challengesOpen}
+          onOpenChange={(open) => closeFeature(setChallengesOpen, open)}
+        >
           <DialogContent
             className={skillGoalStyles.dialog}
             initialFocus={goalsTitle}
@@ -2398,7 +2397,10 @@ export default function Home() {
               </details>
             </div>
             <footer className={skillGoalStyles.footer}>
-              <Button variant="ghost" onClick={() => setChallengesOpen(false)}>
+              <Button
+                variant="ghost"
+                onClick={() => closeFeature(setChallengesOpen, false)}
+              >
                 Done
               </Button>
               <Button
@@ -2406,7 +2408,7 @@ export default function Home() {
                 disabled={!ready || !!error}
                 onClick={() => {
                   if (active) {
-                    setChallengesOpen(false);
+                    closeFeature(setChallengesOpen, false);
                     return;
                   }
                   if (skills.completed.length === SKILL_GOALS.length) {
@@ -2428,7 +2430,7 @@ export default function Home() {
         </Dialog>
         <HowToPlayDialog
           open={help}
-          onOpenChange={setHelp}
+          onOpenChange={(open) => closeFeature(setHelp, open)}
           ready={ready && !error}
           active={active}
           onPractice={guidedPractice}
@@ -2450,7 +2452,7 @@ export default function Home() {
           <LeaderboardDialog
             runId={submissionRun ? remoteRunId : undefined}
             open={leaderboardOpen}
-            onOpenChange={setLeaderboardOpen}
+            onOpenChange={(open) => closeFeature(setLeaderboardOpen, open)}
             run={submissionRun}
             outfit={profile.equipped}
             initialMode={mode === 'party' ? 'party' : 'arcade'}
@@ -2458,7 +2460,7 @@ export default function Home() {
         )}
         <WardrobeDialog
           open={wardrobeOpen}
-          onOpenChange={setWardrobeOpen}
+          onOpenChange={(open) => closeFeature(setWardrobeOpen, open)}
           profile={profile}
           onEquip={equip}
           storageAvailable={storageAvailable}

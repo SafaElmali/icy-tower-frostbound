@@ -11,6 +11,7 @@ import { RaceRunner } from '../lib/race-runner.ts';
 import { type RaceBumpEvent, type RaceSettings } from '../lib/race-protocol.ts';
 
 const settings: RaceSettings = {
+  mode: 'arcade',
   targetFloor: 35,
   durationMs: 180_000,
   bumping: true,
