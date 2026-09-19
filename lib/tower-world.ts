@@ -298,7 +298,10 @@ export class TowerWorld {
   private resize() {
     const { width, height } = this.renderer.domElement.getBoundingClientRect();
     if (!width || !height) return;
-    const aspect = width / height; const h = Math.max(15.5, 15 / aspect);
+    const aspect = width / height;
+    // Bring portrait phone views closer while keeping both playable walls in frame.
+    const viewWidth = width <= 768 && aspect < 1 ? 13.2 : 15;
+    const h = Math.max(15.5, viewWidth / aspect);
     this.camera.aspect = aspect; this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(h / 52)); this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false); this.composer.setSize(width, height);
 
