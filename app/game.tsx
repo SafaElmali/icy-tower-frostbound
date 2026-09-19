@@ -80,6 +80,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { JevInspector } from '@/components/jev-inspector';
+import type { JevDebugRecord, JevLiveState } from '@/lib/jev-debug';
+import { JevPlayer } from '@/lib/jev-player';
 import { TowerInput } from '@/lib/tower-input';
 import { TowerAudio } from '@/lib/tower-audio';
 import { registerGameTools } from '@/lib/game-tools';
@@ -117,7 +120,11 @@ import {
 import { PersonalProgressResults } from '@/components/personal-progress';
 import { NextClimb } from '@/components/next-climb';
 import { DailyReturn } from '@/components/daily-return';
-import { getFirstJumpGuidance, shouldStartFirstJumpGuidance, type FirstJumpGuidance } from '@/lib/first-jump-guidance';
+import {
+  getFirstJumpGuidance,
+  shouldStartFirstJumpGuidance,
+  type FirstJumpGuidance,
+} from '@/lib/first-jump-guidance';
 import {
   readPersonalProgress,
   personalRunBaseline,
@@ -162,6 +169,7 @@ const emptyBests = (): Record<GameMode, PersonalBest> => ({
 const bestKey = (mode: GameMode) =>
   mode === 'arcade' ? 'frostbound-best' : `frostbound-best-${mode}`;
 const initial = new TowerEngine().snapshot();
+const JEV_ENABLED = import.meta.env.JEV_ENABLED;
 const formatTime = (t: number) =>
   `${Math.floor(t / 60)
     .toString()
@@ -174,6 +182,11 @@ export default function Home() {
   const engine = useRef<TowerEngine | null>(null);
   const world = useRef<TowerWorld | null>(null);
   const input = useRef(new TowerInput());
+  const jev = useRef<JevPlayer | null>(null);
+  const aiRun = useRef(false);
+  const [jevMessage, setJevMessage] = useState('');
+  const [jevTrace, setJevTrace] = useState<JevDebugRecord[]>([]);
+  const [jevLive, setJevLive] = useState<JevLiveState | null>(null);
   const [touchPressed, setTouchPressed] = useState(freshControls());
   const [touchGuidance, setTouchGuidance] = useState(false);
   const [game, setGame] = useState<Snapshot>(initial);
@@ -383,6 +396,10 @@ export default function Home() {
       e.status === 'over' && e.floor < 5 && e.mode === selectedMode
         ? e.seed
         : undefined;
+    jev.current?.stop();
+    jev.current = null;
+    aiRun.current = source === 'jev';
+    setJevMessage('');
     const reason =
       e.status === 'over'
         ? 'retry'
@@ -396,7 +413,12 @@ export default function Home() {
     setMenuOpen(false);
     setRunDetailsOpen(false);
     guidanceRun.current = freshGuidanceRun();
-    firstJumpEnabled.current = shouldStartFirstJumpGuidance(guidanceProfile.current, profileRef.current.progress.floor);
+    firstJumpEnabled.current =
+      !aiRun.current &&
+      shouldStartFirstJumpGuidance(
+        guidanceProfile.current,
+        profileRef.current.progress.floor,
+      );
     firstJumpRef.current = null;
     setFirstJump(null);
     comboFeedback.current.reset();
@@ -420,37 +442,41 @@ export default function Home() {
     startGhostFloor.current = ghost.current
       ? (ghostBest.current?.floor ?? null)
       : null;
-    telemetry.current.start(e, {
-      start_source: source,
-      start_reason: reason,
-      input_type:
-        source === 'game_tool'
-          ? 'game_tool'
-          : source === 'keyboard'
-            ? 'keyboard'
-            : lastInput.current,
-      device_proxy: window.matchMedia('(any-pointer: coarse)').matches
-        ? 'coarse_pointer'
-        : 'fine_pointer',
-      run_context: dailyRef.current
-        ? 'daily'
-        : challengeRef.current
-          ? 'friend_challenge'
-          : 'normal',
-      daily_date: dailyRef.current?.date,
-      target_floor: challengeRef.current?.floor,
-      target_score: challengeRef.current?.score,
-      ghost_enabled: !!ghost.current,
-      guidance_enabled: !guidanceProfile.current.skipped,
-    });
-    setRemoteRunId(telemetry.current.runId ?? undefined);
+    if (!aiRun.current)
+      telemetry.current.start(e, {
+        start_source: source,
+        start_reason: reason,
+        input_type:
+          source === 'game_tool'
+            ? 'game_tool'
+            : source === 'keyboard'
+              ? 'keyboard'
+              : lastInput.current,
+        device_proxy: window.matchMedia('(any-pointer: coarse)').matches
+          ? 'coarse_pointer'
+          : 'fine_pointer',
+        run_context: dailyRef.current
+          ? 'daily'
+          : challengeRef.current
+            ? 'friend_challenge'
+            : 'normal',
+        daily_date: dailyRef.current?.date,
+        target_floor: challengeRef.current?.floor,
+        target_score: challengeRef.current?.score,
+        ghost_enabled: !!ghost.current,
+        guidance_enabled: !guidanceProfile.current.skipped,
+      });
+    setRemoteRunId(
+      aiRun.current ? undefined : (telemetry.current.runId ?? undefined),
+    );
     const baseline = personalRunBaseline(personalProgress.current, e.mode);
     setRunBaseline(baseline);
     world.current?.setPersonalBest(baseline.floor);
-    measuredRun.current =
-      analytics.current?.beginRun({
-        mode: `${dailyRef.current ? 'daily:' : challengeRef.current ? 'challenge:' : ''}${e.mode}`,
-      }) ?? null;
+    measuredRun.current = aiRun.current
+      ? null
+      : (analytics.current?.beginRun({
+          mode: `${dailyRef.current ? 'daily:' : challengeRef.current ? 'challenge:' : ''}${e.mode}`,
+        }) ?? null);
     setMode(e.mode);
     setSharedRun(null);
     setRace(ghost.current?.snapshot(e) ?? null);
@@ -513,15 +539,26 @@ export default function Home() {
     audio.current?.setEnabled(enabled);
     if (enabled) tone('gem');
   }
-  function begin(selectedMode = mode) {
+  function begin(selectedMode = mode, source = 'button') {
     if (!engine.current || !ready) return;
-    startRun(engine.current, selectedMode);
+    startRun(engine.current, selectedMode, source);
     audio.current?.setPaused(false);
     setGame(engine.current.snapshot());
     setHelp(false);
     setChallengesOpen(false);
     tone('jump');
     canvas.current?.focus({ preventScroll: true });
+  }
+  function beginJev() {
+    if (!JEV_ENABLED || !ready || !engine.current) return;
+    leaveChallenge();
+    leaveDaily();
+    begin('practice', 'jev');
+    setJevTrace([]);
+    setJevLive(null);
+    jev.current = new JevPlayer(undefined, setJevMessage, setJevTrace);
+    setJevMessage('Jev is thinking…');
+    world.current?.setPersonalBest(0);
   }
   function leaveChallenge() {
     if (challengeRef.current)
@@ -610,6 +647,10 @@ export default function Home() {
     setLeaderboardOpen(true);
   }
   function menu() {
+    jev.current?.stop();
+    jev.current = null;
+    aiRun.current = false;
+    setJevMessage('');
     setRunDetailsOpen(false);
     if (engine.current)
       telemetry.current.terminal(engine.current, 'abandoned', {
@@ -820,7 +861,9 @@ export default function Home() {
               const code = graphicsFailureCode(cause, 'render_failed');
               setGraphicsReconnecting(false);
               setPerformanceRetry(
-                !performanceMode && code !== 'webgl_unavailable' && code !== 'network_failed',
+                !performanceMode &&
+                  code !== 'webgl_unavailable' &&
+                  code !== 'network_failed',
               );
               telemetry.current.event('graphics_failed', {
                 load_id: loadId,
@@ -874,7 +917,8 @@ export default function Home() {
             last = now;
             graphics?.frame(() => {
               reportReady();
-              e.tick(dt, input.current.controls);
+              if (aiRun.current) jev.current?.tick(e, dt);
+              else e.tick(dt, input.current.controls);
               audio.current?.updateAction(
                 e.time,
                 e.rulesVersion >= 6 ? e.action.frenzyTime : 0,
@@ -892,36 +936,38 @@ export default function Home() {
                 !events.some((event) => event.type === 'frenzy')
               )
                 tone('combo', milestone);
-              const guided = advanceGuidance(
-                guidanceProfile.current,
-                guidanceRun.current,
-                e,
-                events,
-                input.current.controls,
-              );
-              saveGuidance(guided.profile);
-              guidanceRun.current = guided.run;
-              const cue = getGuidanceCue(
-                guidanceProfile.current,
-                guidanceRun.current,
-                e,
-              );
-              if ((cue?.id ?? null) !== guidanceCueId.current) {
-                if (cue) {
-                  guidanceShownAt.current[cue.id] = e.time;
-                  telemetry.current.event('guidance_step_shown', {
-                    step_id: cue.id,
-                    guidance_attempt_id: telemetry.current.runId,
-                    active_duration_s: e.time,
-                  });
+              if (!aiRun.current) {
+                const guided = advanceGuidance(
+                  guidanceProfile.current,
+                  guidanceRun.current,
+                  e,
+                  events,
+                  input.current.controls,
+                );
+                saveGuidance(guided.profile);
+                guidanceRun.current = guided.run;
+                const cue = getGuidanceCue(
+                  guidanceProfile.current,
+                  guidanceRun.current,
+                  e,
+                );
+                if ((cue?.id ?? null) !== guidanceCueId.current) {
+                  if (cue) {
+                    guidanceShownAt.current[cue.id] = e.time;
+                    telemetry.current.event('guidance_step_shown', {
+                      step_id: cue.id,
+                      guidance_attempt_id: telemetry.current.runId,
+                      active_duration_s: e.time,
+                    });
+                  }
+                  guidanceCueId.current = cue?.id ?? null;
+                  setGuidanceCue(cue);
                 }
-                guidanceCueId.current = cue?.id ?? null;
-                setGuidanceCue(cue);
               }
               for (const event of events) {
                 w.effect(event, e.time);
                 if (event.type !== 'combo') tone(event.type);
-                if (event.type === 'over') {
+                if (event.type === 'over' && !aiRun.current) {
                   const progress = recordPersonalProgress(
                     personalProgress.current,
                     e.snapshot(),
@@ -1005,7 +1051,7 @@ export default function Home() {
                   }
                 }
               }
-              if (events.length) {
+              if (events.length && !aiRun.current) {
                 saveSkills(
                   advanceSkillProgress(skillsRef.current, e.snapshot()),
                 );
@@ -1041,9 +1087,12 @@ export default function Home() {
                     ]);
                 }
               }
-              if (events.length || now - sync > 65)
+              if (!aiRun.current && (events.length || now - sync > 65))
                 telemetry.current.progress(e);
-              if (events.some((event) => event.type === 'over')) {
+              if (
+                !aiRun.current &&
+                events.some((event) => event.type === 'over')
+              ) {
                 if (measuredRun.current)
                   analytics.current?.finishRun(measuredRun.current, {
                     floor: e.floor,
@@ -1081,14 +1130,19 @@ export default function Home() {
               }
               if (e.status === 'playing') {
                 firstJumpRef.current = getFirstJumpGuidance(
-                  e, input.current.controls, firstJumpRef.current,
+                  e,
+                  input.current.controls,
+                  firstJumpRef.current,
                   firstJumpEnabled.current && !guidanceProfile.current.skipped,
                 );
               }
-              const landingGuide = e.status === 'playing' ? firstJumpRef.current : null;
+              const landingGuide =
+                e.status === 'playing' ? firstJumpRef.current : null;
               w.render(e, dt, now / 1000, ghost.current, landingGuide);
               if (now - sync > 65 || events.length) {
                 setGame(e.snapshot());
+                if (aiRun.current && jev.current)
+                  setJevLive(jev.current.liveState(e));
                 setRace(ghost.current?.snapshot(e) ?? null);
                 setFirstJump(landingGuide);
                 sync = now;
@@ -1114,7 +1168,9 @@ export default function Home() {
           setReady(false);
           setGraphicsReconnecting(false);
           setPerformanceRetry(
-            !performanceMode && code !== 'webgl_unavailable' && code !== 'network_failed',
+            !performanceMode &&
+              code !== 'webgl_unavailable' &&
+              code !== 'network_failed',
           );
           console.error(cause);
           setError(graphicsFailureMessage(code, performanceMode));
@@ -1145,7 +1201,7 @@ export default function Home() {
       const editable =
         event.target instanceof HTMLElement &&
         event.target.closest(
-          'input, select, textarea, dialog, [role="dialog"]',
+          'input, select, textarea, dialog, [role="dialog"], [data-jev-inspector]',
         );
       if (editable) return;
       if (
@@ -1168,7 +1224,7 @@ export default function Home() {
         (active || !button)
       )
         event.preventDefault();
-      if (active) {
+      if (active && !aiRun.current) {
         if (event.code === 'KeyA' || event.code === 'ArrowLeft')
           input.current.press(source, 'left');
         if (event.code === 'KeyD' || event.code === 'ArrowRight')
@@ -1185,6 +1241,10 @@ export default function Home() {
         telemetry.current.pause(e, 'keyboard');
         audio.current?.setPaused(e.status === 'paused');
         setGame(e.snapshot());
+      }
+      if (event.code === 'Enter' && aiRun.current) {
+        event.preventDefault();
+        return;
       }
       if (event.code === 'Enter' && !button && world.current) {
         if (e.status === 'paused') {
@@ -1251,6 +1311,7 @@ export default function Home() {
     document.addEventListener('visibilitychange', visibility);
     return () => {
       disposed = true;
+      jev.current?.stop();
       endVisit();
       cancelAnimationFrame(frame);
       graphics?.dispose();
@@ -1283,7 +1344,12 @@ export default function Home() {
     setTouchGuidance(true);
     const control = event.currentTarget.dataset.control;
     if (control !== 'left' && control !== 'right' && control !== 'jump') return;
-    if (engine.current?.status !== 'playing' || event.button !== 0) return;
+    if (
+      aiRun.current ||
+      engine.current?.status !== 'playing' ||
+      event.button !== 0
+    )
+      return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     input.current.press(`pointer:${event.pointerId}`, control);
@@ -1332,1075 +1398,1143 @@ export default function Home() {
   );
 
   return (
-    <main
-      onPointerDownCapture={(event) => {
-        lastInput.current = event.pointerType === 'touch' ? 'touch' : 'pointer';
-      }}
-      onKeyDownCapture={() => {
-        lastInput.current = 'keyboard';
-      }}
-      className={`game-shell state-${game.status} mode-${game.mode} ${active ? hudStyles.layout : ''} ${challenge ? 'friend-run' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}
-    >
-      <canvas
-        className="world-canvas"
-        ref={canvas}
-        tabIndex={game.status === 'ready' ? -1 : 0}
-        aria-hidden={game.status === 'ready'}
-        aria-label="Icy Tower game. Use the on-screen left, right and jump buttons, or A/D and Space. Pause with the top button or Escape."
-      />
-      <div className="screen-vignette" />
-      <header className="topbar" hidden={game.status === 'ready'}>
-        <div className="brand">
-          <Snowflake size={23} strokeWidth={1.4} />
-          <span>
-            ICY TOWER<small>F R O S T B O U N D</small>
-          </span>
-        </div>
-        {game.status !== 'ready' && (
-          <div className="topbar-right">{menuButton}</div>
-        )}
-      </header>
-      {game.status === 'ready' && (
-        <>
-          <div className={titleStyles.backdrop} aria-hidden="true" />
-          <section
-            className={`${titleStyles.menu} ${challenge || daily || challengeError ? titleStyles.invited : ''}`}
-            aria-label="Frostbound main menu"
-          >
-            <div className={titleStyles.heading}>
-              <h1>Frostbound</h1>
-              <div className={titleStyles.subtitle}>
-                <i aria-hidden="true" /> THE ENDLESS ASCENT{' '}
-                <i aria-hidden="true" />
+    <div className={JEV_ENABLED && jevMessage ? 'jev-layout' : undefined}>
+      <main
+        onPointerDownCapture={(event) => {
+          lastInput.current =
+            event.pointerType === 'touch' ? 'touch' : 'pointer';
+        }}
+        onKeyDownCapture={() => {
+          lastInput.current = 'keyboard';
+        }}
+        className={`game-shell state-${game.status} mode-${game.mode} ${active ? hudStyles.layout : ''} ${challenge ? 'friend-run' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}
+      >
+        <canvas
+          className="world-canvas"
+          ref={canvas}
+          tabIndex={game.status === 'ready' ? -1 : 0}
+          aria-hidden={game.status === 'ready'}
+          aria-label="Icy Tower game. Use the on-screen left, right and jump buttons, or A/D and Space. Pause with the top button or Escape."
+        />
+        <div className="screen-vignette" />
+        <header className="topbar" hidden={game.status === 'ready'}>
+          <div className="brand">
+            <Snowflake size={23} strokeWidth={1.4} />
+            <span>
+              ICY TOWER<small>F R O S T B O U N D</small>
+            </span>
+          </div>
+          {game.status !== 'ready' && (
+            <div className="topbar-right">{menuButton}</div>
+          )}
+        </header>
+        {game.status === 'ready' && (
+          <>
+            <div className={titleStyles.backdrop} aria-hidden="true" />
+            <section
+              className={`${titleStyles.menu} ${challenge || daily || challengeError ? titleStyles.invited : ''}`}
+              aria-label="Frostbound main menu"
+            >
+              <div className={titleStyles.heading}>
+                <h1>Frostbound</h1>
+                <div className={titleStyles.subtitle}>
+                  <i aria-hidden="true" /> THE ENDLESS ASCENT{' '}
+                  <i aria-hidden="true" />
+                </div>
               </div>
-            </div>
-            {daily ? (
-              <div className="friend-invite">
-                <span>DAILY TOWER · CLASSIC</span>
-                <strong>{daily.date}</strong>
-                <p>Same tower for everyone. Unlimited attempts.</p>
-                <Button variant="ghost" onClick={leaveDaily}>
-                  Leave daily tower
-                </Button>
-              </div>
-            ) : challenge ? (
-              <div className="friend-invite">
-                <span>FRIEND CHALLENGE</span>
-                <strong>Beat floor {challenge.floor}.</strong>
-                <p>
-                  {challenge.score.toLocaleString()} points ·{' '}
-                  {MODE_LABELS[challenge.mode]}
-                  <br />
-                  Same tower. Your turn.
-                </p>
-                <Button variant="ghost" onClick={leaveChallenge}>
-                  Leave challenge
-                </Button>
-              </div>
-            ) : challengeError ? (
-              <p className="friend-link-error" role="alert">
-                {challengeError}
-              </p>
-            ) : null}
-            <div className={titleStyles.actions}>
-              <Button
-                className={titleStyles.play}
-                onClick={() => begin()}
-                disabled={!ready || !!error}
-              >
-                <Play fill="currentColor" aria-hidden="true" />
-                <span>
-                  {ready
-                    ? daily
-                      ? 'CLIMB DAILY TOWER'
-                      : challenge
-                        ? 'ACCEPT CHALLENGE'
-                        : `PLAY ${MODE_LABELS[mode].toUpperCase()}`
-                    : 'ENTERING THE TOWER…'}
-                </span>
-              </Button>
-              <span className={titleStyles.hint}>
-                {touchGuidance ? (
-                  <>Hold an arrow to run. Tap JUMP, release, then tap again.</>
-                ) : (
-                  <>
-                    Move with ← / → · Jump with Space
+              {daily ? (
+                <div className="friend-invite">
+                  <span>DAILY TOWER · CLASSIC</span>
+                  <strong>{daily.date}</strong>
+                  <p>Same tower for everyone. Unlimited attempts.</p>
+                  <Button variant="ghost" onClick={leaveDaily}>
+                    Leave daily tower
+                  </Button>
+                </div>
+              ) : challenge ? (
+                <div className="friend-invite">
+                  <span>FRIEND CHALLENGE</span>
+                  <strong>Beat floor {challenge.floor}.</strong>
+                  <p>
+                    {challenge.score.toLocaleString()} points ·{' '}
+                    {MODE_LABELS[challenge.mode]}
                     <br />
-                    Press <kbd>ENTER</kbd> to begin
-                  </>
+                    Same tower. Your turn.
+                  </p>
+                  <Button variant="ghost" onClick={leaveChallenge}>
+                    Leave challenge
+                  </Button>
+                </div>
+              ) : challengeError ? (
+                <p className="friend-link-error" role="alert">
+                  {challengeError}
+                </p>
+              ) : null}
+              <div className={titleStyles.actions}>
+                <Button
+                  className={titleStyles.play}
+                  onClick={() => begin()}
+                  disabled={!ready || !!error}
+                >
+                  <Play fill="currentColor" aria-hidden="true" />
+                  <span>
+                    {ready
+                      ? daily
+                        ? 'CLIMB DAILY TOWER'
+                        : challenge
+                          ? 'ACCEPT CHALLENGE'
+                          : `PLAY ${MODE_LABELS[mode].toUpperCase()}`
+                      : 'ENTERING THE TOWER…'}
+                  </span>
+                </Button>
+                <span className={titleStyles.hint}>
+                  {touchGuidance ? (
+                    <>
+                      Hold an arrow to run. Tap JUMP, release, then tap again.
+                    </>
+                  ) : (
+                    <>
+                      Move with ← / → · Jump with Space
+                      <br />
+                      Press <kbd>ENTER</kbd> to begin
+                    </>
+                  )}
+                </span>
+                <nav className={titleStyles.links} aria-label="Game options">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      changeMenuTab('play');
+                      setMenuOpen(true);
+                    }}
+                    aria-haspopup="dialog"
+                    aria-expanded={menuOpen}
+                  >
+                    <ChartNoAxesColumnIncreasing aria-hidden="true" />
+                    <span>Game modes</span>
+                    <ChevronRight aria-hidden="true" />
+                    {newOutfits.length > 0 && (
+                      <i
+                        className={menuStyles.unlockDot}
+                        aria-label="New outfits available"
+                      />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setHelp(true)}
+                    aria-haspopup="dialog"
+                    aria-expanded={help}
+                  >
+                    <BookOpen aria-hidden="true" />
+                    <span>How to play</span>
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                  {!challenge &&
+                    !daily &&
+                    (skills.completed.length > 0 ||
+                      bests.arcade.floor >= 5) && (
+                      <Button
+                        variant="ghost"
+                        onClick={() => playDaily(todayDailyTower(), 'title')}
+                        disabled={!ready || !!error}
+                      >
+                        <CalendarDays aria-hidden="true" />
+                        <span>
+                          Today’s tower<small>New climb every day</small>
+                        </span>
+                        <ChevronRight aria-hidden="true" />
+                      </Button>
+                    )}
+                </nav>
+                {best.floor > 0 && (
+                  <p className={titleStyles.record}>
+                    Personal best · {best.floor} floors
+                  </p>
                 )}
+              </div>
+            </section>
+            <footer className={titleStyles.footer}>
+              <p>Chain jumps. Outrun the frost.</p>
+              <div className={titleStyles.utilities}>
+                <Button
+                  variant="ghost"
+                  aria-label={sound ? 'Mute sound' : 'Unmute sound'}
+                  aria-pressed={!sound}
+                  onClick={() => changeSound(!sound)}
+                >
+                  {sound ? (
+                    <Volume2 aria-hidden="true" />
+                  ) : (
+                    <VolumeX aria-hidden="true" />
+                  )}
+                </Button>
+                <span aria-hidden="true" />
+                <Button
+                  variant="ghost"
+                  aria-label="Settings"
+                  aria-haspopup="dialog"
+                  aria-expanded={menuOpen && menuTab === 'settings'}
+                  onClick={() => {
+                    changeMenuTab('settings');
+                    setMenuOpen(true);
+                  }}
+                >
+                  <Settings aria-hidden="true" />
+                </Button>
+              </div>
+            </footer>
+          </>
+        )}
+        {active && (
+          <>
+            <GameHud
+              game={game}
+              skills={skills}
+              guidance={game.status === 'playing' ? guidanceCue : null}
+              ghost={race}
+              touch={touchGuidance}
+              firstJump={game.status === 'playing' ? firstJump : null}
+              onSkip={() => saveGuidance(skipGuidance(guidanceProfile.current))}
+            />
+            {game.status === 'playing' && (
+              <fieldset
+                className="touch-controls"
+                aria-label="Touch game controls"
+                data-guidance={guidanceCue?.id}
+                data-guidance-direction={firstJump?.direction ?? undefined}
+                data-guidance-phase={firstJump?.phase}
+              >
+                <fieldset className="touch-move" aria-label="Movement">
+                  <Button
+                    aria-label="Move left"
+                    aria-pressed={touchPressed.left}
+                    data-control="left"
+                    {...touchEvents}
+                  >
+                    <ArrowLeft />
+                  </Button>
+                  <Button
+                    aria-label="Move right"
+                    aria-pressed={touchPressed.right}
+                    data-control="right"
+                    {...touchEvents}
+                  >
+                    <ArrowRight />
+                  </Button>
+                </fieldset>
+                <Button
+                  className="touch-jump"
+                  aria-label="Jump"
+                  aria-pressed={touchPressed.jump}
+                  data-control="jump"
+                  {...touchEvents}
+                >
+                  <ArrowUp />
+                  <span>{game.doubleJumpReady ? 'DOUBLE' : 'JUMP'}</span>
+                </Button>
+              </fieldset>
+            )}
+          </>
+        )}
+        {(game.status === 'paused' || game.status === 'over') && (
+          <div className="overlay">
+            <section
+              className="result-card run-summary"
+              aria-label={
+                game.status === 'paused' ? 'Paused climb' : 'Climb result'
+              }
+            >
+              <span className="run-context">
+                {game.status === 'paused'
+                  ? 'PAUSED'
+                  : daily
+                    ? `DAILY TOWER · ${daily.date}`
+                    : challenge
+                      ? 'FRIEND CHALLENGE'
+                      : `${MODE_LABELS[game.mode].toUpperCase()} CLIMB`}
               </span>
-              <nav className={titleStyles.links} aria-label="Game options">
+              <h2>
+                {game.status === 'paused' ? (
+                  'Take a breath.'
+                ) : (
+                  <>Floor {game.floor}.</>
+                )}
+              </h2>
+              <p className="run-metrics">
+                {game.status === 'paused'
+                  ? `Floor ${game.floor}`
+                  : `${game.score.toLocaleString()} points`}
+                <span aria-hidden="true"> · </span>
+                {game.status === 'paused'
+                  ? `${game.score.toLocaleString()} points`
+                  : `${game.bestCombo}× best combo`}
+              </p>
+              {game.status === 'over' &&
+                !aiRun.current &&
+                (challenge || game.floor > 0 || runBaseline.floor > 0) && (
+                  <p
+                    className={`run-highlight ${(challenge ? game.floor > challenge.floor : game.floor > runBaseline.floor) ? 'is-record' : ''}`}
+                  >
+                    {challenge
+                      ? game.floor > challenge.floor
+                        ? 'Challenge beaten!'
+                        : `Challenge target · Floor ${challenge.floor + 1}`
+                      : game.floor > runBaseline.floor
+                        ? 'New personal best!'
+                        : `Personal best · ${runBaseline.floor} floors`}
+                  </p>
+                )}
+              {game.status === 'over' && !aiRun.current && (
+                <NextClimb
+                  snapshot={game}
+                  baseline={runBaseline}
+                  skills={skills}
+                  achievementProgress={profile.progress}
+                  challengeFloor={challenge?.floor}
+                  daily={!!daily}
+                />
+              )}
+              <Button
+                className="start-button"
+                onClick={() =>
+                  aiRun.current &&
+                  (game.status === 'over' || jev.current?.finished)
+                    ? beginJev()
+                    : game.status === 'paused'
+                      ? pause()
+                      : begin()
+                }
+              >
+                {game.status === 'paused' ? (
+                  <Play size={16} />
+                ) : (
+                  <RotateCcw size={16} />
+                )}
+                {aiRun.current &&
+                (game.status === 'over' || jev.current?.finished)
+                  ? 'WATCH JEV AGAIN'
+                  : game.status === 'paused'
+                    ? 'CONTINUE'
+                    : daily
+                      ? 'RETRY DAILY TOWER'
+                      : challenge
+                        ? 'RETRY CHALLENGE'
+                        : 'CLIMB AGAIN'}
+                <ArrowRight size={18} />
+              </Button>
+              {game.status === 'over' && !aiRun.current && (
+                <span className="retry-hint">
+                  or press <kbd>ENTER</kbd>
+                </span>
+              )}
+              {game.status === 'over' && newOutfits.length > 0 && (
+                <Button
+                  variant="ghost"
+                  className="run-unlock"
+                  onClick={openWardrobe}
+                >
+                  <Shirt size={18} aria-hidden="true" />
+                  <span>
+                    Unlocked: {newOutfits.join(', ')}
+                    <small>Try on your reward</small>
+                  </span>
+                  <ChevronRight size={16} aria-hidden="true" />
+                </Button>
+              )}
+              {game.status === 'over' &&
+                !challenge &&
+                !daily &&
+                game.mode !== 'practice' &&
+                game.floor < 5 &&
+                runBaseline.floor < 5 && (
+                  <Button
+                    variant="ghost"
+                    className="run-practice"
+                    onClick={guidedPractice}
+                  >
+                    <Footprints size={16} aria-hidden="true" />
+                    Practice without rising frost
+                  </Button>
+                )}
+              {game.status === 'over' &&
+                !challenge &&
+                game.mode !== 'practice' &&
+                (daily || Math.max(game.floor, runBaseline.floor) >= 5) &&
+                newOutfits.length === 0 && (
+                  <DailyReturn
+                    daily={daily}
+                    onStartToday={() => playDaily(todayDailyTower(), 'results')}
+                  />
+                )}
+              <div className="run-summary-actions">
+                {game.status === 'over' && !aiRun.current && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => setRunDetailsOpen(true)}
+                  >
+                    Run details <ChevronRight size={14} />
+                  </Button>
+                )}
+                <Button variant="ghost" onClick={menu}>
+                  Back to title
+                </Button>
+              </div>
+            </section>
+          </div>
+        )}
+        <Dialog
+          open={runDetailsOpen && game.status === 'over'}
+          onOpenChange={setRunDetailsOpen}
+        >
+          <DialogContent className="result-card help-card run-details-dialog">
+            <DialogTitle>Your climb.</DialogTitle>
+            <DialogDescription>
+              {MODE_LABELS[game.mode]} · Floor {game.floor} ·{' '}
+              {game.score.toLocaleString()} points
+            </DialogDescription>
+            <p className="run-detail-timing">
+              Time {formatTime(game.time)} ·{' '}
+              {game.mode === 'practice'
+                ? 'Practice pace off'
+                : `Pace ${game.pace.level}`}
+            </p>
+            <div className="run-details-content">
+              <RunFeedback snapshot={game} />
+              {actionRules && <TowerActionResults action={game.action} />}
+              <PersonalProgressResults baseline={runBaseline} run={game} />
+              <FeaturedSkillGoal profile={skills} snapshot={game} />
+              {daily && (
+                <DailyTowerBanner
+                  daily={daily}
+                  best={getDailyBest(dailyProgress, daily)}
+                />
+              )}
+              {challenge && (
+                <p className="run-details-note">
+                  {game.floor > challenge.floor
+                    ? 'Floor beaten!'
+                    : game.floor === challenge.floor
+                      ? 'Floor matched — climb one higher to win.'
+                      : `Challenge: beat floor ${challenge.floor}.`}{' '}
+                  {game.score > challenge.score
+                    ? 'Score beaten!'
+                    : `Score to beat: ${challenge.score.toLocaleString()}.`}
+                </p>
+              )}
+              {game.mode === 'arcade' && !daily && (
+                <p className="run-details-note">
+                  <Ghost size={18} />
+                  {ghostUnavailable
+                    ? 'This climb exceeded the ghost recording limit.'
+                    : newGhost
+                      ? 'New ghost ready. Race this climb next run.'
+                      : race
+                        ? `Ghost to beat: floor ${race.floor}.`
+                        : 'Reach a floor and finish to record your ghost.'}
+                </p>
+              )}
+            </div>
+            <div className="run-details-actions">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRunDetailsOpen(false);
+                  openLeaderboard();
+                }}
+              >
+                <Trophy size={16} />{' '}
+                {game.mode !== 'practice' && game.floor > 0
+                  ? 'Submit score & leaderboard'
+                  : 'View leaderboard'}
+              </Button>
+              {game.floor > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setRunDetailsOpen(false);
+                    shareRun();
+                  }}
+                >
+                  <Share2 size={16} /> Challenge a friend
+                </Button>
+              )}
+              {daily && (
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    changeMenuTab('play');
-                    setMenuOpen(true);
+                    setRunDetailsOpen(false);
+                    openDailyShare(daily);
                   }}
-                  aria-haspopup="dialog"
-                  aria-expanded={menuOpen}
                 >
-                  <ChartNoAxesColumnIncreasing aria-hidden="true" />
-                  <span>Game modes</span>
-                  <ChevronRight aria-hidden="true" />
-                  {newOutfits.length > 0 && (
-                    <i
-                      className={menuStyles.unlockDot}
-                      aria-label="New outfits available"
-                    />
+                  Share daily tower
+                </Button>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
+          <DialogContent className={menuStyles.dialog}>
+            <div className={menuStyles.header}>
+              <div className={menuStyles.eyebrow}>
+                <Snowflake aria-hidden="true" /> FROSTBOUND
+              </div>
+              <DialogTitle className={menuStyles.title}>
+                Make it your climb.
+              </DialogTitle>
+              <DialogDescription className={menuStyles.description}>
+                A new challenge. A little fine-tuning. Your next ascent.
+              </DialogDescription>
+            </div>
+            <Tabs
+              className={menuStyles.tabs}
+              value={menuTab}
+              onValueChange={(value) => changeMenuTab(String(value))}
+            >
+              <TabsList className={menuStyles.tabList} aria-label="Climb menu">
+                <TabsTrigger value="play">
+                  <Play aria-hidden="true" />
+                  Play
+                </TabsTrigger>
+                <TabsTrigger value="progress">
+                  <Trophy aria-hidden="true" />
+                  Your climb
+                </TabsTrigger>
+                <TabsTrigger value="settings">
+                  <Settings2 aria-hidden="true" />
+                  Settings
+                </TabsTrigger>
+              </TabsList>
+              <div className={menuStyles.body}>
+                <TabsContent value="play" className={menuStyles.panel}>
+                  <fieldset
+                    className={menuStyles.modes}
+                    disabled={active || !!challenge || !!daily}
+                  >
+                    <legend>CHOOSE YOUR MODE</legend>
+                    <div className={menuStyles.modeGrid}>
+                      {(
+                        [
+                          {
+                            value: 'arcade',
+                            label: 'Classic',
+                            description: 'Climb higher. Beat the frost.',
+                            Icon: Snowflake,
+                          },
+                          {
+                            value: 'party',
+                            label: 'Party',
+                            description: 'Low gravity. Bigger jumps.',
+                            Icon: Sparkles,
+                          },
+                          {
+                            value: 'practice',
+                            label: 'Practice',
+                            description: 'Find your feet. No rush.',
+                            Icon: Footprints,
+                          },
+                        ] as const
+                      ).map(({ value, label, description, Icon }) => (
+                        <label className={menuStyles.modeCard} key={value}>
+                          <input
+                            type="radio"
+                            name="game-mode"
+                            aria-label={label}
+                            value={value}
+                            checked={mode === value}
+                            onChange={() => {
+                              if (value !== mode)
+                                trackEvent('mode_selected', {
+                                  surface: 'solo',
+                                  previous_mode: mode,
+                                  mode: value,
+                                });
+                              setMode(value);
+                              if (engine.current) {
+                                engine.current.start(
+                                  value,
+                                  engine.current.seed,
+                                  CURRENT_RULES_VERSION,
+                                );
+                                engine.current.status = 'ready';
+                                setGame(engine.current.snapshot());
+                              }
+                            }}
+                          />
+                          <Icon aria-hidden="true" />
+                          <strong>{label}</strong>
+                          <small>{description}</small>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  {(active || challenge || daily) && (
+                    <p className={menuStyles.note}>
+                      {active
+                        ? 'Return to the title screen to change mode.'
+                        : 'Leave this challenge to choose a different mode.'}
+                    </p>
                   )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => setHelp(true)}
-                  aria-haspopup="dialog"
-                  aria-expanded={help}
-                >
-                  <BookOpen aria-hidden="true" />
-                  <span>How to play</span>
-                  <ChevronRight aria-hidden="true" />
-                </Button>
-                {!challenge &&
-                  !daily &&
-                  (skills.completed.length > 0 || bests.arcade.floor >= 5) && (
+                  <section
+                    className={menuStyles.group}
+                    aria-labelledby="menu-play-heading"
+                  >
+                    <h3 id="menu-play-heading">Explore the tower</h3>
+                    {JEV_ENABLED && (
+                      <Button
+                        className={menuStyles.row}
+                        variant="ghost"
+                        disabled={!ready || !!error}
+                        onClick={() => fromMenu(beginJev)}
+                      >
+                        <Play aria-hidden="true" />
+                        <span>
+                          Watch Jev play <small>AI player · unranked</small>
+                        </span>
+                        <ChevronRight aria-hidden="true" />
+                      </Button>
+                    )}
                     <Button
+                      className={menuStyles.row}
                       variant="ghost"
-                      onClick={() => playDaily(todayDailyTower(), 'title')}
-                      disabled={!ready || !!error}
+                      render={
+                        // oxlint-disable-next-line next/no-html-link-for-pages -- Vinext's client router fails in the static Netlify export.
+                        <a href="/race" aria-label="Race a friend" />
+                      }
+                      nativeButton={false}
                     >
-                      <CalendarDays aria-hidden="true" />
+                      <Users aria-hidden="true" />
                       <span>
-                        Today’s tower<small>New climb every day</small>
+                        Race a friend<small>A private, two-player climb</small>
                       </span>
                       <ChevronRight aria-hidden="true" />
                     </Button>
-                  )}
-              </nav>
-              {best.floor > 0 && (
-                <p className={titleStyles.record}>
-                  Personal best · {best.floor} floors
-                </p>
-              )}
-            </div>
-          </section>
-          <footer className={titleStyles.footer}>
-            <p>Chain jumps. Outrun the frost.</p>
-            <div className={titleStyles.utilities}>
-              <Button
-                variant="ghost"
-                aria-label={sound ? 'Mute sound' : 'Unmute sound'}
-                aria-pressed={!sound}
-                onClick={() => changeSound(!sound)}
-              >
-                {sound ? (
-                  <Volume2 aria-hidden="true" />
-                ) : (
-                  <VolumeX aria-hidden="true" />
-                )}
-              </Button>
-              <span aria-hidden="true" />
-              <Button
-                variant="ghost"
-                aria-label="Settings"
-                aria-haspopup="dialog"
-                aria-expanded={menuOpen && menuTab === 'settings'}
-                onClick={() => {
-                  changeMenuTab('settings');
-                  setMenuOpen(true);
-                }}
-              >
-                <Settings aria-hidden="true" />
-              </Button>
-            </div>
-          </footer>
-        </>
-      )}
-      {active && (
-        <>
-          <GameHud
-            game={game}
-            skills={skills}
-            guidance={game.status === 'playing' ? guidanceCue : null}
-            ghost={race}
-            touch={touchGuidance}
-            firstJump={game.status === 'playing' ? firstJump : null}
-            onSkip={() => saveGuidance(skipGuidance(guidanceProfile.current))}
-          />
-          {game.status === 'playing' && (
-            <fieldset
-              className="touch-controls"
-              aria-label="Touch game controls"
-              data-guidance={guidanceCue?.id}
-              data-guidance-direction={firstJump?.direction ?? undefined}
-              data-guidance-phase={firstJump?.phase}
-            >
-              <fieldset className="touch-move" aria-label="Movement">
-                <Button
-                  aria-label="Move left"
-                  aria-pressed={touchPressed.left}
-                  data-control="left"
-                  {...touchEvents}
-                >
-                  <ArrowLeft />
-                </Button>
-                <Button
-                  aria-label="Move right"
-                  aria-pressed={touchPressed.right}
-                  data-control="right"
-                  {...touchEvents}
-                >
-                  <ArrowRight />
-                </Button>
-              </fieldset>
-              <Button
-                className="touch-jump"
-                aria-label="Jump"
-                aria-pressed={touchPressed.jump}
-                data-control="jump"
-                {...touchEvents}
-              >
-                <ArrowUp />
-                <span>{game.doubleJumpReady ? 'DOUBLE' : 'JUMP'}</span>
-              </Button>
-            </fieldset>
-          )}
-        </>
-      )}
-      {(game.status === 'paused' || game.status === 'over') && (
-        <div className="overlay">
-          <section
-            className="result-card run-summary"
-            aria-label={
-              game.status === 'paused' ? 'Paused climb' : 'Climb result'
-            }
-          >
-            <span className="run-context">
-              {game.status === 'paused'
-                ? 'PAUSED'
-                : daily
-                  ? `DAILY TOWER · ${daily.date}`
-                  : challenge
-                    ? 'FRIEND CHALLENGE'
-                    : `${MODE_LABELS[game.mode].toUpperCase()} CLIMB`}
-            </span>
-            <h2>
-              {game.status === 'paused' ? (
-                'Take a breath.'
-              ) : (
-                <>Floor {game.floor}.</>
-              )}
-            </h2>
-            <p className="run-metrics">
-              {game.status === 'paused'
-                ? `Floor ${game.floor}`
-                : `${game.score.toLocaleString()} points`}
-              <span aria-hidden="true"> · </span>
-              {game.status === 'paused'
-                ? `${game.score.toLocaleString()} points`
-                : `${game.bestCombo}× best combo`}
-            </p>
-            {game.status === 'over' &&
-              (challenge || game.floor > 0 || runBaseline.floor > 0) && (
-                <p
-                  className={`run-highlight ${(challenge ? game.floor > challenge.floor : game.floor > runBaseline.floor) ? 'is-record' : ''}`}
-                >
-                  {challenge
-                    ? game.floor > challenge.floor
-                      ? 'Challenge beaten!'
-                      : `Challenge target · Floor ${challenge.floor + 1}`
-                    : game.floor > runBaseline.floor
-                      ? 'New personal best!'
-                      : `Personal best · ${runBaseline.floor} floors`}
-                </p>
-              )}
-            {game.status === 'over' && (
-              <NextClimb
-                snapshot={game}
-                baseline={runBaseline}
-                skills={skills}
-                achievementProgress={profile.progress}
-                challengeFloor={challenge?.floor}
-                daily={!!daily}
-              />
-            )}
-            <Button
-              className="start-button"
-              onClick={() => (game.status === 'paused' ? pause() : begin())}
-            >
-              {game.status === 'paused' ? (
-                <Play size={16} />
-              ) : (
-                <RotateCcw size={16} />
-              )}
-              {game.status === 'paused'
-                ? 'CONTINUE'
-                : daily
-                  ? 'RETRY DAILY TOWER'
-                  : challenge
-                    ? 'RETRY CHALLENGE'
-                    : 'CLIMB AGAIN'}
-              <ArrowRight size={18} />
-            </Button>
-            {game.status === 'over' && (
-              <span className="retry-hint">
-                or press <kbd>ENTER</kbd>
+                    <Button
+                      className={menuStyles.row}
+                      variant="ghost"
+                      onClick={() =>
+                        fromMenu(() => {
+                          setDailyChoice(daily ?? todayDailyTower());
+                          setDailyOpen(true);
+                        })
+                      }
+                    >
+                      <CalendarDays aria-hidden="true" />
+                      <span>
+                        Daily tower
+                        <small>
+                          One shared route. A fresh start every day.
+                        </small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                    <Button
+                      className={menuStyles.row}
+                      variant="ghost"
+                      disabled={!ready}
+                      onClick={() => fromMenu(guidedPractice)}
+                    >
+                      <Footprints aria-hidden="true" />
+                      <span>
+                        Guided practice
+                        <small>Learn the jumps, one step at a time</small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                    <Button
+                      className={menuStyles.row}
+                      variant="ghost"
+                      onClick={() => fromMenu(() => setHelp(true))}
+                    >
+                      <CircleHelp aria-hidden="true" />
+                      <span>
+                        How to play
+                        <small>
+                          Controls, combos, and the art of the ascent
+                        </small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                  </section>
+                </TabsContent>
+                <TabsContent value="progress" className={menuStyles.panel}>
+                  <section
+                    className={menuStyles.group}
+                    aria-labelledby="menu-progress-heading"
+                  >
+                    <h3 id="menu-progress-heading">Your climb</h3>
+                    <Button
+                      className={menuStyles.row}
+                      variant="ghost"
+                      onClick={() => fromMenu(() => setChallengesOpen(true))}
+                    >
+                      <Target aria-hidden="true" />
+                      <span>
+                        Skill goals
+                        <small>Small challenges. Stronger climbs.</small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                    <Button
+                      className={menuStyles.row}
+                      variant="ghost"
+                      onClick={() => fromMenu(openWardrobe)}
+                    >
+                      <Shirt aria-hidden="true" />
+                      <span>
+                        Outfits <small>Make your climber your own</small>
+                        {newOutfits.length > 0 && (
+                          <span className={menuStyles.newLabel}>New</span>
+                        )}
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                    {newOutfits.length > 0 && (
+                      <p className={menuStyles.unlockDetails}>
+                        Unlocked: {newOutfits.join(', ')}. Open Outfits to try
+                        them on.
+                      </p>
+                    )}
+                    <Button
+                      className={menuStyles.row}
+                      variant="ghost"
+                      onClick={() => fromMenu(openLeaderboard)}
+                    >
+                      <Trophy aria-hidden="true" />
+                      <span>
+                        Leaderboard<small>See how high you can go</small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                    {ghostFloor !== null && (
+                      <p className={menuStyles.ghost}>
+                        <Ghost aria-hidden="true" />
+                        <span>Classic ghost</span>
+                        <strong>Floor {ghostFloor}</strong>
+                      </p>
+                    )}
+                  </section>
+                </TabsContent>
+                <TabsContent value="settings" className={menuStyles.panel}>
+                  <section
+                    className={menuStyles.settingGroup}
+                    aria-labelledby="menu-audio-heading"
+                  >
+                    <h3 id="menu-audio-heading">Audio</h3>
+                    <div className={menuStyles.settingRow}>
+                      <Volume2 aria-hidden="true" />
+                      <span>
+                        <label id="setting-sound-label" htmlFor="setting-sound">
+                          Sound
+                        </label>
+                        <small>All game audio, including music</small>
+                      </span>
+                      <Switch
+                        className={menuStyles.switch}
+                        id="setting-sound"
+                        aria-labelledby="setting-sound-label"
+                        checked={sound}
+                        onCheckedChange={changeSound}
+                      />
+                    </div>
+                    <div className={menuStyles.settingRow}>
+                      <Music2 aria-hidden="true" />
+                      <span>
+                        <label id="setting-music-label" htmlFor="setting-music">
+                          Background music
+                        </label>
+                        <small>
+                          {sound
+                            ? 'A soundtrack for your ascent'
+                            : 'Unmute sound to hear music'}
+                        </small>
+                      </span>
+                      <Switch
+                        className={menuStyles.switch}
+                        id="setting-music"
+                        aria-labelledby="setting-music-label"
+                        checked={music}
+                        onCheckedChange={(enabled) => {
+                          trackEvent('setting_changed', {
+                            surface: 'solo',
+                            setting: 'music',
+                            previous_value: music,
+                            value: enabled,
+                            source: 'user',
+                          });
+                          setMusic(enabled);
+                          audio.current ??= new TowerAudio();
+                          audio.current.setMusicEnabled(enabled);
+                        }}
+                      />
+                    </div>
+                  </section>
+                  <section
+                    className={menuStyles.settingGroup}
+                    aria-labelledby="menu-display-heading"
+                  >
+                    <h3 id="menu-display-heading">Display & comfort</h3>
+                    <div className={menuStyles.settingRow}>
+                      <Wind aria-hidden="true" />
+                      <span>
+                        <label
+                          id="setting-motion-label"
+                          htmlFor="setting-motion"
+                        >
+                          Reduce motion
+                        </label>
+                        <small>Less camera shake and movement</small>
+                      </span>
+                      <Switch
+                        className={menuStyles.switch}
+                        id="setting-motion"
+                        aria-labelledby="setting-motion-label"
+                        checked={reducedMotion}
+                        onCheckedChange={changeMotion}
+                      />
+                    </div>
+                    <div className={menuStyles.settingRow}>
+                      <Sparkles aria-hidden="true" />
+                      <span>
+                        <label
+                          id="setting-quality-label"
+                          htmlFor="setting-quality"
+                        >
+                          High quality effects
+                        </label>
+                        <small>
+                          Richer lighting. Turn off for smoother play.
+                        </small>
+                      </span>
+                      <Switch
+                        className={menuStyles.switch}
+                        id="setting-quality"
+                        aria-labelledby="setting-quality-label"
+                        checked={quality}
+                        onCheckedChange={(enabled) => {
+                          trackEvent('setting_changed', {
+                            surface: 'solo',
+                            setting: 'quality',
+                            previous_value: quality,
+                            value: enabled,
+                            source: 'user',
+                          });
+                          setQuality(enabled);
+                          world.current?.setQuality(enabled);
+                        }}
+                      />
+                    </div>
+                  </section>
+                  <div className={menuStyles.fullscreen}>
+                    <Button
+                      className={menuStyles.row}
+                      variant="ghost"
+                      onClick={() => {
+                        const request = document.fullscreenElement
+                          ? document.exitFullscreen()
+                          : document.documentElement.requestFullscreen?.();
+                        if (!request)
+                          trackEvent('fullscreen_failed', {
+                            surface: 'solo',
+                            error_code: 'unavailable',
+                          });
+                        void request?.catch(() => {
+                          trackEvent('fullscreen_failed', {
+                            surface: 'solo',
+                            error_code: 'rejected',
+                          });
+                          setToast('Fullscreen is unavailable in this view.');
+                          setTimeout(() => setToast(''), 3500);
+                        });
+                      }}
+                    >
+                      <Maximize2 aria-hidden="true" />
+                      <span>
+                        Toggle fullscreen
+                        <small>Give the tower a little more room</small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                  </div>
+                </TabsContent>
+              </div>
+            </Tabs>
+            <footer className={menuStyles.footer}>
+              <span>
+                {menuTab === 'settings'
+                  ? 'Changes apply instantly'
+                  : active
+                    ? 'Your climb is paused'
+                    : 'The tower is waiting'}
               </span>
-            )}
-            {game.status === 'over' && newOutfits.length > 0 && (
-              <Button
-                variant="ghost"
-                className="run-unlock"
-                onClick={openWardrobe}
-              >
-                <Shirt size={18} aria-hidden="true" />
-                <span>
-                  Unlocked: {newOutfits.join(', ')}
-                  <small>Try on your reward</small>
-                </span>
-                <ChevronRight size={16} aria-hidden="true" />
+              <Button onClick={() => setMenuOpen(false)}>
+                Done
+                <ChevronRight aria-hidden="true" />
               </Button>
-            )}
-            {game.status === 'over' &&
-              !challenge &&
-              !daily &&
-              game.mode !== 'practice' &&
-              game.floor < 5 &&
-              runBaseline.floor < 5 && (
-                <Button
-                  variant="ghost"
-                  className="run-practice"
-                  onClick={guidedPractice}
-                >
-                  <Footprints size={16} aria-hidden="true" />
-                  Practice without rising frost
-                </Button>
-              )}
-            {game.status === 'over' && !challenge && game.mode !== 'practice' &&
-              (daily || Math.max(game.floor, runBaseline.floor) >= 5) && newOutfits.length === 0 && (
-                <DailyReturn
-                  daily={daily}
-                  onStartToday={() => playDaily(todayDailyTower(), 'results')}
-                />
-              )}
-            <div className="run-summary-actions">
-              {game.status === 'over' && (
-                <Button variant="ghost" onClick={() => setRunDetailsOpen(true)}>
-                  Run details <ChevronRight size={14} />
-                </Button>
-              )}
-              <Button variant="ghost" onClick={menu}>
-                Back to title
-              </Button>
-            </div>
-          </section>
-        </div>
-      )}
-      <Dialog
-        open={runDetailsOpen && game.status === 'over'}
-        onOpenChange={setRunDetailsOpen}
-      >
-        <DialogContent className="result-card help-card run-details-dialog">
-          <DialogTitle>Your climb.</DialogTitle>
-          <DialogDescription>
-            {MODE_LABELS[game.mode]} · Floor {game.floor} ·{' '}
-            {game.score.toLocaleString()} points
-          </DialogDescription>
-          <p className="run-detail-timing">
-            Time {formatTime(game.time)} ·{' '}
-            {game.mode === 'practice'
-              ? 'Practice pace off'
-              : `Pace ${game.pace.level}`}
-          </p>
-          <div className="run-details-content">
-            <RunFeedback snapshot={game} />
-            {actionRules && <TowerActionResults action={game.action} />}
-            <PersonalProgressResults baseline={runBaseline} run={game} />
-            <FeaturedSkillGoal profile={skills} snapshot={game} />
-            {daily && (
-              <DailyTowerBanner
-                daily={daily}
-                best={getDailyBest(dailyProgress, daily)}
-              />
-            )}
-            {challenge && (
-              <p className="run-details-note">
-                {game.floor > challenge.floor
-                  ? 'Floor beaten!'
-                  : game.floor === challenge.floor
-                    ? 'Floor matched — climb one higher to win.'
-                    : `Challenge: beat floor ${challenge.floor}.`}{' '}
-                {game.score > challenge.score
-                  ? 'Score beaten!'
-                  : `Score to beat: ${challenge.score.toLocaleString()}.`}
-              </p>
-            )}
-            {game.mode === 'arcade' && !daily && (
-              <p className="run-details-note">
-                <Ghost size={18} />
-                {ghostUnavailable
-                  ? 'This climb exceeded the ghost recording limit.'
-                  : newGhost
-                    ? 'New ghost ready. Race this climb next run.'
-                    : race
-                      ? `Ghost to beat: floor ${race.floor}.`
-                      : 'Reach a floor and finish to record your ghost.'}
-              </p>
-            )}
-          </div>
-          <div className="run-details-actions">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setRunDetailsOpen(false);
-                openLeaderboard();
-              }}
-            >
-              <Trophy size={16} />{' '}
-              {game.mode !== 'practice' && game.floor > 0
-                ? 'Submit score & leaderboard'
-                : 'View leaderboard'}
-            </Button>
-            {game.floor > 0 && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setRunDetailsOpen(false);
-                  shareRun();
-                }}
-              >
-                <Share2 size={16} /> Challenge a friend
-              </Button>
-            )}
-            {daily && (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setRunDetailsOpen(false);
-                  openDailyShare(daily);
-                }}
-              >
-                Share daily tower
-              </Button>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
-        <DialogContent className={menuStyles.dialog}>
-          <div className={menuStyles.header}>
-            <div className={menuStyles.eyebrow}>
-              <Snowflake aria-hidden="true" /> FROSTBOUND
-            </div>
-            <DialogTitle className={menuStyles.title}>
-              Make it your climb.
-            </DialogTitle>
-            <DialogDescription className={menuStyles.description}>
-              A new challenge. A little fine-tuning. Your next ascent.
+            </footer>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={dailyOpen} onOpenChange={setDailyOpen}>
+          <DialogContent className="result-card help-card daily-dialog">
+            <DialogTitle>A new route each day.</DialogTitle>
+            <DialogDescription>
+              Everyone gets the same Classic tower. Retry as often as you like.
             </DialogDescription>
-          </div>
-          <Tabs
-            className={menuStyles.tabs}
-            value={menuTab}
-            onValueChange={(value) => changeMenuTab(String(value))}
-          >
-            <TabsList className={menuStyles.tabList} aria-label="Climb menu">
-              <TabsTrigger value="play">
-                <Play aria-hidden="true" />
-                Play
-              </TabsTrigger>
-              <TabsTrigger value="progress">
-                <Trophy aria-hidden="true" />
-                Your climb
-              </TabsTrigger>
-              <TabsTrigger value="settings">
-                <Settings2 aria-hidden="true" />
-                Settings
-              </TabsTrigger>
-            </TabsList>
-            <div className={menuStyles.body}>
-              <TabsContent value="play" className={menuStyles.panel}>
-                <fieldset
-                  className={menuStyles.modes}
-                  disabled={active || !!challenge || !!daily}
-                >
-                  <legend>CHOOSE YOUR MODE</legend>
-                  <div className={menuStyles.modeGrid}>
-                    {(
-                      [
-                        {
-                          value: 'arcade',
-                          label: 'Classic',
-                          description: 'Climb higher. Beat the frost.',
-                          Icon: Snowflake,
-                        },
-                        {
-                          value: 'party',
-                          label: 'Party',
-                          description: 'Low gravity. Bigger jumps.',
-                          Icon: Sparkles,
-                        },
-                        {
-                          value: 'practice',
-                          label: 'Practice',
-                          description: 'Find your feet. No rush.',
-                          Icon: Footprints,
-                        },
-                      ] as const
-                    ).map(({ value, label, description, Icon }) => (
-                      <label className={menuStyles.modeCard} key={value}>
-                        <input
-                          type="radio"
-                          name="game-mode"
-                          aria-label={label}
-                          value={value}
-                          checked={mode === value}
-                          onChange={() => {
-                            if (value !== mode)
-                              trackEvent('mode_selected', {
-                                surface: 'solo',
-                                previous_mode: mode,
-                                mode: value,
-                              });
-                            setMode(value);
-                            if (engine.current) {
-                              engine.current.start(
-                                value,
-                                engine.current.seed,
-                                CURRENT_RULES_VERSION,
-                              );
-                              engine.current.status = 'ready';
-                              setGame(engine.current.snapshot());
-                            }
-                          }}
-                        />
-                        <Icon aria-hidden="true" />
-                        <strong>{label}</strong>
-                        <small>{description}</small>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-                {(active || challenge || daily) && (
-                  <p className={menuStyles.note}>
-                    {active
-                      ? 'Return to the title screen to change mode.'
-                      : 'Leave this challenge to choose a different mode.'}
-                  </p>
-                )}
-                <section
-                  className={menuStyles.group}
-                  aria-labelledby="menu-play-heading"
-                >
-                  <h3 id="menu-play-heading">Explore the tower</h3>
-                  <Button
-                    className={menuStyles.row}
-                    variant="ghost"
-                    render={
-                      // oxlint-disable-next-line next/no-html-link-for-pages -- Vinext's client router fails in the static Netlify export.
-                      <a href="/race" aria-label="Race a friend" />
-                    }
-                    nativeButton={false}
-                  >
-                    <Users aria-hidden="true" />
-                    <span>
-                      Race a friend<small>A private, two-player climb</small>
-                    </span>
-                    <ChevronRight aria-hidden="true" />
-                  </Button>
-                  <Button
-                    className={menuStyles.row}
-                    variant="ghost"
-                    onClick={() =>
-                      fromMenu(() => {
-                        setDailyChoice(daily ?? todayDailyTower());
-                        setDailyOpen(true);
-                      })
-                    }
-                  >
-                    <CalendarDays aria-hidden="true" />
-                    <span>
-                      Daily tower
-                      <small>One shared route. A fresh start every day.</small>
-                    </span>
-                    <ChevronRight aria-hidden="true" />
-                  </Button>
-                  <Button
-                    className={menuStyles.row}
-                    variant="ghost"
-                    disabled={!ready}
-                    onClick={() => fromMenu(guidedPractice)}
-                  >
-                    <Footprints aria-hidden="true" />
-                    <span>
-                      Guided practice
-                      <small>Learn the jumps, one step at a time</small>
-                    </span>
-                    <ChevronRight aria-hidden="true" />
-                  </Button>
-                  <Button
-                    className={menuStyles.row}
-                    variant="ghost"
-                    onClick={() => fromMenu(() => setHelp(true))}
-                  >
-                    <CircleHelp aria-hidden="true" />
-                    <span>
-                      How to play
-                      <small>Controls, combos, and the art of the ascent</small>
-                    </span>
-                    <ChevronRight aria-hidden="true" />
-                  </Button>
-                </section>
-              </TabsContent>
-              <TabsContent value="progress" className={menuStyles.panel}>
-                <section
-                  className={menuStyles.group}
-                  aria-labelledby="menu-progress-heading"
-                >
-                  <h3 id="menu-progress-heading">Your climb</h3>
-                  <Button
-                    className={menuStyles.row}
-                    variant="ghost"
-                    onClick={() => fromMenu(() => setChallengesOpen(true))}
-                  >
-                    <Target aria-hidden="true" />
-                    <span>
-                      Skill goals
-                      <small>Small challenges. Stronger climbs.</small>
-                    </span>
-                    <ChevronRight aria-hidden="true" />
-                  </Button>
-                  <Button
-                    className={menuStyles.row}
-                    variant="ghost"
-                    onClick={() => fromMenu(openWardrobe)}
-                  >
-                    <Shirt aria-hidden="true" />
-                    <span>
-                      Outfits <small>Make your climber your own</small>
-                      {newOutfits.length > 0 && (
-                        <span className={menuStyles.newLabel}>New</span>
-                      )}
-                    </span>
-                    <ChevronRight aria-hidden="true" />
-                  </Button>
-                  {newOutfits.length > 0 && (
-                    <p className={menuStyles.unlockDetails}>
-                      Unlocked: {newOutfits.join(', ')}. Open Outfits to try
-                      them on.
-                    </p>
-                  )}
-                  <Button
-                    className={menuStyles.row}
-                    variant="ghost"
-                    onClick={() => fromMenu(openLeaderboard)}
-                  >
-                    <Trophy aria-hidden="true" />
-                    <span>
-                      Leaderboard<small>See how high you can go</small>
-                    </span>
-                    <ChevronRight aria-hidden="true" />
-                  </Button>
-                  {ghostFloor !== null && (
-                    <p className={menuStyles.ghost}>
-                      <Ghost aria-hidden="true" />
-                      <span>Classic ghost</span>
-                      <strong>Floor {ghostFloor}</strong>
-                    </p>
-                  )}
-                </section>
-              </TabsContent>
-              <TabsContent value="settings" className={menuStyles.panel}>
-                <section
-                  className={menuStyles.settingGroup}
-                  aria-labelledby="menu-audio-heading"
-                >
-                  <h3 id="menu-audio-heading">Audio</h3>
-                  <div className={menuStyles.settingRow}>
-                    <Volume2 aria-hidden="true" />
-                    <span>
-                      <label id="setting-sound-label" htmlFor="setting-sound">
-                        Sound
-                      </label>
-                      <small>All game audio, including music</small>
-                    </span>
-                    <Switch
-                      className={menuStyles.switch}
-                      id="setting-sound"
-                      aria-labelledby="setting-sound-label"
-                      checked={sound}
-                      onCheckedChange={changeSound}
-                    />
-                  </div>
-                  <div className={menuStyles.settingRow}>
-                    <Music2 aria-hidden="true" />
-                    <span>
-                      <label id="setting-music-label" htmlFor="setting-music">
-                        Background music
-                      </label>
-                      <small>
-                        {sound
-                          ? 'A soundtrack for your ascent'
-                          : 'Unmute sound to hear music'}
-                      </small>
-                    </span>
-                    <Switch
-                      className={menuStyles.switch}
-                      id="setting-music"
-                      aria-labelledby="setting-music-label"
-                      checked={music}
-                      onCheckedChange={(enabled) => {
-                        trackEvent('setting_changed', {
-                          surface: 'solo',
-                          setting: 'music',
-                          previous_value: music,
-                          value: enabled,
-                          source: 'user',
-                        });
-                        setMusic(enabled);
-                        audio.current ??= new TowerAudio();
-                        audio.current.setMusicEnabled(enabled);
-                      }}
-                    />
-                  </div>
-                </section>
-                <section
-                  className={menuStyles.settingGroup}
-                  aria-labelledby="menu-display-heading"
-                >
-                  <h3 id="menu-display-heading">Display & comfort</h3>
-                  <div className={menuStyles.settingRow}>
-                    <Wind aria-hidden="true" />
-                    <span>
-                      <label id="setting-motion-label" htmlFor="setting-motion">
-                        Reduce motion
-                      </label>
-                      <small>Less camera shake and movement</small>
-                    </span>
-                    <Switch
-                      className={menuStyles.switch}
-                      id="setting-motion"
-                      aria-labelledby="setting-motion-label"
-                      checked={reducedMotion}
-                      onCheckedChange={changeMotion}
-                    />
-                  </div>
-                  <div className={menuStyles.settingRow}>
-                    <Sparkles aria-hidden="true" />
-                    <span>
-                      <label
-                        id="setting-quality-label"
-                        htmlFor="setting-quality"
-                      >
-                        High quality effects
-                      </label>
-                      <small>
-                        Richer lighting. Turn off for smoother play.
-                      </small>
-                    </span>
-                    <Switch
-                      className={menuStyles.switch}
-                      id="setting-quality"
-                      aria-labelledby="setting-quality-label"
-                      checked={quality}
-                      onCheckedChange={(enabled) => {
-                        trackEvent('setting_changed', {
-                          surface: 'solo',
-                          setting: 'quality',
-                          previous_value: quality,
-                          value: enabled,
-                          source: 'user',
-                        });
-                        setQuality(enabled);
-                        world.current?.setQuality(enabled);
-                      }}
-                    />
-                  </div>
-                </section>
-                <div className={menuStyles.fullscreen}>
-                  <Button
-                    className={menuStyles.row}
-                    variant="ghost"
-                    onClick={() => {
-                      const request = document.fullscreenElement
-                        ? document.exitFullscreen()
-                        : document.documentElement.requestFullscreen?.();
-                      if (!request)
-                        trackEvent('fullscreen_failed', {
-                          surface: 'solo',
-                          error_code: 'unavailable',
-                        });
-                      void request?.catch(() => {
-                        trackEvent('fullscreen_failed', {
-                          surface: 'solo',
-                          error_code: 'rejected',
-                        });
-                        setToast('Fullscreen is unavailable in this view.');
-                        setTimeout(() => setToast(''), 3500);
-                      });
-                    }}
-                  >
-                    <Maximize2 aria-hidden="true" />
-                    <span>
-                      Toggle fullscreen
-                      <small>Give the tower a little more room</small>
-                    </span>
-                    <ChevronRight aria-hidden="true" />
-                  </Button>
-                </div>
-              </TabsContent>
-            </div>
-          </Tabs>
-          <footer className={menuStyles.footer}>
-            <span>
-              {menuTab === 'settings'
-                ? 'Changes apply instantly'
-                : active
-                  ? 'Your climb is paused'
-                  : 'The tower is waiting'}
-            </span>
-            <Button onClick={() => setMenuOpen(false)}>
-              Done
-              <ChevronRight aria-hidden="true" />
-            </Button>
-          </footer>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={dailyOpen} onOpenChange={setDailyOpen}>
-        <DialogContent className="result-card help-card daily-dialog">
-          <DialogTitle>A new route each day.</DialogTitle>
-          <DialogDescription>
-            Everyone gets the same Classic tower. Retry as often as you like.
-          </DialogDescription>
-          <fieldset disabled={!ready} className="daily-options">
-            <DailyTowerCard
-              daily={dailyChoice}
-              best={getDailyBest(dailyProgress, dailyChoice)}
-              onStart={() => playDaily(dailyChoice)}
-              onShare={() => openDailyShare(dailyChoice)}
-              onToday={
-                dailyChoice.date !== todayDailyTower().date
-                  ? () => setDailyChoice(todayDailyTower())
-                  : undefined
-              }
+            <fieldset disabled={!ready} className="daily-options">
+              <DailyTowerCard
+                daily={dailyChoice}
+                best={getDailyBest(dailyProgress, dailyChoice)}
+                onStart={() => playDaily(dailyChoice)}
+                onShare={() => openDailyShare(dailyChoice)}
+                onToday={
+                  dailyChoice.date !== todayDailyTower().date
+                    ? () => setDailyChoice(todayDailyTower())
+                    : undefined
+                }
+              />
+            </fieldset>
+          </DialogContent>
+        </Dialog>
+        <Dialog
+          open={!!dailyShare}
+          onOpenChange={(open) => {
+            if (!open) setDailyShare('');
+          }}
+        >
+          <DialogContent className="result-card help-card daily-dialog">
+            <DialogTitle>Share this daily tower.</DialogTitle>
+            <DialogDescription>
+              This link always opens the same dated tower, even after the daily
+              rotation.
+            </DialogDescription>
+            <label htmlFor="daily-share-url">Tower link</label>
+            <input
+              id="daily-share-url"
+              className="daily-share-url"
+              readOnly
+              value={dailyShare}
+              onFocus={(event) => event.target.select()}
             />
-          </fieldset>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={!!dailyShare}
-        onOpenChange={(open) => {
-          if (!open) setDailyShare('');
-        }}
-      >
-        <DialogContent className="result-card help-card daily-dialog">
-          <DialogTitle>Share this daily tower.</DialogTitle>
-          <DialogDescription>
-            This link always opens the same dated tower, even after the daily
-            rotation.
-          </DialogDescription>
-          <label htmlFor="daily-share-url">Tower link</label>
-          <input
-            id="daily-share-url"
-            className="daily-share-url"
-            readOnly
-            value={dailyShare}
-            onFocus={(event) => event.target.select()}
-          />
-          <Button
-            onClick={() => {
-              const operationId = analyticsId();
-              const props = {
-                share_type: 'daily',
-                method: 'clipboard',
-                operation_id: operationId,
-              };
-              telemetry.current.event('share_attempted', props);
-              if (!navigator.clipboard) {
-                telemetry.current.event('share_failed', {
-                  ...props,
-                  error_code: 'unavailable',
-                });
-                setCopyStatus('Select and copy the link above.');
-                return;
-              }
-              void navigator.clipboard
-                .writeText(dailyShare)
-                .then(() => {
-                  telemetry.current.event('share_completed', props);
-                  setCopyStatus('Link copied.');
-                })
-                .catch(() => {
+            <Button
+              onClick={() => {
+                const operationId = analyticsId();
+                const props = {
+                  share_type: 'daily',
+                  method: 'clipboard',
+                  operation_id: operationId,
+                };
+                telemetry.current.event('share_attempted', props);
+                if (!navigator.clipboard) {
                   telemetry.current.event('share_failed', {
                     ...props,
-                    error_code: 'clipboard_failed',
+                    error_code: 'unavailable',
                   });
                   setCopyStatus('Select and copy the link above.');
-                });
-            }}
-          >
-            Copy link
-          </Button>
-          <output aria-live="polite">{copyStatus}</output>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={challengesOpen} onOpenChange={setChallengesOpen}>
-        <DialogContent
-          className={skillGoalStyles.dialog}
-          initialFocus={goalsTitle}
-        >
-          <header className={skillGoalStyles.header}>
-            <span className={skillGoalStyles.eyebrow}>
-              <Target aria-hidden="true" /> ONE CLIMB AT A TIME
-            </span>
-            <DialogTitle
-              className={skillGoalStyles.title}
-              ref={goalsTitle}
-              tabIndex={-1}
-            >
-              Your climbing goals.
-            </DialogTitle>
-            <DialogDescription className={skillGoalStyles.description}>
-              Small steps. Higher places.
-            </DialogDescription>
-          </header>
-          <div className={skillGoalStyles.body}>
-            <SkillGoalProgression
-              profile={skills}
-              snapshot={game}
-              onSelect={(id) => {
-                const next = selectSkillGoal(skillsRef.current, id);
-                if (next !== skillsRef.current)
-                  telemetry.current.event('skill_goal_selected', {
-                    goal_id: id,
-                    previous_goal_id: skillsRef.current.featuredId,
-                  });
-                saveSkills(next);
-              }}
-            />
-            <details className={skillGoalStyles.expert}>
-              <summary>
-                <span>Extra challenges</span>
-                <small>Reset each run</small>
-                <ChevronRight aria-hidden="true" />
-              </summary>
-              <div>
-                <QuickChallenges challenges={game.challenges} preview />
-              </div>
-            </details>
-          </div>
-          <footer className={skillGoalStyles.footer}>
-            <Button variant="ghost" onClick={() => setChallengesOpen(false)}>
-              Done
-            </Button>
-            <Button
-              className={skillGoalStyles.primary}
-              disabled={!ready || !!error}
-              onClick={() => {
-                if (active) {
-                  setChallengesOpen(false);
                   return;
                 }
-                if (skills.completed.length === SKILL_GOALS.length) {
-                  setChallengesOpen(false);
-                  setDailyChoice(daily ?? todayDailyTower());
-                  setDailyOpen(true);
-                } else begin();
+                void navigator.clipboard
+                  .writeText(dailyShare)
+                  .then(() => {
+                    telemetry.current.event('share_completed', props);
+                    setCopyStatus('Link copied.');
+                  })
+                  .catch(() => {
+                    telemetry.current.event('share_failed', {
+                      ...props,
+                      error_code: 'clipboard_failed',
+                    });
+                    setCopyStatus('Select and copy the link above.');
+                  });
               }}
             >
-              {active
-                ? 'Back to climb'
-                : skills.completed.length === SKILL_GOALS.length
-                  ? 'Try the daily tower'
-                  : 'Start climbing'}{' '}
-              <ArrowRight size={18} />
+              Copy link
             </Button>
-          </footer>
-        </DialogContent>
-      </Dialog>
-      <HowToPlayDialog
-        open={help}
-        onOpenChange={setHelp}
-        ready={ready && !error}
-        active={active}
-        onPractice={guidedPractice}
-        onPlay={() => begin()}
-        onMeasurements={() => {
-          setHelp(false);
-          setMeasurementsOpen(true);
-        }}
-      />
-      {sharedRun && (
-        <FriendChallengeDialog
-          runId={remoteRunId}
-          challenge={sharedRun.challenge}
-          url={sharedRun.url}
-          onClose={() => setSharedRun(null)}
-        />
-      )}
-      {leaderboardOpen && (
-        <LeaderboardDialog
-          runId={submissionRun ? remoteRunId : undefined}
-          open={leaderboardOpen}
-          onOpenChange={setLeaderboardOpen}
-          run={submissionRun}
-          outfit={profile.equipped}
-          initialMode={mode === 'party' ? 'party' : 'arcade'}
-        />
-      )}
-      <WardrobeDialog
-        open={wardrobeOpen}
-        onOpenChange={setWardrobeOpen}
-        profile={profile}
-        onEquip={equip}
-        storageAvailable={storageAvailable}
-      />
-      {error && (
-        <div
-          className="error-message"
-          role="alert"
-          style={{ maxHeight: 'calc(var(--visible-height, 100dvh) - 32px)', overflowY: 'auto' }}
-        >
-          <p>{error}</p>
-          {!graphicsReconnecting && (
-            <>
-              <p className="text-xs opacity-80">
-                Reloading ends the current climb. Previously saved records and
-                unlocks stay saved.
-              </p>
-              {performanceRetry && (
-                <Button
-                  onClick={() => {
-                    telemetry.current.event('graphics_retry', { performance_mode: true });
-                    location.replace(graphicsRetryUrl(location.href));
-                  }}
-                >
-                  Reload in performance mode
-                </Button>
-              )}
+            <output aria-live="polite">{copyStatus}</output>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={challengesOpen} onOpenChange={setChallengesOpen}>
+          <DialogContent
+            className={skillGoalStyles.dialog}
+            initialFocus={goalsTitle}
+          >
+            <header className={skillGoalStyles.header}>
+              <span className={skillGoalStyles.eyebrow}>
+                <Target aria-hidden="true" /> ONE CLIMB AT A TIME
+              </span>
+              <DialogTitle
+                className={skillGoalStyles.title}
+                ref={goalsTitle}
+                tabIndex={-1}
+              >
+                Your climbing goals.
+              </DialogTitle>
+              <DialogDescription className={skillGoalStyles.description}>
+                Small steps. Higher places.
+              </DialogDescription>
+            </header>
+            <div className={skillGoalStyles.body}>
+              <SkillGoalProgression
+                profile={skills}
+                snapshot={game}
+                onSelect={(id) => {
+                  const next = selectSkillGoal(skillsRef.current, id);
+                  if (next !== skillsRef.current)
+                    telemetry.current.event('skill_goal_selected', {
+                      goal_id: id,
+                      previous_goal_id: skillsRef.current.featuredId,
+                    });
+                  saveSkills(next);
+                }}
+              />
+              <details className={skillGoalStyles.expert}>
+                <summary>
+                  <span>Extra challenges</span>
+                  <small>Reset each run</small>
+                  <ChevronRight aria-hidden="true" />
+                </summary>
+                <div>
+                  <QuickChallenges challenges={game.challenges} preview />
+                </div>
+              </details>
+            </div>
+            <footer className={skillGoalStyles.footer}>
+              <Button variant="ghost" onClick={() => setChallengesOpen(false)}>
+                Done
+              </Button>
               <Button
-                variant="outline"
+                className={skillGoalStyles.primary}
+                disabled={!ready || !!error}
                 onClick={() => {
-                  telemetry.current.event('graphics_retry', {
-                    performance_mode: usesPerformanceGraphics(location.search),
-                  });
-                  location.reload();
+                  if (active) {
+                    setChallengesOpen(false);
+                    return;
+                  }
+                  if (skills.completed.length === SKILL_GOALS.length) {
+                    setChallengesOpen(false);
+                    setDailyChoice(daily ?? todayDailyTower());
+                    setDailyOpen(true);
+                  } else begin();
                 }}
               >
-                Reload game
+                {active
+                  ? 'Back to climb'
+                  : skills.completed.length === SKILL_GOALS.length
+                    ? 'Try the daily tower'
+                    : 'Start climbing'}{' '}
+                <ArrowRight size={18} />
               </Button>
-            </>
-          )}
-        </div>
-      )}
-      {toast && <output className="toast">{toast}</output>}
-      {measurementsOpen && (
-        <PlaytestReport
-          onClose={() => {
-            setMeasurementsOpen(false);
-            setHelp(true);
+            </footer>
+          </DialogContent>
+        </Dialog>
+        <HowToPlayDialog
+          open={help}
+          onOpenChange={setHelp}
+          ready={ready && !error}
+          active={active}
+          onPractice={guidedPractice}
+          onPlay={() => begin()}
+          onMeasurements={() => {
+            setHelp(false);
+            setMeasurementsOpen(true);
           }}
         />
+        {sharedRun && (
+          <FriendChallengeDialog
+            runId={remoteRunId}
+            challenge={sharedRun.challenge}
+            url={sharedRun.url}
+            onClose={() => setSharedRun(null)}
+          />
+        )}
+        {leaderboardOpen && (
+          <LeaderboardDialog
+            runId={submissionRun ? remoteRunId : undefined}
+            open={leaderboardOpen}
+            onOpenChange={setLeaderboardOpen}
+            run={submissionRun}
+            outfit={profile.equipped}
+            initialMode={mode === 'party' ? 'party' : 'arcade'}
+          />
+        )}
+        <WardrobeDialog
+          open={wardrobeOpen}
+          onOpenChange={setWardrobeOpen}
+          profile={profile}
+          onEquip={equip}
+          storageAvailable={storageAvailable}
+        />
+        {error && (
+          <div
+            className="error-message"
+            role="alert"
+            style={{
+              maxHeight: 'calc(var(--visible-height, 100dvh) - 32px)',
+              overflowY: 'auto',
+            }}
+          >
+            <p>{error}</p>
+            {!graphicsReconnecting && (
+              <>
+                <p className="text-xs opacity-80">
+                  Reloading ends the current climb. Previously saved records and
+                  unlocks stay saved.
+                </p>
+                {performanceRetry && (
+                  <Button
+                    onClick={() => {
+                      telemetry.current.event('graphics_retry', {
+                        performance_mode: true,
+                      });
+                      location.replace(graphicsRetryUrl(location.href));
+                    }}
+                  >
+                    Reload in performance mode
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    telemetry.current.event('graphics_retry', {
+                      performance_mode: usesPerformanceGraphics(
+                        location.search,
+                      ),
+                    });
+                    location.reload();
+                  }}
+                >
+                  Reload game
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+        {toast && <output className="toast">{toast}</output>}
+        {measurementsOpen && (
+          <PlaytestReport
+            onClose={() => {
+              setMeasurementsOpen(false);
+              setHelp(true);
+            }}
+          />
+        )}
+      </main>
+      {JEV_ENABLED && jevMessage && (
+        <JevInspector
+          records={jevTrace}
+          live={jevLive}
+          message={game.status === 'over' ? 'Climb finished.' : jevMessage}
+          paused={game.status !== 'playing'}
+          canPause={
+            !jev.current?.finished &&
+            (game.status === 'playing' || game.status === 'paused')
+          }
+          onPause={() => {
+            if (game.status === 'playing' || game.status === 'paused')
+              pause('jev_inspector');
+          }}
+          onStop={menu}
+        />
       )}
-    </main>
+    </div>
   );
 }

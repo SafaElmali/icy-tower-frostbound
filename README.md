@@ -63,3 +63,51 @@ Open [localhost:5188](http://localhost:5188). Race rooms work locally; the leade
 Production builds send anonymous gameplay and feature events to the Frostbound PostHog project. Names, input recordings, and raw invitation links are excluded; the detailed playtest report remains local. Development capture is off by default. See the analytics guide for configuration and disabling capture.
 
 An independent Icy Tower-inspired browser prototype with no original game assets or affiliation. See [asset credits](public/assets/ATTRIBUTION.md), [audio credits](public/audio/ATTRIBUTION.md), and [cover artwork details](docs/cover-prompt.md).
+
+## Jev AI player (local development only)
+
+Choose **Menu → Watch Jev play** to let TypeSafe's Jev choose landing routes in an
+unranked Practice run. The game simulates candidate button sequences with its real
+physics engine, then gives Jev the reachable floors, landing clearance, duration,
+hazards, and recent landing outcomes. Jev selects a route; the game executes that
+plan's takeoff, steering, and braking smoothly at frame rate.
+
+The next request starts near the end of the current jump using the predicted
+landing state. Before execution, the chosen destination is checked again against
+the live game. Outdated answers are discarded and the game keeps moving while
+requests are in flight. This is a hybrid controller: Jev chooses the route and code
+handles precise movement timing. Pause with Escape or use **Stop watching** to
+return to the title. Sessions are limited to 240 choices. AI runs do not award
+personal records, skills, or outfits.
+
+Jev is disabled by default. To enable it locally, add these values to the ignored
+`.env.local`, then restart the development server:
+
+```dotenv
+JEV_ENABLED=true
+TYPESAFE_API_KEY=your-typesafe-api-key
+```
+
+Set `JEV_ENABLED=false` or remove it to hide the menu entry and inspector and disable
+its local API route. Only the literal value `true` enables it. The flag is honored
+only by the development server in `development` mode; production builds and preview
+servers always disable Jev, even if the flag and API key are present. No Jev Netlify
+function is deployed. The API key stays server-side; never give it a `VITE_` prefix.
+
+The server calls `jev-latest` through TypeSafe's [Choice API](https://docs.typesafe.ai/api).
+Only candidate landing summaries, recent outcomes, and run progress go to TypeSafe.
+Requests time out safely; missing credentials or service errors pause the AI run.
+
+The **Jev live inspector** opens alongside the game when you choose **Watch Jev play**.
+It shows live controls and position, landing probabilities, confidence, request/planning
+timing, and a decision feed. The game has its own viewport; on phones the inspector
+sits below it. Select a past decision while the run continues, then choose **Back to live**
+to follow new answers. The last answer stays visible while the next request is pending.
+Use the inspector controls to pause or stop the run. **Export trace** downloads the latest 30 choices as
+JSON; it includes game state and model metadata, never the API credential.
+
+Validation: `node --test tests/jev-player.test.ts tests/jev-planner.test.ts tests/jev-debug.test.ts tests/jev-development.test.ts`.
+To run a live three-tower benchmark (uses API credits):
+`node --env-file=.env.local scripts/evaluate-jev.ts current 20`.
+Results are written to the ignored `outputs/jev-evaluation/` directory.
+Live model choices and latency vary; this is an experimental AI player.

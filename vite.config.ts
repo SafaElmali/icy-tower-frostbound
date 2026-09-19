@@ -1,8 +1,12 @@
 import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import hostingConfig from './.openai/hosting.json';
+import {
+  isJevDevelopmentEnabled,
+  jevDevelopmentServer,
+} from './lib/jev-dev-server';
 import { raceDevelopmentServer } from './lib/race-dev-server';
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
@@ -35,8 +39,14 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async () => {
-  const analyticsBuild = {
+export default defineConfig(async (configEnv) => {
+  const jevEnabled = isJevDevelopmentEnabled(
+    configEnv,
+    loadEnv(configEnv.mode, process.cwd(), 'JEV_').JEV_ENABLED,
+    process.env.NODE_ENV,
+  );
+  const buildDefines = {
+    'import.meta.env.JEV_ENABLED': JSON.stringify(jevEnabled),
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(
       process.env.VITE_APP_VERSION ||
         process.env.COMMIT_REF ||
@@ -52,9 +62,13 @@ export default defineConfig(async () => {
   // The game runs entirely in the browser; Netlify serves a static export.
   if (process.env.DEPLOY_TARGET === 'netlify') {
     return {
-      define: analyticsBuild,
+      define: buildDefines,
       css: { postcss: { plugins: [tailwindcss()] } },
-      plugins: [raceDevelopmentServer(), vinext()],
+      plugins: [
+        jevDevelopmentServer(jevEnabled),
+        raceDevelopmentServer(),
+        vinext(),
+      ],
     };
   }
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
@@ -67,12 +81,13 @@ export default defineConfig(async () => {
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
   return {
-    define: analyticsBuild,
+    define: buildDefines,
     css: { postcss: { plugins: [tailwindcss()] } },
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
     plugins: [
+      jevDevelopmentServer(jevEnabled),
       raceDevelopmentServer(),
       vinext(),
       sites(),

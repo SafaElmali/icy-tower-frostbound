@@ -144,6 +144,15 @@ export class TowerEngine {
     this.introduced.clear(); this.encounterCrumbles.clear();
     this.resetWorld();
   }
+  /** Isolated physics forecast for AI input planning; never records or mutates the live run. */
+  preview() {
+    const copy = new TowerEngine(this.seed, false, this.rulesVersion);
+    Object.assign(copy, structuredClone(this));
+    copy.recordReplay = false;
+    copy.replay = null;
+    copy.events = [];
+    return copy;
+  }
   togglePause() {
     if (this.status === 'playing' && this.recordReplay && this.replay) {
       if (this.replay.length >= MAX_REPLAY_SEGMENTS) this.replay = null;
