@@ -139,11 +139,16 @@ export default function HowToPlay() {
         <section id="multiplayer">
           <h2>Race a friend</h2>
           <p>
-            Create a private two-player lobby and share its invite. Pick a
+            Choose a name, hat, and sweater, then create a private 2–4 player
+            lobby and share its invite. Everyone sees your name and chosen kit. Pick a
             finish floor from 5–100, a one-, two-, three-, or five-minute limit,
-            and optional shoves. Both players ready up to start. Falls return
-            you to the last five-floor checkpoint, and equal verified floors
+            and optional shoves. You can edit your name and kit in the lobby before
+            getting ready. Everyone in the room readies up to start. Falls return you to the last five-floor checkpoint, and equal verified floors
             draw.
+          </p>
+          <p>
+            Dodge frost bats and falling ice as you climb. After a hit or checkpoint
+            recovery, a brief shield protects you from obstacles and shoves.
           </p>
           <p>
             With shoves enabled, press E or the shove button while facing a

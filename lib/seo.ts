@@ -18,13 +18,13 @@ export const publicPages = [
     path: '/how-to-play',
     title: 'How to Play Icy Tower — Frostbound | Controls & Game Modes',
     description:
-      'Learn Frostbound controls, momentum jumps, combos, Classic, Party and Practice modes, daily towers, and two-player races. Read the gameplay FAQ.',
+      'Learn Frostbound controls, momentum jumps, combos, Classic, Party and Practice modes, daily towers, and 2–4 player races. Read the gameplay FAQ.',
   },
   {
     path: '/race',
     title: 'Race a Friend | Icy Tower — Frostbound',
     description:
-      'Play a private two-player tower race in your browser. Invite a friend, choose a finish floor, and climb with checkpoints and optional shoves.',
+      'Play a private 2–4 player tower race in your browser. Invite a friend, choose a finish floor, and climb with checkpoints and optional shoves.',
   },
 ] as const;
 

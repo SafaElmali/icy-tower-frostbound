@@ -2,6 +2,7 @@ import { ClimberMotion } from './climber-motion.ts';
 import type { GameStatus } from './tower-engine.ts';
 import type { RacePose } from './race-protocol.ts';
 import { validPeerPose } from './race-peer.ts';
+import { DEFAULT_OUTFIT, type Outfit } from './outfits.ts';
 
 type Snapshot = { pose: RacePose; received: number };
 const lerp = (a: number, b: number, amount: number) => a + (b - a) * amount;
@@ -10,6 +11,10 @@ const clamp = (n: number, min: number, max: number) =>
 
 /** Buffer on receipt time: lobby waits and suspended simulation clocks cannot skew playback. */
 export class RaceRival {
+  readonly appearance = 'player' as const;
+  outfit: Outfit = { ...DEFAULT_OUTFIT };
+  name = '';
+  protected = false;
   engine = {
     x: 0,
     y: 0,
@@ -25,6 +30,7 @@ export class RaceRival {
   private snapshots: Snapshot[] = [];
   private delay = 100;
   private lastSource: 'http' | 'peer' | null = null;
+  private protectionExpiresAt = 0;
 
   receive(
     pose: RacePose | null,
@@ -36,6 +42,18 @@ export class RaceRival {
     if (!pose || !validPeerPose(pose)) return;
     const previous = this.snapshots.at(-1);
     if (previous && pose.time < previous.pose.time) return;
+    // A stalled connection must not leave a shield on a rival indefinitely.
+    // Duplicate HTTP poses do not renew the lifetime of an old shield.
+    if (
+      !previous ||
+      pose.time > previous.pose.time ||
+      pose.protected !== previous.pose.protected
+    ) {
+      this.protected = pose.protected && !hidden;
+      // Maximum hit immunity, plus recovery time while visibly falling.
+      this.protectionExpiresAt = now + (pose.respawning ? 2_550 : 1_650);
+    }
+    if (hidden) this.protected = false;
     if (previous && pose.time === previous.pose.time) {
       // Settlement can rest a climber without advancing its input clock.
       previous.pose = { ...pose };
@@ -53,6 +71,7 @@ export class RaceRival {
   }
 
   advance(now: number, dt: number) {
+    if (now >= this.protectionExpiresAt || this.finished) this.protected = false;
     if (!this.snapshots.length || this.finished) return;
     const newest = this.snapshots.at(-1)!;
     const at = now - this.delay;

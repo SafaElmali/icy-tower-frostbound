@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RacePeer, validPeerPose } from '../lib/race-peer.ts';
+import { RacePeer, RaceMesh, validPeerPose } from '../lib/race-peer.ts';
 import { RaceRival } from '../lib/race-rival.ts';
 import {
   DEFAULT_RACE_SETTINGS,
+  RACE_SLOTS,
+  RACE_RULES_VERSION,
+  type RaceSlot,
   racePose,
   createRaceEngine,
   type RaceView,
@@ -29,7 +32,7 @@ const view = (
   round,
   seed: 17,
   revision: 1,
-  rulesVersion: 5,
+  rulesVersion: RACE_RULES_VERSION,
   settings: DEFAULT_RACE_SETTINGS,
   bumps: [],
   startAt: null,
@@ -306,4 +309,65 @@ void test('lobby waits and suspended clocks do not skip the interpolation buffer
     rival.engine.time < 1.1,
     'a background gap cannot advance beyond the newest simulation',
   );
+});
+
+void test('a four-player mesh streams to every opponent and closes departed peers', async () => {
+  const pcs: Peer[] = [],
+    targets: RaceSlot[] = [],
+    received: RaceSlot[] = [];
+  const mesh = new RaceMesh({
+    roomId,
+    slot: 'host',
+    clock: () => 1000,
+    createPeer: () => {
+      const pc = new Peer();
+      pcs.push(pc);
+      return pc as unknown as RTCPeerConnection;
+    },
+    onState() {},
+    onSignal(_signal, target) {
+      targets.push(target);
+    },
+    onPose(_pose, _round, slot) {
+      received.push(slot);
+    },
+  });
+  const room = view('host');
+  room.players = RACE_SLOTS.map((slot) => ({ ...room.players[0], slot }));
+  mesh.sync(room);
+  await settle();
+  assert.deepEqual(targets, ['guest', 'guest2', 'guest3']);
+  pcs.forEach((pc) => pc.channel.open());
+  assert.equal(mesh.connected, true);
+  mesh.sendPose(1, pose(1));
+  for (const pc of pcs) {
+    assert.equal(pc.channel.sent.length, 1);
+    pc.channel.onmessage?.({
+      data: JSON.stringify({ room: roomId, round: 1, seq: 1, pose: pose(1) }),
+    });
+  }
+  assert.deepEqual(received, ['guest', 'guest2', 'guest3']);
+  mesh.sync({ ...room, revision: 2, players: room.players.slice(0, 3) });
+  assert.equal(pcs[2].connectionState, 'closed');
+  pcs[0].channel.close();
+  assert.equal(mesh.connected, false);
+  mesh.sync({
+    ...room,
+    revision: 3,
+    players: room.players
+      .slice(0, 3)
+      .map((p) =>
+        p.slot === 'guest'
+          ? { ...p, result: { kind: 'forfeit', floor: 0, duration: 0 } }
+          : p,
+      ),
+  });
+  assert.equal(pcs[0].connectionState, 'closed');
+  assert.equal(
+    mesh.connected,
+    true,
+    'forfeited peers do not force live opponents to HTTP fallback',
+  );
+  mesh.close();
+  assert.ok(pcs.every((pc) => pc.connectionState === 'closed'));
 });

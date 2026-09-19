@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { applyCharacterOutfit } from './character-outfit';
+import { cloneRaceCharacter, PlayerNameplate } from './race-character';
 import { ClimberMotion } from './climber-motion';
 import { ComboStarTrail } from './combo-star-trail';
 import { cosmeticFor, normalizeOutfit, type Outfit } from './outfits';
@@ -17,10 +18,12 @@ import { LandingGuideWorld, type LandingGuideTarget } from './landing-guide-worl
 import { getTowerSection } from './tower-sections';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 import { TowerActionWorld, type CrumbleVisual } from './tower-action-world';
+import { RecoveryShield } from './recovery-shield';
 
 type ClimberView = {
   engine: Pick<TowerEngine, 'x' | 'y' | 'vx' | 'vy' | 'facing' | 'grounded' | 'time' | 'status'>;
   motion: ClimberMotion; finished: boolean;
+  appearance?: 'player'; outfit?: Outfit; name?: string; protected?: boolean;
 };
 
 type FloorPlaque = THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
@@ -48,6 +51,7 @@ export class TowerWorld {
   private arms: THREE.Object3D[] = [];
   private tumble = new THREE.Group();
   private motion = new ClimberMotion();
+  private rivals: { tumble: THREE.Group; character: THREE.Group; arms: THREE.Object3D[]; legs: THREE.Object3D[]; nameplate: PlayerNameplate; shield: RecoveryShield; outfitKey: string }[] = [];
   private ghostTumble = new THREE.Group();
   private ghostCharacter = new THREE.Group();
   private ghostArms: THREE.Object3D[] = [];
@@ -155,6 +159,15 @@ export class TowerWorld {
     this.ghostArms = ['Arm_L', 'Arm_R'].map(n => this.ghostCharacter.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
     this.ghostLegs = ['Leg_L', 'Leg_R'].map(n => this.ghostCharacter.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
     this.ghostTumble.add(this.ghostCharacter); this.ghostTumble.visible = false; this.root.add(this.ghostTumble);
+    for (let index = 0; index < 3; index++) {
+      const character = cloneRaceCharacter(this.character), tumble = new THREE.Group();
+      const nameplate = new PlayerNameplate(); this.root.add(nameplate.sprite);
+      const shield = new RecoveryShield(); this.root.add(shield.group);
+      tumble.add(character); tumble.visible = false; this.root.add(tumble);
+      this.rivals.push({ tumble, character, nameplate, shield, outfitKey: '',
+        arms: ['Arm_L', 'Arm_R'].map(n => character.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o),
+        legs: ['Leg_L', 'Leg_R'].map(n => character.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o) });
+    }
   }
   setOutfit(value: Outfit) {
     const outfit = normalizeOutfit(value);
@@ -324,7 +337,7 @@ export class TowerWorld {
       }
     }
   }
-  render(e: TowerEngine, dt: number, t: number, ghost: ClimberView | null = null, landingTarget: LandingGuideTarget | null = null) {
+  render(e: TowerEngine, dt: number, t: number, ghosts: ClimberView | ClimberView[] | null = null, landingTarget: LandingGuideTarget | null = null) {
     // Ambient snow, lighting and the menu idle pose honor reduced motion too.
     if (this.reducedMotion) t = 0;
     const menu = e.status === 'ready';
@@ -375,15 +388,36 @@ export class TowerWorld {
     this.character.rotation.z = damp(this.character.rotation.z, e.vx * -.018 * (1 - pose.spread), 8, dt);
     this.character.scale.set(1 + this.squish * .45, 1 - this.squish, 1 + this.squish * .3);
     this.motion.applyLimbs(e, pose.spread, this.arms, this.legs);
-    this.ghostTumble.visible = !!ghost && !menu && !ghost.finished;
-    if (ghost && this.ghostTumble.visible) {
+    const views = Array.isArray(ghosts) ? ghosts : ghosts ? [ghosts] : [];
+    const playerViews = views.filter(view => view.appearance === 'player');
+    const replay = views.find(view => view.appearance !== 'player');
+    const models = [{ tumble: this.ghostTumble, character: this.ghostCharacter, arms: this.ghostArms, legs: this.ghostLegs }, ...this.rivals];
+    models.forEach((model, index) => {
+      const ghost = index === 0 ? replay : playerViews[index - 1];
+      model.tumble.visible = !!ghost && !menu && !ghost.finished;
+      const rival = index > 0 ? this.rivals[index - 1] : null;
+      if (rival) {
+        rival.shield.update(model.tumble.visible && ghost?.protected ? 1 : 0, t, this.reducedMotion);
+        rival.nameplate.setName(ghost?.name ?? '');
+        rival.nameplate.sprite.visible = model.tumble.visible && !!ghost?.name?.trim();
+        if (ghost) {
+          const outfit = normalizeOutfit(ghost.outfit), key = `${outfit.hat}/${outfit.sweater}/${outfit.trail}`;
+          if (key !== rival.outfitKey) { applyCharacterOutfit(model.character, outfit); rival.outfitKey = key; }
+        }
+      }
+      if (!ghost || !model.tumble.visible) return;
       const g = ghost.engine, ghostPose = ghost.motion.pose(g);
-      this.ghostTumble.position.set(g.x, g.y + .8, -.35);
-      this.ghostTumble.rotation.z = this.reducedMotion ? 0 : ghostPose.roll;
-      this.ghostCharacter.position.set(0, -.8, 0);
-      this.ghostCharacter.rotation.set(0, (Math.abs(g.vx) > .25 ? g.facing * .9 : .12) * (1 - ghostPose.spread * .9), g.vx * -.018 * (1 - ghostPose.spread));
-      ghost.motion.applyLimbs(g, ghostPose.spread, this.ghostArms, this.ghostLegs);
-    }
+      model.tumble.position.set(g.x, g.y + .8, -.35 - index * .12);
+      // Stack nearby labels so shared spawn/checkpoint positions stay readable.
+      const nearbyLabels = rival ? playerViews.slice(0, index - 1).filter(other =>
+        !other.finished && Math.abs(other.engine.x - g.x) < 2.6 && Math.abs(other.engine.y - g.y) < .6).length : 0;
+      rival?.nameplate.sprite.position.set(g.x, g.y + 2.05 + nearbyLabels * .45, .25);
+      rival?.shield.group.position.set(g.x, g.y + .78, .15 - index * .12);
+      model.tumble.rotation.z = this.reducedMotion ? 0 : ghostPose.roll;
+      model.character.position.set(0, -.8, 0);
+      model.character.rotation.set(0, (Math.abs(g.vx) > .25 ? g.facing * .9 : .12) * (1 - ghostPose.spread * .9), g.vx * -.018 * (1 - ghostPose.spread));
+      ghost.motion.applyLimbs(g, ghostPose.spread, model.arms, model.legs);
+    });
     this.starTrail.update(e);
     this.actionWorld.update(e, this.reducedMotion);
     this.glow.position.set(e.x + this.root.position.x, e.y + 1.5, 2.8);
@@ -416,6 +450,7 @@ export class TowerWorld {
     this.bestMarker.dispose();
     this.root.remove(this.landingGuide.group);
     this.landingGuide.dispose();
+    this.rivals.forEach(rival => { rival.nameplate.dispose(); rival.shield.group.removeFromParent(); rival.shield.dispose(); });
     const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>([this.springMat, this.partyGemMat, this.gemMat, this.routeMat, this.crackedIceMat, this.impactFleckMat, this.frenzyFleckMat]), textures = new Set<THREE.Texture>();
     this.scene.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Points) { geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m); } });
     for (const m of materials) { for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value); m.dispose(); }

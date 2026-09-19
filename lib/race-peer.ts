@@ -1,5 +1,7 @@
 import {
   otherSlot,
+  RACE_SLOTS,
+  signalKey,
   type RaceBumpEvent,
   type RacePose,
   type RaceSignal,
@@ -11,6 +13,7 @@ export type RacePeerState = 'connecting' | 'live' | 'fallback';
 type PeerOptions = {
   roomId: string;
   slot: RaceSlot;
+  target?: RaceSlot;
   onPose: (pose: RacePose, round: number) => void;
   onState: (state: RacePeerState) => void;
   onSignal: (signal: RaceSignal) => Promise<unknown> | void;
@@ -278,12 +281,22 @@ export class RacePeer {
 
   private async negotiate() {
     const view = this.view;
-    if (this.closed || this.negotiating || !view || view.players.length !== 2)
+    if (
+      this.closed ||
+      this.negotiating ||
+      !view ||
+      !view.players.some(
+        (p) => p.slot === (this.options.target ?? otherSlot(this.options.slot)),
+      )
+    )
       return;
-    const theirs = view.signals?.[otherSlot(this.options.slot)];
+    const target = this.options.target ?? otherSlot(this.options.slot);
+    const offerer =
+      RACE_SLOTS.indexOf(this.options.slot) < RACE_SLOTS.indexOf(target);
+    const theirs = view.signals?.[signalKey(target, this.options.slot)];
     this.negotiating = true;
     try {
-      if (this.options.slot === 'host') {
+      if (offerer) {
         if (
           !this.pc ||
           (!this.connected && this.clock() - this.attemptedAt > RETRY_MS)
@@ -336,7 +349,7 @@ export class RacePeer {
           });
       }
     } catch {
-      if (this.options.slot === 'guest') this.generation = '';
+      if (!offerer) this.generation = '';
       this.setState('fallback');
     } finally {
       this.negotiating = false;
@@ -356,5 +369,70 @@ export class RacePeer {
     this.closed = true;
     this.disposePeer();
     this.view = null;
+  }
+}
+
+/** One independently negotiated connection per opponent, with HTTP fallback per room. */
+export class RaceMesh {
+  private peers = new Map<RaceSlot, RacePeer>();
+  private states = new Map<RaceSlot, RacePeerState>();
+  private options: Omit<PeerOptions, 'onPose' | 'onSignal'> & {
+    onPose: (pose: RacePose, round: number, slot: RaceSlot) => void;
+    onSignal: (signal: RaceSignal, target: RaceSlot) => Promise<unknown> | void;
+  };
+  constructor(options: RaceMesh['options']) {
+    this.options = options;
+  }
+  get connected() {
+    return (
+      this.peers.size > 0 && [...this.peers.values()].every((p) => p.connected)
+    );
+  }
+  sync(view: RaceView) {
+    const players = view.players.filter((p) => p.result?.kind !== 'forfeit');
+    for (const [slot, peer] of this.peers) {
+      if (!players.some((p) => p.slot === slot)) {
+        peer.close();
+        this.peers.delete(slot);
+        this.states.delete(slot);
+      }
+    }
+    for (const player of players) {
+      const slot = player.slot;
+      if (slot === this.options.slot) continue;
+      if (!this.peers.has(slot)) {
+        this.states.set(slot, 'connecting');
+        this.peers.set(
+          slot,
+          new RacePeer({
+            ...this.options,
+            target: slot,
+            onPose: (pose, round) => this.options.onPose(pose, round, slot),
+            onSignal: (signal) => this.options.onSignal(signal, slot),
+            onState: (state) => {
+              this.states.set(slot, state);
+              this.options.onState(
+                [...this.states.values()].every((s) => s === 'live')
+                  ? 'live'
+                  : 'fallback',
+              );
+            },
+          }),
+        );
+      }
+      this.peers.get(slot)!.sync(view);
+    }
+    this.options.onState(this.connected ? 'live' : 'fallback');
+  }
+  sendPose(round: number, pose: RacePose) {
+    for (const peer of this.peers.values()) peer.sendPose(round, pose);
+  }
+  notifyBumps(events: readonly RaceBumpEvent[]) {
+    for (const peer of this.peers.values()) peer.notifyBumps(events);
+  }
+  close() {
+    for (const peer of this.peers.values()) peer.close();
+    this.peers.clear();
+    this.states.clear();
   }
 }

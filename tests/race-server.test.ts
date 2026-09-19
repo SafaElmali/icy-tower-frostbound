@@ -23,10 +23,12 @@ import {
   RACE_DISCONNECT_MS,
   RACE_ROOM_TTL_MS,
   type RaceAction,
+  RACE_SLOTS,
 } from '../lib/race-protocol.ts';
 import { RaceSimulation } from '../lib/race-simulation.ts';
 import { freshControls } from '../lib/tower-engine.ts';
 import { raceBlobStore } from '../lib/race-store.ts';
+import { DEFAULT_OUTFIT } from '../lib/outfits.ts';
 
 const room = 'a'.repeat(32),
   host = '1'.repeat(64),
@@ -115,7 +117,7 @@ function climb(
   };
 }
 
-void test('a private room admits exactly two players under simultaneous joins and hides credentials', async () => {
+void test('a private room admits exactly four players under simultaneous joins and hides credentials', async () => {
   const h = harness();
   const created = await h.act(host, 'create');
   assert.equal(created.you, 'host');
@@ -126,19 +128,112 @@ void test('a private room admits exactly two players under simultaneous joins an
   const joins = await Promise.allSettled([
     h.act(guest, 'join'),
     h.act(stranger, 'join'),
+    h.act('4'.repeat(64), 'join'),
+    h.act('5'.repeat(64), 'join'),
   ]);
-  assert.equal(joins.filter((r) => r.status === 'fulfilled').length, 1);
+  assert.equal(joins.filter((r) => r.status === 'fulfilled').length, 3);
   const rejected = joins.find((r) => r.status === 'rejected')!;
   assert.equal(rejected.reason.status, 409);
   const view = await h.act(host, 'poll');
-  assert.equal(view.players.length, 2);
+  assert.equal(view.players.length, 4);
   assert.equal(JSON.stringify(view).includes('token'), false);
   assert.equal(JSON.stringify(view).includes(host), false);
-  await assert.rejects(h.act('4'.repeat(64), 'poll'), { status: 403 });
+  await assert.rejects(h.act('6'.repeat(64), 'poll'), { status: 403 });
   await assert.rejects(
     h.service.act({ action: 'poll', room: '../other' }, host),
     { status: 400 },
   );
+});
+
+void test('four players share normalized profiles without credentials or arbitrary profile fields', async () => {
+  const h = harness();
+  const tokens = [host, guest, stranger, '4'.repeat(64)];
+  for (const [index, token] of tokens.entries()) {
+    await h.service.act({
+      action: index === 0 ? 'create' : 'join', room,
+      profile: {
+        name: `  Rider\n ${index + 1}\u202E  `,
+        outfit: { hat: 'frost-beanie', sweater: 'missing-knit', trail: 'glacier' },
+        token, private: 'not public',
+      },
+    }, token);
+  }
+  const view = await h.act(host, 'poll');
+  assert.deepEqual(view.players.map((p) => p.slot), RACE_SLOTS);
+  assert.deepEqual(view.players.map((p) => p.profile), tokens.map((_, index) => ({
+    name: `Rider ${index + 1}`,
+    outfit: { hat: 'frost-beanie', sweater: 'green-knit', trail: 'glacier' },
+  })));
+  for (const token of tokens) assert.equal(JSON.stringify(view).includes(token), false);
+  assert.equal(JSON.stringify(view).includes('not public'), false);
+  // Retrying a join cannot change an existing player's identity.
+  const retry = await h.act(guest, 'join', {
+    profile: { name: 'Changed', outfit: DEFAULT_OUTFIT },
+  });
+  assert.equal(retry.players[1].profile?.name, 'Rider 2');
+});
+
+void test('profile changes authenticate the player and lock at readiness, countdown, race and results', async () => {
+  const h = harness();
+  await h.act(host, 'create');
+  await h.act(guest, 'join');
+  const profile = { name: 'Custom Rider', outfit: { ...DEFAULT_OUTFIT, sweater: 'berry-knit' } };
+  await assert.rejects(h.act(stranger, 'profile', { profile }), { status: 403 });
+  const changed = await h.act(guest, 'profile', { profile, target: 'host' });
+  assert.equal(changed.players[0].profile?.name, 'Player 1');
+  assert.deepEqual(changed.players[1].profile, profile);
+  await h.act(guest, 'ready', { ready: true });
+  await assert.rejects(h.act(guest, 'profile', { profile }), { status: 409 });
+  await h.act(guest, 'ready', { ready: false });
+  await h.act(guest, 'profile', { profile });
+  await h.act(guest, 'ready', { ready: true });
+  await h.act(host, 'ready', { ready: true });
+  await assert.rejects(h.act(guest, 'profile', { profile }), { status: 409 });
+  h.advance(4000);
+  await assert.rejects(h.act(guest, 'profile', { profile }), { status: 409 });
+  await h.act(host, 'leave');
+  await assert.rejects(h.act(guest, 'profile', { profile }), { status: 409 });
+  await h.act(host, 'rematch');
+  const rematch = await h.act(guest, 'rematch');
+  assert.equal(rematch.round, 2);
+  assert.deepEqual(rematch.players[1].profile, profile);
+  const stale = await h.act(guest, 'profile', {
+    round: 1, profile: { name: 'Stale', outfit: DEFAULT_OUTFIT },
+  });
+  assert.deepEqual(stale.players[1].profile, profile);
+});
+
+void test('malformed and long profile inputs normalize without corrupting a room', async () => {
+  const h = harness();
+  const initial = await h.service.act({ action: 'create', room, profile: { name: 100, outfit: [] } }, host);
+  assert.deepEqual(initial.players[0].profile, { name: 'Player 1', outfit: DEFAULT_OUTFIT });
+  const changed = await h.service.act({ action: 'profile', room, round: 1, profile: {
+    name: '🦊'.repeat(100), outfit: { hat: '<script>', sweater: null, trail: 5 },
+  } }, host);
+  assert.deepEqual(changed.players[0].profile, { name: '🦊'.repeat(20), outfit: DEFAULT_OUTFIT });
+});
+
+void test('existing rooms without stored profiles remain joinable and support profile updates', async () => {
+  const h = harness();
+  await h.act(host, 'create');
+  await h.act(guest, 'join');
+  const key = `rooms/${room}`;
+  const stored = (await h.store.getWithMetadata(key, { type: 'json' }))!;
+  for (const player of stored.data.players) delete player.profile;
+  assert.equal((await h.store.setJSON(key, stored.data, {
+    onlyIfMatch: stored.etag!, metadata: { expiresAt: stored.data.expiresAt },
+  })).modified, true);
+  const legacy = await h.act(guest, 'poll');
+  assert.equal(legacy.phase, 'waiting');
+  assert.deepEqual(legacy.players.map((player) => player.profile), [
+    { name: 'Player 1', outfit: DEFAULT_OUTFIT },
+    { name: 'Player 2', outfit: DEFAULT_OUTFIT },
+  ]);
+  const profile = { name: 'Updated Rider', outfit: { ...DEFAULT_OUTFIT, hat: 'summit-beanie' } };
+  await h.act(guest, 'profile', { profile });
+  const joined = await h.act(stranger, 'join');
+  assert.deepEqual(joined.players[1].profile, profile);
+  assert.deepEqual(joined.players[2].profile, { name: 'Player 3', outfit: DEFAULT_OUTFIT });
 });
 
 void test('both players must ready up; one shared countdown can be cancelled before the start', async () => {
@@ -760,4 +855,130 @@ void test('rematches preserve saved rules and signaling while clearing previous 
   assert.deepEqual(rematch.settings, settings);
   assert.deepEqual(rematch.signals, { host: offer, guest: answer });
   assert.deepEqual(rematch.bumps, []);
+});
+
+void test('four players share readiness, survive departures, and all vote for one rematch', async () => {
+  const h = harness();
+  const tokens = [host, guest, stranger, '4'.repeat(64)];
+  await h.act(host, 'create');
+  for (const token of tokens.slice(1)) await h.act(token, 'join');
+  for (const token of tokens.slice(0, 3))
+    assert.equal((await h.act(token, 'ready', { ready: true })).startAt, null);
+  const start = await h.act(tokens[3], 'ready', { ready: true });
+  assert.equal(start.phase, 'countdown');
+  await assert.rejects(h.act('5'.repeat(64), 'join'), { status: 409 });
+  h.advance(4000);
+  assert.equal((await h.act(host, 'leave')).phase, 'racing');
+  assert.equal((await h.act(guest, 'leave')).phase, 'racing');
+  const result = await h.act(stranger, 'leave');
+  assert.equal(result.winner, 'guest3');
+  for (const token of tokens) await h.act(token, 'poll');
+  for (const token of tokens.slice(0, 3))
+    assert.equal((await h.act(token, 'rematch')).round, 1);
+  const rematch = await h.act(tokens[3], 'rematch');
+  assert.equal(rematch.round, 2);
+  assert.equal(rematch.players.length, 4);
+  assert.ok(rematch.players.every((p) => p.result === null));
+});
+
+void test('four-player verified results rank all players and only tied leaders draw', async () => {
+  for (const tie of [false, true]) {
+    const h = harness();
+    const tokens = [host, guest, stranger, '4'.repeat(64)];
+    const settings = { ...DEFAULT_RACE_SETTINGS, targetFloor: 5 };
+    await h.act(host, 'create', { settings });
+    for (const token of tokens.slice(1)) await h.act(token, 'join');
+    let start = await h.act(host, 'ready', { ready: true });
+    for (const token of tokens.slice(1))
+      start = await h.act(token, 'ready', { ready: true });
+    const winner = climb(start.seed, 5, settings);
+    const empty = new RaceSimulation(start.seed, settings).getRecording();
+    const end = 4000 + winner.time * 1000;
+    for (let elapsed = 0; elapsed < end;) {
+      const step = Math.min(5000, end - elapsed);
+      h.advance(step);
+      elapsed += step;
+      for (const token of tokens) await h.act(token, 'poll');
+    }
+    await h.act(tokens[3], 'finish', { replay: winner.getRecording() });
+    await h.act(host, 'finish', { replay: empty });
+    await h.act(guest, 'finish', { replay: empty });
+    const result = await h.act(stranger, 'finish', {
+      replay: tie ? winner.getRecording() : empty,
+    });
+    assert.equal(result.phase, 'finished');
+    assert.equal(result.winner, tie ? null : 'guest3');
+    assert.equal(result.reason, tie ? 'draw' : 'goal');
+  }
+});
+
+void test('pair signaling isolates guest-to-guest offers and rejects wrong recipients', async () => {
+  const h = harness();
+  await h.act(host, 'create');
+  await h.act(guest, 'join');
+  await h.act(stranger, 'join');
+  const offer = { type: 'offer' as const, sdp: 'offer', generation: 'pair1' };
+  const answer = { ...offer, type: 'answer' as const };
+  await h.act(guest, 'signal', { target: 'guest2', signal: offer });
+  const result = await h.act(stranger, 'signal', {
+    target: 'guest',
+    signal: answer,
+  });
+  assert.equal(result.signals['guest:guest2']?.type, 'offer');
+  assert.equal(result.signals['guest2:guest']?.type, 'answer');
+  await assert.rejects(
+    h.act(stranger, 'signal', { target: 'host', signal: answer }),
+    { status: 409 },
+  );
+  await assert.rejects(
+    h.act(guest, 'signal', { target: 'guest3', signal: offer }),
+    { status: 400 },
+  );
+  const newer = await h.act(guest, 'signal', {
+    target: 'guest2',
+    signal: { ...offer, generation: 'pair2' },
+  });
+  assert.equal(newer.signals['guest2:guest'], undefined);
+});
+
+void test('four-player shoves select the nearest eligible opponent', async () => {
+  const h = harness();
+  const tokens = [host, guest, stranger, '4'.repeat(64)];
+  await h.act(host, 'create', {
+    settings: { ...DEFAULT_RACE_SETTINGS, bumping: true },
+  });
+  for (const token of tokens.slice(1)) await h.act(token, 'join');
+  let start = await h.act(host, 'ready', { ready: true });
+  for (const token of tokens.slice(1))
+    start = await h.act(token, 'ready', { ready: true });
+  h.advance(4000);
+  const base = racePose(createRaceEngine(start.seed));
+  await h.act(guest, 'poll', { seq: 1, pose: { ...base, x: 1.5 } });
+  await h.act(stranger, 'poll', { seq: 1, pose: { ...base, x: 0.5 } });
+  await h.act(tokens[3], 'poll', {
+    seq: 1,
+    pose: { ...base, x: 0.2, protected: true },
+  });
+  const result = await h.act(host, 'bump', {
+    direction: 1,
+    seq: 1,
+    pose: { ...base, x: 0 },
+  });
+  assert.equal(result.bumps[0].to, 'guest2');
+});
+
+void test('one disconnected player does not terminate a four-player race', async () => {
+  const h = harness();
+  const tokens = [host, guest, stranger, '4'.repeat(64)];
+  await h.act(host, 'create');
+  for (const token of tokens.slice(1)) await h.act(token, 'join');
+  for (const token of tokens) await h.act(token, 'ready', { ready: true });
+  for (let tick = 0; tick < 4; tick++) {
+    h.advance(5000);
+    for (const token of tokens.slice(1)) await h.act(token, 'poll');
+  }
+  const result = await h.act(guest, 'poll');
+  assert.equal(result.phase, 'racing');
+  assert.equal(result.players[0].result?.kind, 'forfeit');
+  assert.ok(result.players.slice(1).every((p) => p.result === null));
 });

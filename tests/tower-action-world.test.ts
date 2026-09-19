@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Box3, InstancedMesh, Mesh, Vector3, type BufferGeometry, type Material } from 'three';
 import { freshTowerAction, ICICLE_WARNING_TIME } from '../lib/tower-action.ts';
 import { TowerActionWorld } from '../lib/tower-action-world.ts';
+import { createRaceEngine } from '../lib/race-protocol.ts';
 
 function sceneState() {
   const state = { action: freshTowerAction(), x: 0, y: 10, time: 2, cameraY: 12, status: 'playing', rulesVersion: 7 };
@@ -11,6 +12,19 @@ function sceneState() {
   state.action.crystals.push({ id: 1, x: 1, y: 12, collected: false });
   return state;
 }
+
+void test('recovery protection follows the climber and is hidden in the ready scene', () => {
+  const world = new TowerActionWorld(), state = sceneState();
+  state.action.invulnerableTime = 1; state.x = 2; state.y = 14;
+  world.update(state, true);
+  const shield = world.group.getObjectByName('Recovery shield')!;
+  assert.equal(shield.visible, true); assert.deepEqual(shield.position.toArray(), [2, 14.78, .15]);
+  state.status = 'ready'; world.update(state, true);
+  assert.equal(shield.visible, false);
+  state.status = 'playing'; state.action.invulnerableTime = 0; world.update(state, false);
+  assert.equal(shield.visible, false);
+  world.dispose();
+});
 
 void test('legacy danger cues stay visible in reduced motion and offstage bats warn inside the walls', () => {
   const world = new TowerActionWorld(), state = sceneState();
@@ -51,16 +65,18 @@ void test('paused frenzy keeps its trail frozen and retry clears every stale act
   world.dispose();
 });
 
-void test('current runs render hazards without landing lanes, countdowns, or bat spawn circles', () => {
+void test('current solo runs and multiplayer render hazards without landing lanes, countdowns, or bat spawn circles', () => {
   const world = new TowerActionWorld(), state = sceneState();
+  const race = createRaceEngine(17);
+  race.action = sceneState().action;
   // Reuse a legacy scene first to catch stale warning visibility after a restart.
   world.update(state, false);
   state.rulesVersion = 8;
   const icicle = world.group.getObjectByName('Falling icicle')!;
   const bat = world.group.getObjectByName('Frost bat')!;
-  for (const reducedMotion of [false, true]) for (const phase of ['warning', 'falling'] as const) {
-    state.action.icicles[0].state = phase;
-    world.update(state, reducedMotion);
+  for (const scene of [state, race]) for (const reducedMotion of [false, true]) for (const phase of ['warning', 'falling'] as const) {
+    scene.action.icicles[0].state = phase;
+    world.update(scene, reducedMotion);
     assert.ok(icicle.visible && icicle.children[0].visible && bat.visible);
     assert.ok(icicle.children.slice(1).every(child => !child.visible), 'All lane, edge and target markers stay hidden');
     assert.equal(icicle.getObjectByName('Icicle landing warning')!.children.at(-1)!.visible, false);

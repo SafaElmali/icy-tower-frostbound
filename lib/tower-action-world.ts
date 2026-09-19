@@ -1,12 +1,13 @@
 import * as THREE from 'three';
+import { RecoveryShield } from './recovery-shield.ts';
 import { CRUMBLE_DELAY, ICICLE_WARNING_TIME, type TowerActionState, type CrumbleState } from './tower-action.ts';
 
-type ActionSceneState = { action: TowerActionState; x: number; y: number; time: number; cameraY: number; status: string; rulesVersion: number };
+type ActionSceneState = { action: TowerActionState; x: number; y: number; time: number; cameraY: number; status: string; rulesVersion: number; showHazardWarnings?: boolean };
 type IceVisual = { group: THREE.Group; ice: THREE.Group; lane: THREE.Mesh; edges: THREE.Mesh[]; target: THREE.Group; timer: THREE.Mesh };
 type BatVisual = { group: THREE.Group; wings: THREE.Group[]; warning: THREE.Group };
 type TrailCrystal = { x: number; y: number; born: number; angle: number };
 export type CrumbleVisual = { group: THREE.Group; timer: THREE.Mesh; cracks: THREE.Group; chips: THREE.Mesh[] };
-const ICE_CAPACITY = 4, BAT_CAPACITY = 2, CRYSTAL_CAPACITY = 24, TRAIL_CAPACITY = 72;
+const ICE_CAPACITY = 4, BAT_CAPACITY = 4, CRYSTAL_CAPACITY = 24, TRAIL_CAPACITY = 72;
 
 /** Reusable action geometry. Simulation time owns every warning and animation. */
 export class TowerActionWorld {
@@ -22,10 +23,7 @@ export class TowerActionWorld {
   private previous: { x: number; y: number; time: number; active: boolean } | null = null;
   private emissionTime = 0;
   private aura: THREE.Mesh;
-  private shield: THREE.Group;
-  private shieldShell: THREE.ShaderMaterial;
-  private shieldArcs: THREE.Group;
-  private shieldAccent: THREE.MeshBasicMaterial;
+  private shield: RecoveryShield;
   private encounter: THREE.Group;
   private disposed = false;
   private box = this.geometry(new THREE.BoxGeometry(1, 1, 1));
@@ -49,50 +47,7 @@ export class TowerActionWorld {
     const auraMaterial = this.material(new THREE.MeshBasicMaterial({ color: 0x76ffcf, transparent: true, opacity: .4, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
     this.aura = this.mesh(this.geometry(new THREE.RingGeometry(.79, .87, 48)), auraMaterial, this.group);
     this.aura.name = 'Frenzy halo'; this.aura.visible = false;
-    this.shield = new THREE.Group(); this.shield.name = 'Recovery shield'; this.shield.visible = false; this.group.add(this.shield);
-    // A translucent volume keeps the climber readable; the bright grazing edge
-    // gives protection a silhouette against both the dark tower and pale ledges.
-    this.shieldShell = this.material(new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, toneMapped: false,
-      uniforms: { opacity: { value: 1 }, phase: { value: 0 } },
-      vertexShader: `
-        varying vec3 vNormal;
-        varying vec3 vView;
-        varying vec3 vLocal;
-        void main() {
-          vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
-          vNormal = normalize(normalMatrix * normal);
-          vView = -viewPosition.xyz;
-          vLocal = position;
-          gl_Position = projectionMatrix * viewPosition;
-        }
-      `,
-      fragmentShader: `
-        uniform float opacity;
-        uniform float phase;
-        varying vec3 vNormal;
-        varying vec3 vView;
-        varying vec3 vLocal;
-        void main() {
-          float rim = pow(1.0 - max(dot(normalize(vNormal), normalize(vView)), 0.0), 2.8);
-          float sweep = pow(0.5 + 0.5 * sin(vLocal.y * 7.0 - phase), 18.0);
-          vec3 frost = mix(vec3(0.36, 0.79, 1.0), vec3(1.0, 0.88, 0.59), rim);
-          gl_FragColor = vec4(frost, opacity * (0.035 + rim * 0.62 + sweep * 0.055));
-          #include <colorspace_fragment>
-        }
-      `,
-    }));
-    const shell = this.mesh(this.geometry(new THREE.SphereGeometry(1, 32, 24)), this.shieldShell, this.shield);
-    shell.name = 'Frost shield shell'; shell.scale.set(.77, 1.02, .6);
-    this.shieldAccent = this.material(new THREE.MeshBasicMaterial({ color: 0xffe4aa, transparent: true, opacity: .85, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
-    this.shieldArcs = new THREE.Group(); this.shieldArcs.name = 'Shield orbit'; this.shieldArcs.scale.set(.77, 1.02, 1); this.shield.add(this.shieldArcs);
-    const arcGeometry = this.geometry(new THREE.RingGeometry(1.025, 1.05, 24, 1, 0, Math.PI * .36));
-    for (let i = 0; i < 3; i++) {
-      const angle = i * Math.PI * 2 / 3;
-      const arc = this.mesh(arcGeometry, this.shieldAccent, this.shieldArcs); arc.rotation.z = angle;
-      const spark = this.mesh(this.crystalGeometry, this.shieldAccent, this.shieldArcs, Math.cos(angle) * 1.04, Math.sin(angle) * 1.04, .025);
-      spark.scale.set(.04, .075, .025); spark.rotation.z = angle - Math.PI / 2;
-    }
+    this.shield = new RecoveryShield(); this.group.add(this.shield.group);
     this.encounter = new THREE.Group(); this.encounter.name = 'Ice shower edge cue'; this.encounter.visible = false; this.group.add(this.encounter);
     const edgeMaterial = this.material(new THREE.MeshBasicMaterial({ color: 0xffbf5e, transparent: true, opacity: .13, depthWrite: false }));
     for (const side of [-1, 1]) { const edge = this.mesh(this.box, edgeMaterial, this.encounter, side * 6.7, 0, -.6); edge.scale.set(.035, 24, .02); }
@@ -203,7 +158,7 @@ export class TowerActionWorld {
   update(state: ActionSceneState, reducedMotion: boolean) {
     if (this.disposed) return;
     const { action, time } = state, active = state.status !== 'ready';
-    const showWarnings = state.rulesVersion < 8;
+    const showWarnings = state.showHazardWarnings ?? state.rulesVersion < 8;
     this.icicles.forEach((visual, index) => {
       const icicle = action.icicles[index]; visual.group.visible = active && !!icicle;
       if (!icicle) return;
@@ -238,13 +193,8 @@ export class TowerActionWorld {
     const frenzy = active && action.frenzyTime > 0;
     this.aura.visible = frenzy; this.aura.position.set(state.x, state.y + .76, -.22);
     this.aura.scale.setScalar(reducedMotion ? 1 : 1 + Math.sin(time * 3) * .035);
-    this.shield.visible = active && action.invulnerableTime > 0; this.shield.position.set(state.x, state.y + .78, .15);
-    const shieldFade = THREE.MathUtils.smoothstep(action.invulnerableTime, 0, .35);
-    this.shieldShell.uniforms.opacity.value = shieldFade;
-    this.shieldShell.uniforms.phase.value = reducedMotion ? 0 : time * 2.2;
-    this.shieldAccent.opacity = shieldFade * .85;
-    this.shieldArcs.rotation.z = reducedMotion ? .2 : time * .48;
-    this.shield.scale.setScalar(reducedMotion ? 1 : 1 + Math.sin(time * 3.5) * .018);
+    this.shield.group.position.set(state.x, state.y + .78, .15);
+    this.shield.update(active ? action.invulnerableTime : 0, time, reducedMotion);
     this.encounter.visible = active && action.encounter?.kind === 'ice-shower'; this.encounter.position.y = state.cameraY;
     this.updateTrail(state, frenzy, reducedMotion);
   }
@@ -279,7 +229,7 @@ export class TowerActionWorld {
 
   dispose() {
     if (this.disposed) return; this.disposed = true;
-    this.trail.dispose(); this.geometries.forEach(geometry => geometry.dispose()); this.materials.forEach(material => material.dispose());
+    this.shield.dispose(); this.trail.dispose(); this.geometries.forEach(geometry => geometry.dispose()); this.materials.forEach(material => material.dispose());
     this.group.clear(); this.trailCrystals.length = 0;
   }
 }

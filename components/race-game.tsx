@@ -16,6 +16,7 @@ import {
   Hand,
   Music2,
   RotateCcw,
+  ShieldCheck,
   Users,
   Volume2,
   VolumeX,
@@ -27,15 +28,18 @@ import {
   readRaceSession,
 } from '@/lib/race-client';
 import { RaceRival, RaceRunner } from '@/lib/race-runner';
-import { RacePeer } from '@/lib/race-peer';
+import { RaceMesh } from '@/lib/race-peer';
 import {
   DEFAULT_RACE_SETTINGS,
   RACE_API,
   RACE_DISCONNECT_MS,
   RACE_POLL_MS,
-  otherSlot,
+  RACE_MAX_PLAYERS,
+  type RaceSlot,
   raceInvite,
   validRaceId,
+  type RacePlayer,
+  type RaceProfile,
   type RacePose,
   type RaceSession,
   type RaceSettings,
@@ -46,11 +50,29 @@ import { TowerInput } from '@/lib/tower-input';
 import { TowerAudio } from '@/lib/tower-audio';
 import { ComboFeedbackTracker } from '@/lib/combo-feedback';
 import { GraphicsRecovery } from '@/lib/graphics-recovery';
-import { readProfile, OUTFIT_STORAGE_KEY } from '@/lib/outfits';
+import { DEFAULT_OUTFIT } from '@/lib/outfits';
+import { normalizeRaceProfile } from '@/lib/race-profile';
+import { RaceProfileEditor } from './race-profile-editor';
 import type { TowerWorld } from '@/lib/tower-world';
 import { trackEvent, analyticsId } from '@/lib/analytics';
 import { RaceAnalyticsTransitions } from '@/lib/race-analytics';
 import styles from './race-game.module.css';
+
+const raceProfileStorageKey = 'frostbound-race-profile-v1';
+const playerName = (player: RacePlayer) =>
+  normalizeRaceProfile(player.profile, player.slot).name;
+const sameProfile = (a: RaceProfile, b: RaceProfile) =>
+  a.name === b.name &&
+  a.outfit.hat === b.outfit.hat &&
+  a.outfit.sweater === b.outfit.sweater &&
+  a.outfit.trail === b.outfit.trail;
+const persistProfile = (profile: RaceProfile) => {
+  try {
+    localStorage.setItem(raceProfileStorageKey, JSON.stringify(profile));
+  } catch {
+    /* The current race still keeps your profile when storage is unavailable. */
+  }
+};
 
 const sessionKey = (room: string) => `frostbound-race:${room}`;
 const seconds = (value: number) =>
@@ -104,18 +126,33 @@ export function RaceGame() {
   const world = useRef<TowerWorld | null>(null);
   const connection = useRef<RaceConnection | null>(null);
   const runner = useRef<RaceRunner | null>(null);
-  const peer = useRef<RacePeer | null>(null);
+  const peer = useRef<RaceMesh | null>(null);
   const friendPoseRef = useRef<RacePose | null>(null);
   const shovePending = useRef(false);
   const nextShoveAt = useRef(0);
   const sendSequence = useRef(0);
   const wakePoll = useRef<(() => void) | null>(null);
-  const rival = useRef(new RaceRival());
+  const rivals = useRef(new Map<RaceSlot, RaceRival>());
   const input = useRef(new TowerInput());
   const audio = useRef<TowerAudio | null>(null);
   const comboFeedback = useRef(new ComboFeedbackTracker());
   const soundRef = useRef(true);
   const roomRef = useRef<RaceView | null>(null);
+  const draftProfileRef = useRef<RaceProfile>({
+    name: '',
+    outfit: { ...DEFAULT_OUTFIT },
+  });
+  const [draftProfile, setDraftProfile] = useState<RaceProfile>({
+    name: '',
+    outfit: { ...DEFAULT_OUTFIT },
+  });
+  const [editingProfile, setEditingProfile] = useState(false);
+  const profileEdited = useRef(false);
+  function updateDraftProfile(profile: RaceProfile) {
+    draftProfileRef.current = profile;
+    setDraftProfile(profile);
+    if (!roomRef.current) world.current?.setOutfit(profile.outfit);
+  }
   const [room, setRoom] = useState<RaceView | null>(null);
   const [session, setSession] = useState<RaceSession | null>(null);
   const [inviteRoom, setInviteRoom] = useState<string | null>(null);
@@ -138,6 +175,7 @@ export function RaceGame() {
     'connecting' | 'live' | 'fallback'
   >('connecting');
   const [shoveReady, setShoveReady] = useState(true);
+  const [shielded, setShielded] = useState(false);
   const [draftSettings, setDraftSettings] = useState<RaceSettings>({
     ...DEFAULT_RACE_SETTINGS,
   });
@@ -156,11 +194,35 @@ export function RaceGame() {
     peer.current = null;
   }
 
-  function receivePose(pose: RacePose, round: number, source: 'peer' | 'http') {
-    if (round !== roomRef.current?.round) return;
-    if (friendPoseRef.current && pose.time < friendPoseRef.current.time) return;
-    friendPoseRef.current = pose;
-    rival.current.receive(pose, performance.now(), false, source);
+  function receivePose(
+    pose: RacePose,
+    round: number,
+    source: 'peer' | 'http',
+    slot: RaceSlot,
+  ) {
+    if (
+      round !== roomRef.current?.round ||
+      roomRef.current.players.find((p) => p.slot === slot)?.result?.kind ===
+        'forfeit'
+    )
+      return;
+    let rival = rivals.current.get(slot);
+    if (!rival) {
+      rival = new RaceRival();
+      rivals.current.set(slot, rival);
+    }
+    const player = roomRef.current.players.find((p) => p.slot === slot);
+    const profile = normalizeRaceProfile(player?.profile, slot);
+    rival.outfit = profile.outfit;
+    rival.name = profile.name;
+    rival.receive(pose, performance.now(), false, source);
+    if (player?.result || roomRef.current.phase !== 'racing')
+      rival.protected = false;
+    if (
+      slot ===
+      roomRef.current.players.find((p) => p.slot !== roomRef.current?.you)?.slot
+    )
+      friendPoseRef.current = pose;
   }
 
   function receive(next: RaceView) {
@@ -188,7 +250,7 @@ export function RaceGame() {
       runner.current = new RaceRunner(next.round, next.seed, next.settings);
       respawnOrdinal.current = 0;
       shoveCounts.current = { attempts: 0, accepted: 0 };
-      rival.current = new RaceRival();
+      rivals.current.clear();
       friendPoseRef.current = null;
       nextShoveAt.current = 0;
       sendSequence.current = 0;
@@ -198,20 +260,55 @@ export function RaceGame() {
       setClimbEnded(false);
       setFinishKind(null);
       setRespawnFloor(null);
+      setShielded(false);
       setDraftSettings({ ...next.settings });
+    }
+    const localProfile = normalizeRaceProfile(
+      next.players.find((player) => player.slot === next.you)?.profile,
+      next.you,
+    );
+    const previousProfile = previous?.players.find(
+      (player) => player.slot === previous.you,
+    )?.profile;
+    if (
+      previous?.id !== next.id ||
+      !previousProfile ||
+      !sameProfile(localProfile, previousProfile)
+    ) {
+      updateDraftProfile(localProfile);
+      persistProfile(localProfile);
+      world.current?.setOutfit(localProfile.outfit);
     }
     roomRef.current = next;
     setRoom(next);
     runner.current?.applyBumps(next.bumps, next.you);
-    const friend = next.players.find((p) => p.slot !== next.you);
-    if (friend?.pose) receivePose(friend.pose, next.round, 'http');
+    for (const player of next.players) {
+      if (player.slot === next.you) continue;
+      const rival = rivals.current.get(player.slot);
+      if (rival) {
+        const profile = normalizeRaceProfile(player.profile, player.slot);
+        rival.outfit = profile.outfit;
+        rival.name = profile.name;
+        if (player.result || next.phase !== 'racing') rival.protected = false;
+      }
+      if (player.pose)
+        receivePose(player.pose, next.round, 'http', player.slot);
+    }
+    for (const slot of rivals.current.keys())
+      if (
+        !next.players.some(
+          (p) => p.slot === slot && p.result?.kind !== 'forfeit',
+        )
+      )
+        rivals.current.delete(slot);
     const client = connection.current;
     if (!peer.current && client) {
-      const stream = new RacePeer({
+      const stream = new RaceMesh({
         roomId: next.id,
         slot: next.you,
-        onPose: (pose, round) => {
-          if (connection.current === client) receivePose(pose, round, 'peer');
+        onPose: (pose, round, slot) => {
+          if (connection.current === client)
+            receivePose(pose, round, 'peer', slot);
         },
         onState: (state) => {
           if (connection.current === client) {
@@ -226,10 +323,15 @@ export function RaceGame() {
         onRoomUpdate: () => {
           if (connection.current === client) wakePoll.current?.();
         },
-        onSignal: async (signal) => {
+        onSignal: async (signal, target) => {
           const current = roomRef.current;
           if (connection.current !== client || !current) return;
-          await client.send({ action: 'signal', round: current.round, signal });
+          await client.send({
+            action: 'signal',
+            round: current.round,
+            signal,
+            target,
+          });
         },
       });
       peer.current = stream;
@@ -248,6 +350,8 @@ export function RaceGame() {
 
   async function connect(join: boolean, restored?: RaceSession | null) {
     if (busy) return;
+    const requestedProfile = draftProfileRef.current;
+    const applyRequestedProfile = profileEdited.current;
     const attemptId = analyticsId();
     const startedAt = performance.now();
     const operation = restored ? 'restore' : join ? 'join' : 'create';
@@ -285,7 +389,10 @@ export function RaceGame() {
     roomRef.current = null;
     setRoom(null);
     try {
-      const view = await client.send({ action: join ? 'join' : 'create' });
+      const view = await client.send({
+        action: join ? 'join' : 'create',
+        ...(restored ? {} : { profile: requestedProfile }),
+      });
       try {
         sessionStorage.setItem(sessionKey(next.room), JSON.stringify(next));
       } catch {
@@ -299,6 +406,25 @@ export function RaceGame() {
         await client.send({ action: 'leave', round: view.round });
       else if (restored && view.phase === 'countdown')
         await client.send({ action: 'ready', round: view.round, ready: false });
+      else if (restored && view.phase === 'waiting' && applyRequestedProfile) {
+        const restoredPlayer = view.players.find(
+          (player) => player.slot === view.you,
+        );
+        if (
+          !restoredPlayer?.ready &&
+          !sameProfile(
+            normalizeRaceProfile(requestedProfile, view.you),
+            normalizeRaceProfile(restoredPlayer?.profile, view.you),
+          )
+        ) {
+          await client.send({
+            action: 'profile',
+            round: view.round,
+            profile: requestedProfile,
+          });
+        }
+      }
+      profileEdited.current = false;
       setSession(next);
       capture(
         join ? 'race_room_joined' : 'race_room_created',
@@ -356,6 +482,41 @@ export function RaceGame() {
       capture('race_action_failed', { action, error_code: failure(error) });
       setNetworkError(
         error instanceof Error ? error.message : 'Could not update this race.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveProfile() {
+    const client = connection.current,
+      current = roomRef.current;
+    if (
+      !client ||
+      !current ||
+      busy ||
+      current.phase !== 'waiting' ||
+      current.players.find((player) => player.slot === current.you)?.ready
+    )
+      return;
+    setBusy(true);
+    setNetworkError('');
+    try {
+      const updated = await client.send({
+        action: 'profile',
+        round: current.round,
+        profile: draftProfileRef.current,
+      });
+      const saved = normalizeRaceProfile(
+        updated.players.find((player) => player.slot === updated.you)?.profile,
+        updated.you,
+      );
+      updateDraftProfile(saved);
+      persistProfile(saved);
+      setEditingProfile(false);
+    } catch (error) {
+      setNetworkError(
+        error instanceof Error ? error.message : 'Could not save your climber.',
       );
     } finally {
       setBusy(false);
@@ -470,6 +631,12 @@ export function RaceGame() {
     let disposed = false;
     void Promise.resolve().then(() => {
       if (disposed) return;
+      try {
+        const saved = localStorage.getItem(raceProfileStorageKey);
+        if (saved) updateDraftProfile(normalizeRaceProfile(JSON.parse(saved)));
+      } catch {
+        /* Start with the default profile if browser storage is unavailable. */
+      }
       const value = new URLSearchParams(window.location.search).get('room');
       if (value === null) return;
       capture('shared_link_opened', {
@@ -736,13 +903,16 @@ export function RaceGame() {
           scene.dispose();
           return;
         }
-        try {
-          scene.setOutfit(
-            readProfile(localStorage.getItem(OUTFIT_STORAGE_KEY)).equipped,
-          );
-        } catch {
-          /* Use the starter outfit. */
-        }
+        const current = roomRef.current;
+        scene.setOutfit(
+          current
+            ? normalizeRaceProfile(
+                current.players.find((player) => player.slot === current.you)
+                  ?.profile,
+                current.you,
+              ).outfit
+            : draftProfileRef.current.outfit,
+        );
         modelLoaded = true;
         setLoaded(!graphics.blocked);
         ready();
@@ -805,7 +975,7 @@ export function RaceGame() {
                 if (event.type !== 'combo') audio.current?.play(event.type);
               }
             }
-            rival.current.advance(now, dt);
+            for (const rival of rivals.current.values()) rival.advance(now, dt);
             scene.render(
               local?.engine ?? idle,
               dt,
@@ -813,7 +983,7 @@ export function RaceGame() {
               current?.phase === 'racing' ||
                 current?.phase === 'finishing' ||
                 current?.phase === 'finished'
-                ? rival.current
+                ? [...rivals.current.values()]
                 : null,
             );
             if (now - synced > 100) {
@@ -828,6 +998,7 @@ export function RaceGame() {
               );
               setFriendPose(friendPoseRef.current);
               setRespawnFloor(local?.respawning ? local.checkpointFloor : null);
+              setShielded(!!local?.protected && !local.respawning && !local.recording);
               setShoveReady(
                 !shovePending.current &&
                   !local?.protected &&
@@ -871,16 +1042,18 @@ export function RaceGame() {
   }, []);
 
   const me = room?.players.find((p) => p.slot === room.you);
-  const friend = room?.players.find((p) => p.slot === otherSlot(room.you));
+  const profileDirty =
+    !!me &&
+    !sameProfile(draftProfile, normalizeRaceProfile(me.profile, me.slot));
+  const winner = room?.players.find((player) => player.slot === room.winner);
+  const friends = room?.players.filter((p) => p.slot !== room.you) ?? [];
+  const friend = friends[0];
   const settings = room?.settings ?? DEFAULT_RACE_SETTINGS;
   const settingsDirty = !sameSettings(draftSettings, settings);
   const settingsValid =
     Number.isInteger(draftSettings.targetFloor) &&
     draftSettings.targetFloor >= 5 &&
     draftSettings.targetFloor <= 100;
-  const friendFloor =
-    friend?.result?.floor ??
-    Math.min(settings.targetFloor, friendPose?.floor ?? 0);
   const countdown = room?.startAt
     ? Math.ceil(Math.max(0, room.startAt - clock) / 1000)
     : 0;
@@ -890,18 +1063,16 @@ export function RaceGame() {
   const finished = room?.phase === 'finished';
   const friendOnline = !!friend && clock - friend.lastSeen < RACE_DISCONNECT_MS;
   const verifiedDraw =
-    !!me?.result &&
-    !!friend?.result &&
-    me.result.kind !== 'forfeit' &&
-    friend.result.kind !== 'forfeit' &&
-    me.result.floor === friend.result.floor;
-  const missingResult = !me?.result || !friend?.result;
+    room?.reason === 'draw' &&
+    room.players.filter((p) => p.result && p.result.kind !== 'forfeit')
+      .length >= 2;
+  const missingResult = room?.players.some((p) => !p.result);
   const resultTitle = verifiedDraw
     ? 'A close draw.'
     : room?.winner === room?.you
       ? 'You won.'
       : room?.winner
-        ? 'Your friend won.'
+        ? `${winner ? playerName(winner) : 'A climber'} won.`
         : missingResult
           ? 'Race complete.'
           : 'A close draw.';
@@ -956,7 +1127,7 @@ export function RaceGame() {
         ref={canvas}
         className={styles.canvas}
         tabIndex={-1}
-        aria-label="Two-player tower race. A and D to move, Space to jump."
+        aria-label="Multiplayer tower race. A and D to move, Space to jump."
       />
       {(!room || waiting || finished) && (
         <div className={styles.lobbyShade} aria-hidden="true" />
@@ -966,7 +1137,7 @@ export function RaceGame() {
           <ArrowLeft size={16} /> {active ? 'Leave race' : 'Back to tower'}
         </button>
         <span>
-          <Users size={16} /> TWO PLAYER RACE
+          <Users size={16} /> 2–4 PLAYER RACE
         </span>
         <div className={styles.audioControls}>
           <button
@@ -1028,13 +1199,21 @@ export function RaceGame() {
       {!room && (
         <section className={styles.card} aria-labelledby="race-heading">
           <Flag className={styles.emblem} size={30} />
-          <p className={styles.kicker}>ONE TOWER. TWO CLIMBERS.</p>
-          <h1 id="race-heading">Race a friend.</h1>
+          <p className={styles.kicker}>ONE TOWER. UP TO FOUR CLIMBERS.</p>
+          <h1 id="race-heading">Race your friends.</h1>
           <p>
-            Choose the finish line. Climb together.
+            Climb together. Dodge bats and falling ice.
             <br />
             Fall? Return to a checkpoint and keep going.
           </p>
+          <RaceProfileEditor
+            profile={draftProfile}
+            onChange={(profile) => {
+              profileEdited.current = true;
+              updateDraftProfile(profile);
+            }}
+            disabled={busy}
+          />
           <button
             className={styles.primary}
             disabled={!loaded || busy || !!renderError}
@@ -1084,18 +1263,22 @@ export function RaceGame() {
               <h1 id="lobby-heading">
                 {friendOnline ? 'Ready, set, climb.' : 'Better with a rival.'}
               </h1>
-              <p>
+              <p className={styles.lobbyIntro}>
                 {friendOnline
-                  ? 'Your friend is here. Get ready to race.'
+                  ? 'Invite up to three friends, then everyone ready up.'
                   : friend
                     ? 'Your friend disconnected. Waiting for them to return.'
                     : 'Invite a friend. See who reaches the top first.'}
               </p>
+              <p className={styles.hazardHint}>
+                Dodge bats and falling ice. Your shield briefly blocks hits
+                and shoves after a hit or checkpoint recovery.
+              </p>
             </header>
-            {!friend && (
+            {room.players.length < RACE_MAX_PLAYERS && (
               <div className={styles.invite}>
                 <label htmlFor="race-invite">
-                  <UserRoundPlus size={18} /> Invite your friend
+                  <UserRoundPlus size={18} /> Invite friends
                 </label>
                 <div>
                   <input
@@ -1136,7 +1319,7 @@ export function RaceGame() {
                 </div>
                 <output>
                   {copied
-                    ? 'Link copied. Send it to your friend.'
+                    ? 'Link copied. Send it to your friends.'
                     : 'Send this private link. No account needed.'}
                 </output>
               </div>
@@ -1153,40 +1336,86 @@ export function RaceGame() {
                 </span>
                 <span className={styles.playerInfo}>
                   <strong>
-                    You <em>{room.you === 'host' ? 'Host' : 'Guest'}</em>
+                    {me ? playerName(me) : 'Climber'}{' '}
+                    <span className={styles.youLabel}>(you)</span>{' '}
+                    <em>{room.you === 'host' ? 'Host' : 'Guest'}</em>
                   </strong>
                   <small>{me?.ready ? 'Ready to race' : 'Not ready yet'}</small>
                 </span>
                 {me?.ready && <Check size={17} />}
               </div>
-              <div
-                data-ready={!!friend?.ready && friendOnline}
-                data-empty={!friendOnline}
-              >
-                <span
-                  className={`${styles.playerAvatar} ${styles.friendAvatar}`}
-                >
-                  {friendOnline ? (
-                    <UserRound size={22} />
-                  ) : (
-                    <UserRoundPlus size={22} />
-                  )}
-                </span>
-                <span className={styles.playerInfo}>
-                  <strong>Friend</strong>
+              {friends.map((player) => {
+                const online = clock - player.lastSeen < RACE_DISCONNECT_MS;
+                return (
+                  <div
+                    key={player.slot}
+                    data-ready={player.ready && online}
+                    data-empty={!online}
+                  >
+                    <span
+                      className={`${styles.playerAvatar} ${styles.friendAvatar}`}
+                    >
+                      <UserRound size={22} />
+                    </span>
+                    <span className={styles.playerInfo}>
+                      <strong>{playerName(player)}</strong>
+                      <small>
+                        {!online
+                          ? 'Disconnected'
+                          : player.ready
+                            ? 'Ready to race'
+                            : 'Not ready yet'}
+                      </small>
+                    </span>
+                    {player.ready && online && <Check size={17} />}
+                  </div>
+                );
+              })}
+              <small>
+                {room.players.length} / {RACE_MAX_PLAYERS} players · Everyone
+                ready starts the race
+              </small>
+            </div>
+            <details
+              className={styles.ruleDetails}
+              open={editingProfile}
+              onToggle={(event) => setEditingProfile(event.currentTarget.open)}
+            >
+              <summary>
+                <UserRound size={18} />
+                <span>
+                  <strong>
+                    Your climber {profileDirty && <em>Unsaved</em>}
+                  </strong>
                   <small>
-                    {!friend
-                      ? 'Waiting to join…'
-                      : !friendOnline
-                        ? 'Disconnected'
-                        : friend.ready
-                          ? 'Ready to race'
-                          : 'Not ready yet'}
+                    {me?.ready
+                      ? 'Choose Not ready to make changes'
+                      : 'Edit your name and colors'}
                   </small>
                 </span>
-                {friend?.ready && friendOnline && <Check size={17} />}
-              </div>
-            </div>
+                <ChevronDown size={18} className={styles.ruleChevron} />
+              </summary>
+              {editingProfile && (
+                <div className={styles.profileForm}>
+                  <RaceProfileEditor
+                    profile={draftProfile}
+                    onChange={(profile) => {
+                      profileEdited.current = true;
+                      updateDraftProfile(profile);
+                    }}
+                    disabled={busy || me?.ready}
+                  />
+                  <button
+                    type="button"
+                    className={styles.saveRules}
+                    disabled={busy || me?.ready || !profileDirty}
+                    onClick={() => void saveProfile()}
+                  >
+                    Save climber
+                  </button>
+                </div>
+              )}
+            </details>
             <details className={styles.ruleDetails}>
               <summary>
                 <SlidersHorizontal size={18} />
@@ -1314,6 +1543,7 @@ export function RaceGame() {
                 (!friendOnline && !me?.ready) ||
                 !loaded ||
                 blocked ||
+                (profileDirty && !me?.ready) ||
                 (room.you === 'host' && settingsDirty && !me?.ready)
               }
               onClick={() => void act('ready')}
@@ -1323,12 +1553,14 @@ export function RaceGame() {
             </button>
             <small>
               {me?.ready
-                ? 'Waiting for your friend to ready up.'
-                : settingsDirty && room.you === 'host'
-                  ? 'Save your rules before getting ready.'
-                  : !friendOnline
-                    ? 'Your friend needs to join before you can ready up.'
-                    : 'Both ready? The race starts automatically.'}
+                ? 'Waiting for everyone to ready up.'
+                : profileDirty
+                  ? 'Save your climber before getting ready.'
+                  : settingsDirty && room.you === 'host'
+                    ? 'Save your rules before getting ready.'
+                    : !friendOnline
+                      ? 'Your friend needs to join before you can ready up.'
+                      : 'Everyone ready? The race starts automatically.'}
             </small>
           </footer>
         </section>
@@ -1343,18 +1575,24 @@ export function RaceGame() {
           <span>RACE TO FLOOR {settings.targetFloor}</span>
           <strong>{countdown}</strong>
           <p>
-            {settings.bumping
-              ? 'Jump, dodge, and shove.'
-              : 'Fall. Respawn. Keep climbing.'}
+            Watch for falling ice and incoming bats.
           </p>
         </section>
       )}
       {active && (
         <>
-          <section className={styles.hud} aria-label="Race progress">
+          <section
+            className={styles.hud}
+            data-party={friends.length > 1}
+            aria-label="Race progress"
+          >
             <div>
               <span>
-                <i className={styles.youDot} /> YOU
+                <i className={styles.youDot} />{' '}
+                <b className={styles.hudName}>
+                  {me ? playerName(me) : 'Climber'}
+                </b>{' '}
+                <small>(you)</small>
               </span>
               <strong>
                 {me?.result?.floor ?? floor}
@@ -1374,20 +1612,27 @@ export function RaceGame() {
                 )}
               </small>
             </span>
-            <div>
-              <span>
-                <i className={styles.friendDot} /> FRIEND
-              </span>
-              <strong>
-                {friendFloor}
-                <small> / {settings.targetFloor}</small>
-              </strong>
-              <progress
-                aria-label="Friend progress"
-                value={friendFloor}
-                max={settings.targetFloor}
-              />
-            </div>
+            {friends.map((player) => (
+              <div key={player.slot}>
+                <span>
+                  <i className={styles.friendDot} />{' '}
+                  <b className={styles.hudName}>{playerName(player)}</b>
+                </span>
+                <strong>
+                  {player.result?.kind === 'forfeit'
+                    ? 'Left'
+                    : (player.result?.floor ?? player.pose?.floor ?? 0)}
+                  {player.result?.kind !== 'forfeit' && (
+                    <small> / {settings.targetFloor}</small>
+                  )}
+                </strong>
+                <progress
+                  aria-label={`${playerName(player)} progress`}
+                  value={player.result?.floor ?? player.pose?.floor ?? 0}
+                  max={settings.targetFloor}
+                />
+              </div>
+            ))}
           </section>
           <div className={styles.raceStatus}>
             <output aria-live="polite">
@@ -1399,16 +1644,22 @@ export function RaceGame() {
                     ? finishKind === 'goal'
                       ? 'Finish reached. Checking the result…'
                       : 'Time’s up. Checking the result…'
-                    : friendPose?.respawning
+                    : friend?.result?.kind !== 'forfeit' &&
+                        friendPose?.respawning
                       ? 'Your friend is returning to a checkpoint.'
                       : friend?.result?.kind === 'goal'
                         ? 'Your friend reached the finish.'
-                        : friend &&
-                            clock - friend.lastSeen > 3_000 &&
-                            peerState !== 'live'
-                          ? 'Friend reconnecting…'
+                        : friends.some(
+                              (p) => !p.result && clock - p.lastSeen > 3_000,
+                            ) && peerState !== 'live'
+                          ? 'Player reconnecting…'
                           : ''}
             </output>
+            {shielded && (
+              <span className={styles.shieldState}>
+                <ShieldCheck size={13} aria-hidden="true" /> Shielded
+              </span>
+            )}
             <span className={styles.linkState} data-live={peerState === 'live'}>
               {peerState === 'live' ? 'Live' : 'Connecting'}
             </span>
@@ -1465,39 +1716,30 @@ export function RaceGame() {
           <h1 id="race-result-heading">{resultTitle}</h1>
           <p>{resultText}</p>
           <div className={styles.results}>
-            <div>
-              <span>You</span>
-              <strong>
-                {me?.result?.kind === 'forfeit'
-                  ? 'Left'
-                  : (me?.result?.floor ?? '—')}
-              </strong>
-              <small>
-                {me?.result?.kind === 'forfeit'
-                  ? 'the race'
-                  : me?.result
-                    ? 'floors'
-                    : 'No result'}
-              </small>
-            </div>
-            <span>—</span>
-            <div>
-              <span>Friend</span>
-              <strong>
-                {friend?.result?.kind === 'forfeit'
-                  ? 'Left'
-                  : (friend?.result?.floor ?? '—')}
-              </strong>
-              <small>
-                {friend?.result?.kind === 'forfeit'
-                  ? 'the race'
-                  : friend?.result
-                    ? 'floors'
-                    : 'No result'}
-              </small>
-            </div>
+            {room.players.map((player) => (
+              <div key={player.slot}>
+                <span>
+                  {player.slot === room.you
+                    ? `${playerName(player)} (you)`
+                    : playerName(player)}
+                </span>
+                <strong>
+                  {player.result?.kind === 'forfeit'
+                    ? 'Left'
+                    : (player.result?.floor ?? '—')}
+                </strong>
+                <small>
+                  {player.result?.kind === 'forfeit'
+                    ? 'the race'
+                    : player.result
+                      ? 'floors'
+                      : 'No result'}
+                </small>
+              </div>
+            ))}
           </div>
-          {friendOnline ? (
+          {friends.length > 0 &&
+          friends.every((p) => clock - p.lastSeen < RACE_DISCONNECT_MS) ? (
             <button
               className={styles.primary}
               disabled={busy || me?.rematch || blocked}
@@ -1505,7 +1747,7 @@ export function RaceGame() {
             >
               <RotateCcw size={18} />
               {me?.rematch
-                ? 'Waiting for friend…'
+                ? 'Waiting for everyone…'
                 : friend?.rematch
                   ? 'Accept rematch'
                   : 'Race again'}

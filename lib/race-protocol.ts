@@ -1,7 +1,8 @@
 import { TowerEngine } from './tower-engine.ts';
+import type { Outfit } from './outfits.ts';
 
-export const RACE_RULES_VERSION = 5;
-export const RACE_PROTOCOL_VERSION = 2;
+export const RACE_RULES_VERSION = 6;
+export const RACE_PROTOCOL_VERSION = 4;
 export type RaceSettings = {
   targetFloor: number;
   durationMs: number;
@@ -22,7 +23,15 @@ export const RACE_ROOM_TTL_MS = 60 * 60_000;
 export const RACE_POLL_MS = 500;
 export const RACE_BUMP_COOLDOWN_MS = 1_500;
 export const RACE_API = '/.netlify/functions/race';
-export type RaceSlot = 'host' | 'guest';
+export const RACE_SLOTS = ['host', 'guest', 'guest2', 'guest3'] as const;
+export const RACE_MAX_PLAYERS = RACE_SLOTS.length;
+export type RaceSlot = (typeof RACE_SLOTS)[number];
+export const racePlayerLabel = (slot: RaceSlot) =>
+  `Player ${RACE_SLOTS.indexOf(slot) + 1}`;
+export const signalKey = (from: RaceSlot, to: RaceSlot) =>
+  (from === 'host' && to === 'guest') || (from === 'guest' && to === 'host')
+    ? from
+    : `${from}:${to}`;
 export type RacePhase =
   | 'waiting'
   | 'countdown'
@@ -48,8 +57,10 @@ export type RaceResult = {
   floor: number;
   duration: number;
 };
+export type RaceProfile = { name: string; outfit: Outfit };
 export type RacePlayer = {
   slot: RaceSlot;
+  profile?: RaceProfile;
   ready: boolean;
   lastSeen: number;
   pose: RacePose | null;
@@ -83,7 +94,7 @@ export type RaceView = {
   seed: number;
   rulesVersion: typeof RACE_RULES_VERSION;
   settings: RaceSettings;
-  signals: Partial<Record<RaceSlot, RaceSignal>>;
+  signals: Partial<Record<string, RaceSignal>>;
   bumps: RaceBumpEvent[];
   phase: RacePhase;
   startAt: number | null;
@@ -103,6 +114,7 @@ export type RaceAction = {
     | 'poll'
     | 'ready'
     | 'configure'
+    | 'profile'
     | 'signal'
     | 'bump'
     | 'finish'
@@ -115,7 +127,9 @@ export type RaceAction = {
   pose?: RacePose;
   replay?: RaceRecording;
   settings?: RaceSettings;
+  profile?: RaceProfile;
   signal?: RaceSignal;
+  target?: RaceSlot;
   direction?: -1 | 1;
 };
 export const validRaceId = (value: unknown): value is string =>
@@ -123,9 +137,10 @@ export const validRaceId = (value: unknown): value is string =>
 export const otherSlot = (slot: RaceSlot): RaceSlot =>
   slot === 'host' ? 'guest' : 'host';
 export function createRaceEngine(seed: number) {
-  const engine = new TowerEngine(seed, false, RACE_RULES_VERSION);
+  const engine = new TowerEngine(seed, false, 5);
   engine.start('arcade');
   engine.useStaticRacePlatforms();
+  engine.useRaceHazards();
   return engine;
 }
 export function racePose(engine: TowerEngine): RacePose {

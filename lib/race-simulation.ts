@@ -56,7 +56,12 @@ export class RaceSimulation {
     return this.respawnRemaining > 0;
   }
   get protected() {
-    return this.respawning || this.frame < this.protectedUntil;
+    if (this.finished) return false;
+    return (
+      this.respawning ||
+      this.frame < this.protectedUntil ||
+      this.engine.action.invulnerableTime > 0
+    );
   }
   get pose() {
     return {
@@ -78,6 +83,8 @@ export class RaceSimulation {
     if (last?.[1] === mask) last[0]++;
     else this.moves.push([1, mask]);
     this.frame++;
+    this.engine.advanceRaceHazards(this.frame);
+    this.syncProtection();
 
     if (this.respawnRemaining > 0) {
       // A fallen climber keeps falling out of view during the short recovery cue.
@@ -87,6 +94,7 @@ export class RaceSimulation {
       if (--this.respawnRemaining === 0) {
         this.engine.respawnRace(this.checkpoint, this.checkpointLedges);
         this.protectedUntil = this.frame + RACE_RESPAWN_PROTECTION_FRAMES;
+        this.syncProtection();
       }
     } else {
       this.engine.tick(RACE_STEP, controls);
@@ -102,6 +110,14 @@ export class RaceSimulation {
     }
     if (!this.finished && this.frame >= (this.settings.durationMs * 120) / 1000)
       this.finishTime();
+  }
+
+  private syncProtection() {
+    this.engine.action.invulnerableTime = Math.max(
+      this.engine.action.invulnerableTime,
+      Math.max(0, this.protectedUntil - this.frame) * RACE_STEP,
+      this.respawning ? RACE_STEP : 0,
+    );
   }
 
   private saveCheckpoint() {
@@ -131,6 +147,7 @@ export class RaceSimulation {
     if (this.protected) return false;
     this.engine.applyRacePush(event.direction);
     this.protectedUntil = this.frame + RACE_PUSH_PROTECTION_FRAMES;
+    this.syncProtection();
     return true;
   }
 
@@ -144,6 +161,10 @@ export class RaceSimulation {
 
   private settle() {
     const e = this.engine;
+    this.protectedUntil = 0;
+    e.action.invulnerableTime = 0;
+    e.action.icicles = [];
+    e.action.bats = [];
     const ledge =
       (e.grounded
         ? e.platforms.find((platform) => platform.id === e.standingId)

@@ -194,13 +194,13 @@ void test('two independent clients share a countdown, stream real positions and 
       if ([host, guest][index].view?.phase === 'finishing') r.finish();
       const e = r.engine;
       if (e.grounded)
-        targets[index] = e.platforms.find((p) => p.id === e.floor + 1)!;
+        targets[index] = e.platforms.find((p) => p.id === e.standingId + 1)!;
       const steering = (targets[index].x - e.x) * 3.8 - e.vx * 1.1;
       const jump = e.grounded && !wasJump[index];
       r.advance(
         now,
         startAt,
-        index === 1 && frame < 180
+        index === 1 && frame < 1800
           ? freshControls()
           : { left: steering < -0.35, right: steering > 0.35, jump },
       );
@@ -248,4 +248,92 @@ void test('two independent clients share a countdown, stream real positions and 
     host.send({ action: 'poll', round: 1 }),
     RaceRequestError,
   );
+});
+
+void test('four HTTP clients retain distinct names and outfits through polls and a shared countdown', async () => {
+  const now = Date.now();
+  const service = new RaceService(
+    new MemoryRaceStore(),
+    () => now,
+    () => 17,
+  );
+  const handler = createRaceHandler(() => service);
+  const transport = ((url: string, init: RequestInit) =>
+    handler(
+      new Request(new URL(url, 'https://tower.example'), init),
+    )) as typeof fetch;
+  const session = newRaceSession();
+  const clients = Array.from(
+    { length: 4 },
+    (_, index) =>
+      new RaceConnection(
+        index === 0 ? session : newRaceSession(session.room),
+        () => {},
+        transport,
+        () => now,
+      ),
+  );
+  const profiles = [
+    {
+      name: 'Safa',
+      outfit: { hat: 'summit-beanie', sweater: 'berry-knit', trail: 'rainbow' },
+    },
+    {
+      name: 'Ada',
+      outfit: { hat: 'frost-beanie', sweater: 'aurora-knit', trail: 'rainbow' },
+    },
+    {
+      name: 'Emir',
+      outfit: { hat: 'blue-beanie', sweater: 'berry-knit', trail: 'rainbow' },
+    },
+    {
+      name: 'Zoe',
+      outfit: { hat: 'summit-beanie', sweater: 'green-knit', trail: 'rainbow' },
+    },
+  ];
+  try {
+    for (const [index, client] of clients.entries())
+      await client.send({
+        action: index === 0 ? 'create' : 'join',
+        profile: profiles[index],
+      });
+    profiles[2] = {
+      ...profiles[2],
+      name: 'Emir II',
+      outfit: { ...profiles[2].outfit, hat: 'frost-beanie' },
+    };
+    await clients[2].send({
+      action: 'profile',
+      round: 1,
+      profile: profiles[2],
+    });
+    for (const client of clients) {
+      const view = await client.send({ action: 'poll', round: 1 });
+      assert.deepEqual(
+        view.players.map((p) => p.profile),
+        profiles,
+      );
+      assert.equal(JSON.stringify(view).includes(session.token), false);
+    }
+    for (const client of clients)
+      await client.send({ action: 'ready', round: 1, ready: true });
+    for (const client of clients) {
+      const view = await client.send({ action: 'poll', round: 1 });
+      assert.equal(view.phase, 'countdown');
+      assert.deepEqual(
+        view.players.map((p) => p.profile),
+        profiles,
+      );
+    }
+    await assert.rejects(
+      clients[0].send({
+        action: 'profile',
+        round: 1,
+        profile: { ...profiles[0], name: 'Changed during countdown' },
+      }),
+      { status: 409 },
+    );
+  } finally {
+    clients.forEach((client) => client.close());
+  }
 });

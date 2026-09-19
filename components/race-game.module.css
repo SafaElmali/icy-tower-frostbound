@@ -493,6 +493,20 @@
   display: block;
   min-height: 20px;
 }
+.shieldState {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-end: 10px;
+  color: #a8edff;
+  font-size: 10px;
+}
+.lobbyHeading .hazardHint {
+  margin-top: 10px;
+  color: #a9c4ca;
+  font-size: 11px;
+  line-height: 1.55;
+}
 .linkState {
   display: inline-flex;
   align-items: center;
@@ -767,7 +781,7 @@
   margin: 0 0 10px;
   letter-spacing: -0.8px;
 }
-.lobbyHeading > p:last-child {
+.lobbyHeading .lobbyIntro {
   color: #9fb9c2;
   font-size: 13px;
   line-height: 1.6;
@@ -897,5 +911,78 @@
   }
   .lobbyFooter {
     padding-block: 12px;
+  }
+}
+
+.players > small {
+  grid-column: 1 / -1;
+  color: #93afb9;
+}
+.results {
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.results > div {
+  min-width: 55px;
+}
+.hud[data-party='true'] {
+  grid-template-columns: 1fr 1fr;
+}
+.hud[data-party='true'] .goal {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: center;
+}
+.hud[data-party='true'] ~ .raceStatus {
+  top: 320px;
+}
+@media (max-width: 600px) {
+  .hud[data-party='true'] {
+    width: calc(100% - 32px);
+  }
+}
+
+.profileForm {
+  padding-bottom: 18px;
+}
+.profileForm .saveRules {
+  width: 100%;
+}
+.playerInfo strong {
+  overflow-wrap: anywhere;
+}
+.youLabel {
+  color: #a3bec5;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.players > div {
+  min-width: 0;
+}
+.hud > div {
+  min-width: 0;
+}
+.hudName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  letter-spacing: 0.4px;
+}
+.hud > div > span small {
+  flex-shrink: 0;
+  font-size: 9px;
+  letter-spacing: 0;
+}
+.results > div {
+  max-width: 45%;
+}
+.results span,
+.card h1 {
+  overflow-wrap: anywhere;
+}
+@media (min-width: 521px) {
+  .playerInfo {
+    flex: 1;
   }
 }

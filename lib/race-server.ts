@@ -9,6 +9,9 @@ import {
   RACE_ROOM_TTL_MS,
   RACE_RULES_VERSION,
   otherSlot,
+  RACE_SLOTS,
+  RACE_MAX_PLAYERS,
+  signalKey,
   validRaceId,
   type RaceAction,
   type RaceBumpEvent,
@@ -22,6 +25,7 @@ import {
   type RaceView,
 } from './race-protocol.ts';
 import { replayRaceRecording } from './race-simulation.ts';
+import { normalizeRaceProfile } from './race-profile.ts';
 
 export class RaceError extends Error {
   status: number;
@@ -43,7 +47,7 @@ export type StoredRace = {
   round: number;
   seed: number;
   settings: RaceSettings;
-  signals: Partial<Record<RaceSlot, RaceSignal>>;
+  signals: Partial<Record<string, RaceSignal>>;
   bumps: RaceBumpEvent[];
   expiresAt: number;
   startAt: number | null;
@@ -73,8 +77,10 @@ const makePlayer = (
   slot: RaceSlot,
   tokenHash: string,
   now: number,
+  profile?: unknown,
 ): StoredPlayer => ({
   slot,
+  profile: normalizeRaceProfile(profile, slot),
   tokenHash,
   ready: false,
   lastSeen: now,
@@ -150,12 +156,12 @@ function parsePose(raw: unknown, settings: RaceSettings): RacePose {
   };
 }
 
-function parseSignal(raw: unknown, slot: RaceSlot): RaceSignal {
+function parseSignal(raw: unknown, offerer: boolean): RaceSignal {
   if (!raw || typeof raw !== 'object')
     throw new RaceError('Invalid connection offer.');
   const signal = raw as RaceSignal;
   if (
-    signal.type !== (slot === 'host' ? 'offer' : 'answer') ||
+    signal.type !== (offerer ? 'offer' : 'answer') ||
     typeof signal.sdp !== 'string' ||
     signal.sdp.length < 1 ||
     Buffer.byteLength(signal.sdp, 'utf8') > 16 * 1024 ||
@@ -260,33 +266,18 @@ export function verifyRaceFinish(
 }
 
 function decide(room: StoredRace) {
-  const [host, guest] = room.players;
-  if (!guest) {
-    room.winner = null;
-    room.reason = 'forfeit';
-    room.finished = true;
-    return;
-  }
-  const a = host.result,
-    b = guest.result;
-  if (a?.kind === 'forfeit' || b?.kind === 'forfeit') {
-    room.winner =
-      a?.kind === 'forfeit' && b?.kind === 'forfeit'
-        ? null
-        : a?.kind === 'forfeit'
-          ? guest.slot
-          : host.slot;
-    room.reason = room.winner ? 'forfeit' : 'draw';
-  } else {
-    const af = a?.floor ?? 0,
-      bf = b?.floor ?? 0;
-    room.winner = af === bf ? null : af > bf ? host.slot : guest.slot;
-    room.reason = room.winner
-      ? a?.kind === 'goal' || b?.kind === 'goal'
+  const contenders = room.players.filter((p) => p.result?.kind !== 'forfeit');
+  const best = Math.max(...contenders.map((p) => p.result?.floor ?? 0));
+  const leaders = contenders.filter((p) => (p.result?.floor ?? 0) === best);
+  room.winner = leaders.length === 1 ? leaders[0].slot : null;
+  room.reason = !room.winner
+    ? 'draw'
+    : contenders.length === 1 &&
+        room.players.some((p) => p.result?.kind === 'forfeit')
+      ? 'forfeit'
+      : leaders[0].result?.kind === 'goal'
         ? 'goal'
-        : 'height'
-      : 'draw';
-  }
+        : 'height';
   room.finished = true;
 }
 
@@ -297,7 +288,7 @@ function advanceRoom(room: StoredRace, now: number) {
       player.result = forfeit();
   }
   if (
-    room.players.some((p) => p.result?.kind === 'forfeit') ||
+    room.players.filter((p) => p.result?.kind !== 'forfeit').length <= 1 ||
     room.players.every((p) => p.result)
   ) {
     decide(room);
@@ -338,8 +329,9 @@ function view(room: StoredRace, you: RaceSlot, now: number): RaceView {
     winner: room.winner,
     reason: room.reason,
     players: room.players.map(
-      ({ slot, ready, lastSeen, pose, result, rematch }) => ({
+      ({ slot, profile, ready, lastSeen, pose, result, rematch }) => ({
         slot,
+        profile: normalizeRaceProfile(profile, slot),
         ready,
         lastSeen,
         pose,
@@ -369,7 +361,28 @@ function acceptBump(
     throw new RaceError('Shoving is only available during the race.', 409);
   if (now - player.lastBumpAt < RACE_BUMP_COOLDOWN_MS)
     throw new RaceError('Your shove is recharging.', 409);
-  const rival = room.players.find((p) => p.slot === otherSlot(player.slot));
+  const rival = room.players
+    .filter((p) => {
+      const a = player.pose,
+        b = p.pose;
+      return (
+        p.slot !== player.slot &&
+        !p.result &&
+        a &&
+        b &&
+        now - p.poseAt <= 1_500 &&
+        !b.respawning &&
+        !b.protected &&
+        Math.abs(a.x - b.x) <= 1.8 &&
+        Math.abs(a.y - b.y) <= 1.7 &&
+        (b.x - a.x) * direction >= -0.35
+      );
+    })
+    .sort(
+      (a, b) =>
+        Math.abs(a.pose!.x - player.pose!.x) -
+        Math.abs(b.pose!.x - player.pose!.x),
+    )[0];
   const a = player.pose,
     b = rival?.pose;
   if (
@@ -438,6 +451,7 @@ export class RaceService {
         'poll',
         'ready',
         'configure',
+        'profile',
         'signal',
         'bump',
         'finish',
@@ -476,7 +490,7 @@ export class RaceService {
             startAt: null,
             settleAt: null,
             finished: false,
-            players: [makePlayer('host', tokenHash, now)],
+            players: [makePlayer('host', tokenHash, now, body.profile)],
             winner: null,
             reason: null,
           };
@@ -489,12 +503,23 @@ export class RaceService {
         );
       let player = room.players.find((p) => p.tokenHash === tokenHash);
       if (!player && body.action === 'join') {
-        if (room.players.length === 2 || room.startAt !== null || room.finished)
+        if (
+          room.players.length >= RACE_MAX_PLAYERS ||
+          room.startAt !== null ||
+          room.finished
+        )
           throw new RaceError(
-            'This two-player room is full. Ask for a new invite.',
+            'This four-player room is full. Ask for a new invite.',
             409,
           );
-        player = makePlayer('guest', tokenHash, now);
+        player = makePlayer(
+          RACE_SLOTS.find(
+            (slot) => !room.players.some((p) => p.slot === slot),
+          )!,
+          tokenHash,
+          now,
+          body.profile,
+        );
         room.players.push(player);
       }
       if (!player)
@@ -502,6 +527,11 @@ export class RaceService {
       advanceRoom(room, now);
       player.lastSeen = now;
       const sameRound = body.round === room.round;
+      if (sameRound && body.action === 'profile') {
+        if (player.ready || room.startAt !== null || room.finished)
+          throw new RaceError('Choose your name and outfit before you ready up.', 409);
+        player.profile = normalizeRaceProfile(body.profile, player.slot);
+      }
       if (sameRound && body.action === 'configure') {
         if (player.slot !== 'host')
           throw new RaceError('Only the host can change the rules.', 403);
@@ -512,21 +542,25 @@ export class RaceService {
         for (const member of room.players) member.ready = false;
       }
       if (sameRound && body.action === 'signal') {
-        const signal = parseSignal(body.signal, player.slot);
+        const target = body.target ?? otherSlot(player.slot);
         if (
-          player.slot === 'guest' &&
-          room.signals.host?.generation !== signal.generation
+          target === player.slot ||
+          !room.players.some((p) => p.slot === target)
         )
+          throw new RaceError('Invalid connection recipient.');
+        const offerer =
+          RACE_SLOTS.indexOf(player.slot) < RACE_SLOTS.indexOf(target);
+        const signal = parseSignal(body.signal, offerer);
+        const ownKey = signalKey(player.slot, target);
+        const peerKey = signalKey(target, player.slot);
+        if (!offerer && room.signals[peerKey]?.generation !== signal.generation)
           throw new RaceError(
             'The connection offer changed. Reconnecting…',
             409,
           );
-        if (
-          player.slot === 'host' &&
-          room.signals.host?.generation !== signal.generation
-        )
-          delete room.signals.guest;
-        room.signals[player.slot] = signal;
+        if (offerer && room.signals[ownKey]?.generation !== signal.generation)
+          delete room.signals[peerKey];
+        room.signals[ownKey] = signal;
       }
       if (
         sameRound &&
@@ -539,7 +573,7 @@ export class RaceService {
         player.ready = body.ready;
         if (!body.ready) room.startAt = null;
         else if (
-          room.players.length === 2 &&
+          room.players.length >= 2 &&
           room.players.every(
             (p) => p.ready && now - p.lastSeen < RACE_DISCONNECT_MS,
           )
@@ -579,11 +613,17 @@ export class RaceService {
       if (sameRound && body.action === 'leave' && !room.finished) {
         player.result = forfeit();
         player.lastSeen = 0;
-        decide(room);
+        if (room.startAt === null) {
+          if (player.slot === 'host') decide(room);
+          else {
+            room.players = room.players.filter((p) => p !== player);
+            room.signals = {};
+          }
+        } else advanceRoom(room, now);
       }
       if (sameRound && body.action === 'rematch' && room.finished) {
         if (
-          room.players.length !== 2 ||
+          room.players.length < 2 ||
           room.players.some((p) => now - p.lastSeen >= RACE_DISCONNECT_MS)
         )
           throw new RaceError('Your friend has left. Create a new race.', 409);
@@ -611,7 +651,7 @@ export class RaceService {
       if (
         !room.finished &&
         room.startAt === null &&
-        room.players.length === 2 &&
+        room.players.length >= 2 &&
         room.players.every(
           (p) => p.ready && now - p.lastSeen < RACE_DISCONNECT_MS,
         )

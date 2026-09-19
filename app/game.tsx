@@ -2005,7 +2005,7 @@ export default function Home() {
                     >
                       <Users aria-hidden="true" />
                       <span>
-                        Race a friend<small>A private, two-player climb</small>
+                        Race a friend<small>A private, 2–4 player climb</small>
                       </span>
                       <ChevronRight aria-hidden="true" />
                     </Button>

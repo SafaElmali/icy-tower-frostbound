@@ -31,7 +31,7 @@ Run to jump higher, use wall jumps to recover, and land on new floors within 3.8
 - **Party:** lower gravity, spring platforms, and timed double jumps, with separate rankings.
 - **Practice:** learn with guided tips and no automatic frost chase; runs are unranked.
 - **Daily tower:** a shared Classic tower for each UTC date, with unlimited retries.
-- **Race a friend:** private two-player races with checkpoints, configurable goals, and optional shoves.
+- **Race a friend:** private 2–4 player races with names, customizable climbers, bats, falling ice, checkpoint shields, configurable goals, and optional shoves.
 
 Open **Menu** for modes, daily towers, skill goals, unlockable outfits, and leaderboards. Race your saved ghost or share a friend challenge after a run. Personal progress is stored in your browser.
 
@@ -54,7 +54,7 @@ Open [localhost:5188](http://localhost:5188). Race rooms work locally; the leade
 | --- | --- |
 | [Gameplay](docs/gameplay.md) | Movement, hazards, difficulty, goals, outfits, and ghosts |
 | [Leaderboards and sharing](docs/leaderboard-and-sharing.md) | Verified scores, replay compatibility, and friend challenges |
-| [Two-player races](docs/multiplayer.md) | Lobby rules, networking, acceptance criteria, and testing |
+| [Multiplayer races](docs/multiplayer.md) | Lobby rules, networking, acceptance criteria, and testing |
 | [Development](docs/development.md) | Setup, checks, art and audio, validation notes, and Netlify deployment |
 | [SEO and GEO](docs/seo-geo.md) | Search metadata, structured data, crawl files, and AI-readable game guide |
 | [Playtesting](docs/playtesting.md) | Human playtest protocol and local measurement exports |

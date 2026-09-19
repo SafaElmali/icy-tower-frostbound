@@ -1,3 +1,4 @@
+import { RaceHazards } from './race-hazards.ts';
 import { CRUMBLE_DELAY, FRENZY_COMBO_TARGET, FRENZY_DURATION, ICICLE_WARNING_TIME, freshTowerAction, type CrumbleState, type TowerActionState } from './tower-action.ts';
 
 export type GameStatus = 'ready' | 'playing' | 'paused' | 'over';
@@ -71,7 +72,9 @@ export class TowerEngine {
   private recordReplay: boolean;
   private _rulesVersion: RunReplay['version'];
   private raceStaticPlatforms = false;
+  private raceHazards: RaceHazards | null = null;
   get rulesVersion() { return this._rulesVersion; }
+  get showHazardWarnings() { return this.rulesVersion < 8 && !this.raceHazards; }
   constructor(seed = 73091, recordReplay = true, rulesVersion: RunReplay['version'] = CURRENT_RULES_VERSION) { this.seed = seed; this.recordReplay = recordReplay; this._rulesVersion = rulesVersion; this.resetWorld(); }
   get version() { return this.rulesVersion; }
   get pace() {
@@ -169,6 +172,13 @@ export class TowerEngine {
       platform.moving = false;
       platform.x = platform.origin;
     }
+  }
+  /** Race weather uses its own frame clock and never enables solo action rules. */
+  useRaceHazards() { this.raceHazards = new RaceHazards(); }
+  advanceRaceHazards(frame: number) {
+    this.action.invulnerableTime = Math.max(0, this.action.invulnerableTime - 1 / 120);
+    if (this.action.invulnerableTime < 1e-8) this.action.invulnerableTime = 0;
+    this.raceHazards?.advance(this.action, this.seed, frame, this.cameraY, this.events);
   }
   /** The race owns checkpoint snapshots, including ledges already pruned by the camera. */
   respawnRace(checkpoint: Platform, nearby: readonly Platform[]) {
@@ -332,7 +342,7 @@ export class TowerEngine {
         }
       }
     }
-    if (this.rulesVersion >= 6) this.collideAction(oldY);
+    if (this.rulesVersion >= 6 || this.raceHazards) this.collideAction(oldY);
     for (const p of this.platforms) {
       if (this.rulesVersion >= 6 && p.crumble?.broken) continue;
       if (p.gem && !p.collected && Math.abs(this.x - p.x) < .85 && Math.abs(this.y + .7 - (p.y + 1.05)) < 1) {
@@ -508,7 +518,7 @@ export class TowerEngine {
       // Include the previous tip position to avoid tunneling at high velocity.
       const previousY = icicle.y - icicle.vy / 120;
       if (dx < .6 && icicle.y <= this.y + 1.45 && previousY >= this.y) {
-        this.hurt(icicle.x); icicle.y = this.cameraY - 20;
+        this.hurt(icicle.x); this.raceHazards?.consume(icicle.id); icicle.y = this.cameraY - 20;
       } else if (!icicle.nearMiss && icicle.y < this.y && previousY >= this.y && dx >= .6 && dx < 2.2) {
         icicle.nearMiss = true; action.dodges++; this.score += 75; this.emit('dodge', 75);
       }
@@ -516,7 +526,7 @@ export class TowerEngine {
     for (const bat of action.bats) {
       if (!bat.alive || bat.warningTime > 0 || Math.abs(this.x - bat.x) >= .75) continue;
       if (this.vy < 0 && oldY >= bat.y + .18 && this.y <= bat.y + .35) {
-        bat.alive = false; action.stomps++; this.score += 350;
+        bat.alive = false; this.raceHazards?.consume(bat.id); action.stomps++; this.score += 350;
         this.y = bat.y + .35; this.vy = 17.6 * this.jumpMultiplier;
         this.grounded = false; this.standingId = -1; this.coyote = this.jumpBuffer = 0;
         this.doubleJumpUsed = false; this.lastWallJumpSide = 0; this.walkedOff = null;
