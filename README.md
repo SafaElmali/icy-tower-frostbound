@@ -23,7 +23,7 @@ Four named climbers race through one frozen tower — a six-second multiplayer p
 
 On touch screens, hold left/right with one thumb and tap **JUMP** with the other.
 
-Run to jump higher, use wall jumps to recover, and land on new floors within 3.8 seconds to keep your combo. Automatic scrolling begins at floor 5 and speeds up as you climb. Watch for crumbling ledges, falling icicles, and frost bats; build a combo to trigger frenzy boosts.
+Run to jump higher, use wall jumps to recover, and chain jumps that climb two or more floors, landing within 3.8 seconds, to keep your combo. Automatic scrolling begins at floor 5 and speeds up as you climb. Watch for crumbling ledges, falling icicles, and frost bats; build a combo to trigger frenzy boosts.
 
 ## Modes and features
 

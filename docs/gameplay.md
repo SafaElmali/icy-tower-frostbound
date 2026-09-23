@@ -22,7 +22,7 @@ Controls, tower mechanics, modes, progression, and personal ghosts. For online c
 
 ### Momentum, combos, and frost
 
-Run to jump higher. At high speed, Harold spreads his arms and legs into a star-shaped 360° spin and straightens before landing. Active combos leave a rotating, multicolored five-point star trail behind him. Land on new floors within 3.8 seconds to extend a combo. Arcade scrolling starts when you reach floor 5, making ledges descend even when you stand still. The pace increases every 30 seconds and on landing at or beyond each 50-floor milestone, without a speed cap, so the rising frost eventually overtakes a slow climb. A small line below the score shows elapsed play time and the current pace level, including on short and touch screens. Pausing freezes the clock and pace progression. **Run details** also shows time and pace. The camera tracks downward falls to reveal recovery ledges, while the frost keeps advancing independently. Practice disables automatic scrolling; falling into the frost still ends the run. Personal records are saved on this browser.
+Run to jump higher. At high speed, Harold spreads his arms and legs into a star-shaped 360° spin and straightens before landing. Active combos leave a rotating, multicolored five-point star trail behind him. Combos follow the classic rule: a jump that lands two or more floors above the ledge you last stood on starts or extends a chain, and each combo landing must come within 3.8 seconds of the last. A one-floor hop still earns its floor, but ends the chain with a short "Jump 2+ floors" hint (shown a few times per run). Wall jumps and bat stomps keep counting from the ledge you left, so a wall-assisted climb of two or more floors keeps the chain alive. The score multiplier grows by one for every five combo floors, up to 10×. Arcade scrolling starts when you reach floor 5, making ledges descend even when you stand still. The pace increases every 30 seconds and on landing at or beyond each 50-floor milestone, without a speed cap, so the rising frost eventually overtakes a slow climb. A small line below the score shows elapsed play time and the current pace level, including on short and touch screens. Pausing freezes the clock and pace progression. **Run details** also shows time and pace. The camera tracks downward falls to reveal recovery ledges, while the frost keeps advancing independently. Practice disables automatic scrolling; falling into the frost still ends the run. Personal records are saved on this browser.
 
 ### Wall jumps
 
@@ -49,12 +49,14 @@ Current runs add five action mechanics using the existing move and jump controls
 - **Crumbling ice:** cracked amber ledges begin appearing at floor 8 and break 1.15 seconds after landing. Jump away while the warning bar drains; broken ledges cannot catch a fall.
 - **Falling icicles:** from floor 12, shards fall immediately without a marked lane or countdown. Each shard keeps its original horizontal position instead of tracking the player. Normal drops start 3.5 seconds apart. Close dodges award 75 points.
 - **Frost bats:** from floor 20, winged enemies enter immediately without spawn circles, starting 5.5 seconds apart. Bats and icicles can overlap, with up to two of each active. Both spawn intervals shorten by 15% pressure per 50-floor tier, up to five tiers. Landing on top bounces you upward and awards 350 points. Side hits and icicles give a short upward recovery impulse and 1.65 seconds of protection, and break the combo.
-- **Combo frenzy:** earning a 10-floor combo charge activates six seconds of stronger jumps, bonus crystal trails, and a rhythmic sound cue. Further frenzy charges require new higher-floor landings after the burst ends; breaking the combo clears the charge.
+- **Combo frenzy:** earning a 10-floor combo charge through combo jumps activates six seconds of stronger jumps, bonus crystal trails, and a rhythmic sound cue. Further frenzy charges require new higher-floor landings after the burst ends; breaking the combo clears the charge.
 - **Tower encounters:** starting at floor 30, short ice showers and collapsing-stair sections alternate, with six seconds of calm afterward. Milestone stage neighborhoods stay clear of flying hazards. Ice showers drop shards 1.5 seconds apart before milestone scaling. The encounter timer and frenzy meter remain readable with sound off; reduced motion suppresses decorative motion without adding hazard markers.
 
 Action appears in Classic, Party, Practice, and new daily towers. Practice removes the automatic frost chase while retaining hazards. **Run details → Reflex highlights** shows close dodges, bat stomps, frenzies, and hits taken.
 
 Rules version 8 adds more frequent, overlapping hazards with no advance markers to the 50-floor difficulty steps. Old version 1–7 recordings and friend links, and version 5–7 daily links retain their original simulation rules and hazard markers. New ghosts and score submissions replay the full action simulation. Existing records remain saved.
+
+Rules version 9 adds the two-floor combo rule and the 10× multiplier cap. Classic, Party, Practice, and new daily towers use it; two-player races keep their own pinned rules. Version 1–8 recordings, ghosts, friend links, and daily links replay under their original rules, and version 1–8 scores stay on the Legacy leaderboards.
 
 ## Learning and replayability
 
@@ -69,13 +71,13 @@ The title screen keeps **Play** as its primary action. **Menu** holds modes, dai
 - **Personal progress** keeps independent highest-floor, combo, and wall-rebound records for each mode. **Run details** compares with the records from before the run. A small wall plaque marks the previous highest floor and briefly celebrates passing it.
 - **Route choices** begin at floor 12 and recur every 12 floors, excluding sections that overlap full-width stages. Wide pale steps offer a forgiving climb; a running jump can reach a narrow gold-topped crystal shortcut. Rules version 5 pins the new layouts; earlier leaderboard recordings and friend links retain their original layouts and physics. Live ghost racing uses the current rules.
 - **Daily tower** gives everyone one Classic tower per UTC date with unlimited retries. Daily links pin their date and rules, so old links remain playable after midnight. The best completed attempt is saved per tower, with up to 90 daily records stored in this browser. Daily runs can also be submitted to the existing Classic board; there is no separate online daily ranking.
-- **Tower sections** change architecture, windows, and lighting at floors 25, 50, and 75, progressing from warm stone to icy blue, violet, and aurora. Existing geometry is reused without loading new areas or changing collisions.
+- **Tower sections** change architecture, windows, and lighting at floors 25, 50, 75, 100, 150, and 200, progressing from warm stone to icy blue, violet, and aurora, then the pale Glacier Vault, the slate-and-lightning Stormcrown, and the starlit Starfall Summit. A brief title card names each new section as you land in it. Existing geometry is reused without loading new areas or changing collisions.
 - **Combo feedback** adds distinct musical phrases and captions at 3, 5, 10, and 15. Each milestone sounds once per chain; large jumps announce the highest crossing. Muted play retains captions. **Menu → Settings → Reduce motion** suppresses shake, spins, particles, and trails; the system preference applies until explicitly overridden.
 - **Playtest measurements**, under **Menu → How to play**, records starts, completed goals, finishes, and abandoned climbs on this browser only. The report separates modes, device categories, and feature versions; includes session replay and next-day return; and exports JSON. Records are capped at 300 runs. There is no automatic upload or population dashboard. See [the playtest protocol](playtesting.md) for recruitment, predefined evaluation criteria, and combining participant exports. Human participant sessions remain to be conducted.
 
 ## Quick challenges
 
-Each climb starts three fresh challenges: reach floor 30 with an unbroken combo, collect 10 crystals, and perform 5 wall jumps. Open **Skill goals → Expert challenges** to inspect these optional per-run challenges. The gameplay HUD features one progressive skill goal instead. The combo challenge starts with your first higher-floor landing; letting the 3.8-second timer expire before reaching floor 30 fails it for that run. Passing floor 30 in the air is not enough — land on floor 30 or higher. Wall jumps count fast airborne wall rebounds and controlled wall boosts, not ground-level wall impacts. Completed challenges stay complete until you start again. Challenges work in Classic, Party, and Practice and do not change scoring.
+Each climb starts three fresh challenges: reach floor 30 with an unbroken combo, collect 10 crystals, and perform 5 wall jumps. Open **Skill goals → Expert challenges** to inspect these optional per-run challenges. The gameplay HUD features one progressive skill goal instead. The combo challenge needs every new-height landing to be a combo jump of two or more floors; a one-floor hop, a hazard hit, or letting the 3.8-second timer expire before reaching floor 30 fails it for that run. Passing floor 30 in the air is not enough — land on floor 30 or higher. Wall jumps count fast airborne wall rebounds and controlled wall boosts, not ground-level wall impacts. Completed challenges stay complete until you start again. Challenges work in Classic, Party, and Practice and do not change scoring.
 
 ## Unlockable outfits
 
@@ -85,12 +87,18 @@ Open **Menu → Outfits** to change your look. Equip a hat, sweater, and star-tr
 | --- | --- |
 | Reach floor 10 | Frost beanie |
 | Reach floor 50 | Summit beanie |
+| Reach floor 100 | Glacier beanie |
+| Reach floor 150 | Storm knit |
+| Reach floor 200 | Starfall beanie |
 | Score 1,000 in one run | Berry knit |
 | Score 5,000 in one run | Aurora knit |
+| Score 25,000 in one run | Aurora stars |
+| Stomp 3 bats in one run | Batbane knit |
 | Land a 5× combo | Glacier stars |
 | Land a 15× combo | Sunset stars |
+| Land a 25× combo | Frenzy stars |
 
-Classic, Party, and Practice all earn rewards as soon as milestones are reached. Personal bests count across sessions, and existing saved floor/score records earn their corresponding rewards. Progress and equipped items are stored on this browser; clearing browser storage resets them. If storage is unavailable, the wardrobe works for the current session. Trails still require an airborne combo of at least 2×.
+Classic, Party, and Practice all earn rewards as soon as milestones are reached. Personal bests count across sessions, and existing saved floor/score records earn their corresponding rewards. The bat-stomp reward counts stomps from runs played after it was added. Progress and equipped items are stored on this browser; clearing browser storage resets them. If storage is unavailable, the wardrobe works for the current session. Trails still require an airborne combo of at least 2×.
 
 New leaderboard entries save the outfit equipped when submitted and show its three badges beside the name. Older entries use the original outfit. Cosmetic IDs are checked against the catalog, but unlock ownership is device-local and client-reported; cosmetics do not affect server-verified scores or ranking.
 
