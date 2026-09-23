@@ -12,7 +12,7 @@ type V3 = [number, number, number];
 type Finish = 'cloth' | 'fur' | 'metal' | 'glow';
 type Paint = number | ((position: THREE.Vector3) => number);
 type Part = { geometry: THREE.BufferGeometry; finish: Finish };
-type PivotName = 'spin' | 'bob' | 'flap-l' | 'flap-r' | 'cape' | 'cape-hem' | 'tail';
+type PivotName = 'spin' | 'bob' | 'flap-l' | 'flap-r' | 'cape' | 'cape-hem' | 'tail' | 'blink';
 type Pivot = { name: PivotName; at: V3; parts: Part[]; children?: Pivot[] };
 type Blueprint = { anchor: 'head' | 'body'; parts: Part[]; pivots?: Pivot[]; hidesBeanie?: boolean; glow?: number; tilt?: V3 };
 type BuiltPivot = { name: PivotName; at: V3; meshes: [Finish, THREE.BufferGeometry][]; children: BuiltPivot[] };
@@ -323,6 +323,8 @@ export function animateAccessories(root: THREE.Object3D, state: AccessoryMotion,
       }
       case 'bob': pivot.rotation.z = reduced ? 0 : -state.vx * .035 + wave(8, .12 * (speed + fall)); pivot.rotation.x = reduced ? 0 : Math.max(-.35, Math.min(.35, -state.vy * .02)); break;
       case 'spin': if (!reduced) pivot.rotation.y += dt * (state.grounded ? 3 + speed * 12 : 26); break;
+      // Pip blinks every few seconds, with an occasional double blink.
+      case 'blink': { const cycle = state.time % 3.7; pivot.scale.y = reduced || (cycle > .14 && (cycle < .32 || cycle > .44)) ? 1 : .12; break; }
     }
   }
 }

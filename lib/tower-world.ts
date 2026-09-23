@@ -7,7 +7,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { applyCharacterOutfit, tagCharacterParts } from './character-outfit';
+import { applyCharacterOutfit, climberLimbs, tagCharacterParts } from './character-outfit';
 import { animateAccessories } from './character-accessories';
 import { cloneRaceCharacter, PlayerNameplate } from './race-character';
 import { ClimberMotion } from './climber-motion';
@@ -47,15 +47,11 @@ export class TowerWorld {
   private shake = 0;
   private reducedMotion = false;
   private rotation = .12;
-  private legs: THREE.Object3D[] = [];
-  private arms: THREE.Object3D[] = [];
   private tumble = new THREE.Group();
   private motion = new ClimberMotion();
-  private rivals: { tumble: THREE.Group; character: THREE.Group; arms: THREE.Object3D[]; legs: THREE.Object3D[]; nameplate: PlayerNameplate; shield: RecoveryShield; outfitKey: string }[] = [];
+  private rivals: { tumble: THREE.Group; character: THREE.Group; nameplate: PlayerNameplate; shield: RecoveryShield; outfitKey: string }[] = [];
   private ghostTumble = new THREE.Group();
   private ghostCharacter = new THREE.Group();
-  private ghostArms: THREE.Object3D[] = [];
-  private ghostLegs: THREE.Object3D[] = [];
   private ghostMaterial = new THREE.MeshBasicMaterial({ color: 0x91dfff, transparent: true, opacity: .32, depthWrite: false });
   private outfit: Outfit = DEFAULT_OUTFIT;
   private starTrail = new ComboStarTrail();
@@ -149,8 +145,6 @@ export class TowerWorld {
       const model = gltf.scene; model.scale.setScalar(1);
       model.traverse(o => { if (o instanceof THREE.Mesh) { o.castShadow = true; o.receiveShadow = true; } });
       this.character.add(model);
-      this.legs = ['Leg_L', 'Leg_R'].map(n => model.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
-      this.arms = ['Arm_L', 'Arm_R'].map(n => model.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
     } catch { /* The built-in Harold model keeps the game playable offline. */ }
     if (this.disposed) return;
     // Tag the beanie before cloning so the ghost can hide it under hat shapes after its materials are swapped.
@@ -159,17 +153,13 @@ export class TowerWorld {
     this.ghostCharacter.traverse(o => {
       if (o instanceof THREE.Mesh) { o.material = this.ghostMaterial; o.castShadow = false; o.receiveShadow = false; }
     });
-    this.ghostArms = ['Arm_L', 'Arm_R'].map(n => this.ghostCharacter.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
-    this.ghostLegs = ['Leg_L', 'Leg_R'].map(n => this.ghostCharacter.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
     this.ghostTumble.add(this.ghostCharacter); this.ghostTumble.visible = false; this.root.add(this.ghostTumble);
     for (let index = 0; index < 3; index++) {
       const character = cloneRaceCharacter(this.character), tumble = new THREE.Group();
       const nameplate = new PlayerNameplate(); this.root.add(nameplate.sprite);
       const shield = new RecoveryShield(); this.root.add(shield.group);
       tumble.add(character); tumble.visible = false; this.root.add(tumble);
-      this.rivals.push({ tumble, character, nameplate, shield, outfitKey: '',
-        arms: ['Arm_L', 'Arm_R'].map(n => character.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o),
-        legs: ['Leg_L', 'Leg_R'].map(n => character.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o) });
+      this.rivals.push({ tumble, character, nameplate, shield, outfitKey: '' });
     }
     // An outfit chosen while the model loaded applies to the real model, its ghost and hat shapes.
     this.setOutfit(this.outfit);
@@ -212,10 +202,10 @@ export class TowerWorld {
     this.mesh(new THREE.BoxGeometry(.14, .09, .015), gold, this.character, 0, .73, .269);
     for (const side of [-1, 1]) {
       this.mesh(new THREE.SphereGeometry(.075, 12, 8), skin, this.character, side * .3, 1.1);
-      const leg = new THREE.Group(); leg.name = side < 0 ? 'Leg_L' : 'Leg_R'; leg.position.set(side * .145, .48, 0); this.character.add(leg); this.legs.push(leg);
+      const leg = new THREE.Group(); leg.name = side < 0 ? 'Leg_L' : 'Leg_R'; leg.position.set(side * .145, .48, 0); this.character.add(leg);
       this.mesh(new THREE.CapsuleGeometry(.115, .12, 4, 12), olive, leg, 0, -.17);
       this.mesh(new RoundedBoxGeometry(.27, .16, .35, 3, .06), brown, leg, 0, -.40, .065);
-      const arm = new THREE.Group(); arm.name = side < 0 ? 'Arm_L' : 'Arm_R'; arm.position.set(side * .28, .82, 0); this.character.add(arm); this.arms.push(arm);
+      const arm = new THREE.Group(); arm.name = side < 0 ? 'Arm_L' : 'Arm_R'; arm.position.set(side * .28, .82, 0); this.character.add(arm);
       this.mesh(new THREE.CapsuleGeometry(.1, .17, 4, 12), green, arm, side * .04, -.16);
       this.mesh(new THREE.SphereGeometry(.075, 12, 8), skin, arm, side * .04, -.34);
     }
@@ -392,12 +382,13 @@ export class TowerWorld {
     this.rotation = damp(this.rotation, Math.abs(e.vx) > .25 ? e.facing * .9 : .12, 9, dt); this.character.rotation.y = this.rotation * (1 - pose.spread * .9);
     this.character.rotation.z = damp(this.character.rotation.z, e.vx * -.018 * (1 - pose.spread), 8, dt);
     this.character.scale.set(body.scaleX, body.scaleY, body.scaleZ);
-    this.motion.applyLimbs(e, pose.spread, this.arms, this.legs, this.reducedMotion);
+    const limbs = climberLimbs(this.character);
+    this.motion.applyLimbs(e, pose.spread, limbs.arms, limbs.legs, this.reducedMotion);
     animateAccessories(this.character, e, this.reducedMotion);
     const views = Array.isArray(ghosts) ? ghosts : ghosts ? [ghosts] : [];
     const playerViews = views.filter(view => view.appearance === 'player');
     const replay = views.find(view => view.appearance !== 'player');
-    const models = [{ tumble: this.ghostTumble, character: this.ghostCharacter, arms: this.ghostArms, legs: this.ghostLegs }, ...this.rivals];
+    const models = [{ tumble: this.ghostTumble, character: this.ghostCharacter }, ...this.rivals];
     models.forEach((model, index) => {
       const ghost = index === 0 ? replay : playerViews[index - 1];
       model.tumble.visible = !!ghost && !menu && !ghost.finished;
@@ -423,7 +414,8 @@ export class TowerWorld {
       model.character.position.set(0, -.8 + ghostBody.lift, 0);
       model.character.rotation.set(0, (Math.abs(g.vx) > .25 ? g.facing * .9 : .12) * (1 - ghostPose.spread * .9), g.vx * -.018 * (1 - ghostPose.spread));
       model.character.scale.set(ghostBody.scaleX, ghostBody.scaleY, ghostBody.scaleZ);
-      ghost.motion.applyLimbs(g, ghostPose.spread, model.arms, model.legs, this.reducedMotion);
+      const ghostLimbs = climberLimbs(model.character);
+      ghost.motion.applyLimbs(g, ghostPose.spread, ghostLimbs.arms, ghostLimbs.legs, this.reducedMotion);
       animateAccessories(model.character, g, this.reducedMotion);
     });
     this.starTrail.update(e);

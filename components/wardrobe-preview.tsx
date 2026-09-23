@@ -13,8 +13,8 @@ export function CharacterPreview({ outfit }: { outfit: Outfit }) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [playing, setPlaying] = useState(() => typeof window === 'undefined' || !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const latestPlaying = useRef(playing);
-  const accessory = equippedId(outfit, 'accessory');
-  const description = [cosmeticFor('hat', outfit.hat).name, cosmeticFor('sweater', outfit.sweater).name, ...(accessory === SLOT_DEFAULTS.accessory ? [] : [cosmeticFor('accessory', accessory).name]), cosmeticFor('trail', outfit.trail).name].join(', ');
+  const accessory = equippedId(outfit, 'accessory'), climber = equippedId(outfit, 'climber');
+  const description = [...(climber === SLOT_DEFAULTS.climber ? [] : [cosmeticFor('climber', climber).name]), cosmeticFor('hat', outfit.hat).name, cosmeticFor('sweater', outfit.sweater).name, ...(accessory === SLOT_DEFAULTS.accessory ? [] : [cosmeticFor('accessory', accessory).name]), cosmeticFor('trail', outfit.trail).name].join(', ');
 
   useEffect(() => {
     latestOutfit.current = outfit;

@@ -1,6 +1,6 @@
 export type CoreOutfitSlot = 'hat' | 'sweater' | 'trail';
 /** Slots added after launch are optional so older saves, leaderboard rows and race profiles stay valid. */
-export type OptionalOutfitSlot = 'accessory';
+export type OptionalOutfitSlot = 'accessory' | 'climber';
 export type OutfitSlot = CoreOutfitSlot | OptionalOutfitSlot;
 export type Outfit = Record<CoreOutfitSlot, string> & Partial<Record<OptionalOutfitSlot, string>>;
 export type AchievementProgress = { floor: number; score: number; combo: number; stomps: number };
@@ -28,6 +28,8 @@ export const COSMETICS: readonly Cosmetic[] = [
   { id: 'aurora-scarf', slot: 'accessory', name: 'Aurora scarf', colors: [0x55e8b8, 0x8f7bff, 0x68daff], achievement: 'Northern lights · Land a 20× combo', metric: 'combo', target: 20, shape: 'scarf' },
   { id: 'royal-cape', slot: 'accessory', name: 'Royal cape', colors: [0xc8283f, 0xffd65c, 0xf4efe4], achievement: 'Tower royalty · Score 15,000 in a run', metric: 'score', target: 15000, shape: 'cape' },
   { id: 'bat-cape', slot: 'accessory', name: 'Bat cape', colors: [0x3a2250, 0xc23a5c], achievement: 'Bat lord · Stomp 5 bats in one run', metric: 'stomps', target: 5, shape: 'bat-cape' },
+  { id: 'harold', slot: 'climber', name: 'Harold', colors: [0x16bb2c, 0x285fac], achievement: 'The original climber', metric: 'floor', target: 0 },
+  { id: 'pip-penguin', slot: 'climber', name: 'Pip the penguin', colors: [0x1f2a36, 0xffa22e, 0xf2f5f7], achievement: 'Feathered friend · Reach floor 20', metric: 'floor', target: 20 },
   { id: 'rainbow', slot: 'trail', name: 'Rainbow stars', colors: [0xffd65c, 0xff71c5, 0x68daff, 0xabf767, 0xb496ff], achievement: 'The original starlight', metric: 'combo', target: 0 },
   { id: 'glacier', slot: 'trail', name: 'Glacier stars', colors: [0x68daff, 0xb9f5ff, 0xffffff], achievement: 'Find your rhythm · Land a 5× combo', metric: 'combo', target: 5 },
   { id: 'sunset', slot: 'trail', name: 'Sunset stars', colors: [0xffa45c, 0xff71c5, 0xffd65c], achievement: 'Unstoppable · Land a 15× combo', metric: 'combo', target: 15 },
@@ -36,11 +38,11 @@ export const COSMETICS: readonly Cosmetic[] = [
 ];
 export const DEFAULT_OUTFIT: Outfit = { hat: 'blue-beanie', sweater: 'green-knit', trail: 'rainbow' };
 /** Every slot's default, including optional slots that normalized outfits leave out. */
-export const SLOT_DEFAULTS: Readonly<Record<OutfitSlot, string>> = { ...DEFAULT_OUTFIT, accessory: 'no-accessory' };
+export const SLOT_DEFAULTS: Readonly<Record<OutfitSlot, string>> = { ...DEFAULT_OUTFIT, accessory: 'no-accessory', climber: 'harold' };
 export const EMPTY_PROGRESS: AchievementProgress = { floor: 0, score: 0, combo: 0, stomps: 0 };
 export const OUTFIT_STORAGE_KEY = 'frostbound-outfits-v1';
-export const OUTFIT_SLOTS: OutfitSlot[] = ['hat', 'sweater', 'accessory', 'trail'];
-const OPTIONAL_SLOTS: readonly OptionalOutfitSlot[] = ['accessory'];
+export const OUTFIT_SLOTS: OutfitSlot[] = ['hat', 'sweater', 'accessory', 'trail', 'climber'];
+const OPTIONAL_SLOTS: readonly OptionalOutfitSlot[] = ['accessory', 'climber'];
 export const ACHIEVEMENT_METRICS = ['floor', 'score', 'combo', 'stomps'] as const;
 export const isUnlocked = (item: Cosmetic, progress: AchievementProgress) => progress[item.metric] >= item.target;
 export const cosmeticFor = (slot: OutfitSlot, id: string) => COSMETICS.find(item => item.slot === slot && item.id === id) ?? COSMETICS.find(item => item.slot === slot && item.id === SLOT_DEFAULTS[slot])!;

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { animateAccessories } from '../lib/character-accessories.ts';
-import { applyCharacterOutfit, tagCharacterParts } from '../lib/character-outfit.ts';
+import { applyCharacterOutfit, climberLimbs, tagCharacterParts } from '../lib/character-outfit.ts';
 import { COSMETICS, DEFAULT_OUTFIT } from '../lib/outfits.ts';
 
 async function harold() {
@@ -92,4 +92,33 @@ void test('every shaped cosmetic builds small, opaque geometry that animates wit
     animateAccessories(character, { time: 19 / 60, vx: 7, vy: -9, grounded: false });
     assert.deepEqual(pose(), frozen);
   }
+});
+
+void test('Pip swaps in beside Harold with the same limb names, wears every hat, and swaps back', async () => {
+  const scene = await harold();
+  tagCharacterParts(scene);
+  const haroldArm = scene.getObjectByName('Arm_L')!;
+  assert.equal(climberLimbs(scene).arms[0], haroldArm);
+  applyCharacterOutfit(scene, { ...DEFAULT_OUTFIT, hat: 'summit-beanie', accessory: 'knit-scarf', climber: 'pip-penguin' });
+  const pip = scene.getObjectByName('Pip')!, pipBody = pip.getObjectByName('Pip_Body')!;
+  assert.equal(scene.getObjectByName('Harold')!.visible, false); assert.equal(pip.visible, true);
+  const { arms, legs } = climberLimbs(scene);
+  assert.deepEqual([...arms, ...legs].map(limb => limb.name), ['Arm_L', 'Arm_R', 'Leg_L', 'Leg_R']);
+  assert.ok([...arms, ...legs].every(limb => limb.parent === pip), 'limbs come from the visible climber');
+  assert.ok(accessories(scene).every(object => object.parent === pipBody), 'hat and scarf ride Pip');
+  assert.ok(beanies(pip).length > 0 && beanies(pip).every(mesh => !mesh.visible), 'the crown hides Pip\'s beanie too');
+  // Pip's knit takes the sweater color like Harold's.
+  applyCharacterOutfit(scene, { ...DEFAULT_OUTFIT, sweater: 'berry-knit', climber: 'pip-penguin' });
+  const knit = (() => { let found: MeshStandardMaterial | undefined; pip.traverse(object => { if (object instanceof Mesh && /Pip green sweatshirt/.test(object.material.name)) found = object.material; }); return found!; })();
+  assert.equal(knit.color.getHex(), COSMETICS.find(item => item.id === 'berry-knit')!.colors[0]);
+  assert.ok(beanies(pip).every(mesh => mesh.visible));
+  applyCharacterOutfit(scene, DEFAULT_OUTFIT);
+  assert.equal(scene.getObjectByName('Harold')!.visible, true); assert.equal(pip.visible, false);
+  assert.equal(climberLimbs(scene).arms[0], haroldArm);
+  assert.equal(scene.getObjectByName('Pip'), pip, 'Pip is reused, not rebuilt');
+  // The translucent ghost builds Pip from its own material.
+  const ghost = scene.clone(true), ghostMaterial = new MeshBasicMaterial({ transparent: true });
+  ghost.traverse(object => { if (object instanceof Mesh) object.material = ghostMaterial; });
+  applyCharacterOutfit(ghost, { ...DEFAULT_OUTFIT, climber: 'pip-penguin', hat: 'top-hat' }, { material: ghostMaterial, shadows: false });
+  ghost.getObjectByName('Pip')!.traverse(object => { if (object instanceof Mesh && object.visible) assert.equal(object.material, ghostMaterial); });
 });

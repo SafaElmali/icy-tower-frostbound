@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { animateAccessories } from './character-accessories';
-import { applyCharacterOutfit } from './character-outfit';
+import { applyCharacterOutfit, climberLimbs } from './character-outfit';
 import { ComboStarTrail } from './combo-star-trail';
 import { ClimberMotion } from './climber-motion';
 import { cosmeticFor, type Outfit } from './outfits';
@@ -18,8 +18,6 @@ export class WardrobePreview {
   private disposed = false;
   private outfit: Outfit;
   private motion = new ClimberMotion();
-  private arms: THREE.Object3D[] = [];
-  private legs: THREE.Object3D[] = [];
   private baseY = 0;
   private baseScale = 1;
   private hopMotion = new ClimberMotion();
@@ -57,8 +55,6 @@ export class WardrobePreview {
     model.scale.setScalar(scale);
     model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
     this.baseY = model.position.y; this.baseScale = scale;
-    this.arms = ['Arm_L', 'Arm_R'].map(name => model.getObjectByName(name)).filter((part): part is THREE.Object3D => !!part);
-    this.legs = ['Leg_L', 'Leg_R'].map(name => model.getObjectByName(name)).filter((part): part is THREE.Object3D => !!part);
     this.model = model; this.scene.add(model);
     this.setOutfit(this.outfit);
     this.resize();
@@ -103,7 +99,8 @@ export class WardrobePreview {
       this.hopping = !grounded;
       const vy = grounded ? 0 : 8 * (1 - 2 * hop);
       const body = this.hopMotion.body({ time: this.time, grounded, vx: 1.5, vy, status: 'playing' });
-      this.motion.applyLimbs({ time: this.time * Math.PI * 4 / 12.7, grounded, vx: 1.5 }, 0, this.arms, this.legs);
+      const { arms, legs } = climberLimbs(this.model);
+      this.motion.applyLimbs({ time: this.time * Math.PI * 4 / 12.7, grounded, vx: 1.5 }, 0, arms, legs);
       this.model.position.y = this.baseY + (grounded ? .025 * (1 - Math.cos(this.time * Math.PI * 8)) : 1.1 * hop * (1 - hop));
       this.model.scale.set(this.baseScale * body.scaleX, this.baseScale * body.scaleY, this.baseScale * body.scaleZ);
       this.model.rotation.y = .3 * Math.sin(this.time * Math.PI / 2);

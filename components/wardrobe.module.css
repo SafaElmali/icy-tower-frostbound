@@ -89,6 +89,82 @@ body .card [data-slot='dialog-close'] {
   margin: 0 0 0 -8px;
   color: #b4c9ce;
 }
+.climbers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+}
+.climbers legend {
+  margin-bottom: 8px;
+  color: #b4c9ce;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.climbers p {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  color: #b4c9ce;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.climber {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px solid #b4c9ce26;
+  border-radius: 10px;
+  color: #b4c9ce;
+  cursor: pointer;
+}
+.climber span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.climber strong {
+  color: #eef8f3;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.climber small {
+  font-size: 11px;
+  line-height: 1.4;
+}
+.climber svg {
+  flex-shrink: 0;
+}
+.climber[data-equipped] {
+  border-color: #ffb389;
+  background: #ffb38910;
+  color: #ffb389;
+}
+.climber:hover:not([data-locked]) {
+  background: #eef8f30c;
+}
+.climber[data-locked] {
+  cursor: default;
+  opacity: 0.7;
+}
+.climber input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.climber:has(input:focus-visible) {
+  outline: 2px solid #ffb389;
+  outline-offset: 2px;
+}
 .collection[data-slot='tabs'] {
   display: flex;
   flex-direction: column;

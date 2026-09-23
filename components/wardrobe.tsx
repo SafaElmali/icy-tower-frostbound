@@ -8,6 +8,8 @@ import {
   HardHat,
   ArrowRight,
   Ban,
+  Bird,
+  PersonStanding,
   Crown,
   Fan,
   Flag,
@@ -51,12 +53,16 @@ const labels: Record<OutfitSlot, string> = {
   sweater: 'Sweaters',
   accessory: 'Extras',
   trail: 'Star trails',
+  climber: 'Climber',
 };
+/** The climber is picked beside the preview; every other slot gets a tab. */
+const TAB_SLOTS = OUTFIT_SLOTS.filter((slot) => slot !== 'climber');
 const icons: Record<OutfitSlot, LucideIcon> = {
   hat: HardHat,
   sweater: Shirt,
   accessory: Ribbon,
   trail: Sparkles,
+  climber: PersonStanding,
 };
 const shapeIcons: Record<CosmeticShape, LucideIcon> = {
   bobble: Snowflake,
@@ -75,13 +81,16 @@ const notes: Record<OutfitSlot, string> = {
   sweater: 'Equip a color to see it on your climber.',
   accessory: 'Scarves and capes flutter as you run and fall.',
   trail: 'Stars follow airborne combos of 2× or more.',
+  climber: 'Every climber plays exactly the same.',
 };
 const itemIcon = (item: Cosmetic) =>
   item.shape
     ? shapeIcons[item.shape]
-    : item.slot === 'accessory'
-      ? Ban
-      : icons[item.slot];
+    : item.id === 'pip-penguin'
+      ? Bird
+      : item.slot === 'accessory'
+        ? Ban
+        : icons[item.slot];
 
 export function OutfitBadges({ outfit }: { outfit?: Outfit }) {
   const safe = normalizeOutfit(outfit);
@@ -90,8 +99,11 @@ export function OutfitBadges({ outfit }: { outfit?: Outfit }) {
       {OUTFIT_SLOTS.map((slot) => {
         const item = cosmeticFor(slot, equippedId(safe, slot)),
           Icon = itemIcon(item);
-        // Older rows have no extra; keep their badges unchanged.
-        if (item.id === SLOT_DEFAULTS[slot] && slot === 'accessory')
+        // Older rows have no extra or climber; keep their badges unchanged.
+        if (
+          (slot === 'accessory' || slot === 'climber') &&
+          item.id === SLOT_DEFAULTS[slot]
+        )
           return null;
         return (
           <span
@@ -137,16 +149,60 @@ export function WardrobeDialog({
         <div className={styles.body}>
           <aside className={styles.preview} aria-label="Equipped character">
             {open && <CharacterPreview outfit={profile.equipped} />}
+            <fieldset className={styles.climbers}>
+              <legend>{labels.climber}</legend>
+              {COSMETICS.filter((item) => item.slot === 'climber').map(
+                (item) => {
+                  const unlocked = isUnlocked(item, profile.progress);
+                  const equipped =
+                    equippedId(profile.equipped, 'climber') === item.id;
+                  const Icon = itemIcon(item);
+                  return (
+                    <label
+                      key={item.id}
+                      className={styles.climber}
+                      data-equipped={equipped || undefined}
+                      data-locked={!unlocked || undefined}
+                    >
+                      <input
+                        type="radio"
+                        name="wardrobe-climber"
+                        value={item.id}
+                        checked={equipped}
+                        disabled={!unlocked}
+                        onChange={() => onEquip('climber', item.id)}
+                        aria-label={item.name}
+                        aria-describedby={`wardrobe-${item.id}-description`}
+                      />
+                      {unlocked ? (
+                        <Icon size={18} aria-hidden="true" />
+                      ) : (
+                        <LockKeyhole size={16} aria-hidden="true" />
+                      )}
+                      <span>
+                        <strong>{item.name}</strong>
+                        <small id={`wardrobe-${item.id}-description`}>
+                          {unlocked
+                            ? item.achievement.split(' · ')[0]
+                            : item.achievement.split(' · ').pop()}
+                        </small>
+                      </span>
+                    </label>
+                  );
+                },
+              )}
+              <p>{notes.climber}</p>
+            </fieldset>
           </aside>
           <Tabs defaultValue="hat" className={styles.collection}>
             <TabsList aria-label="Outfit category" className={styles.tabs}>
-              {OUTFIT_SLOTS.map((slot) => (
+              {TAB_SLOTS.map((slot) => (
                 <TabsTrigger key={slot} value={slot}>
                   {labels[slot]}
                 </TabsTrigger>
               ))}
             </TabsList>
-            {OUTFIT_SLOTS.map((slot) => {
+            {TAB_SLOTS.map((slot) => {
               return (
                 <TabsContent key={slot} value={slot} className={styles.panel}>
                   <fieldset className={styles.options}>

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { HAROLD_HAT_ORIGIN, createAccessory, hidesBeanie, resetAccessoryMotion, type AccessoryOptions } from './character-accessories.ts';
+import { createPenguin } from './character-penguin.ts';
 import { SLOT_DEFAULTS, cosmeticFor, equippedId, normalizeOutfit, type Outfit } from './outfits.ts';
 
 const isHatShellMaterial = (material: THREE.Material) => /beanie|knit ribs/i.test(material.name) && !/badge/i.test(material.name);
@@ -23,6 +24,7 @@ export function tagCharacterParts(character: THREE.Object3D) {
 export function applyCharacterOutfit(character: THREE.Object3D, value: Outfit, options: AccessoryOptions = {}) {
   const outfit = normalizeOutfit(value);
   const hat = cosmeticFor('hat', outfit.hat), accessory = cosmeticFor('accessory', equippedId(outfit, 'accessory'));
+  const active = selectClimber(character, equippedId(outfit, 'climber'), options);
   const hideBeanie = hidesBeanie(hat);
   character.traverse(object => {
     if (!(object instanceof THREE.Mesh) || object.userData.accessoryPart) return;
@@ -40,10 +42,41 @@ export function applyCharacterOutfit(character: THREE.Object3D, value: Outfit, o
       }
     }
   });
-  dressAccessories(character, [hat, accessory], options);
+  dressAccessories(character, active, [hat, accessory], options);
 }
 
-function dressAccessories(character: THREE.Object3D, items: ReturnType<typeof cosmeticFor>[], options: AccessoryOptions) {
+/**
+ * Show the chosen climber model and return the root to dress and animate. Pip is built on first use next to the
+ * loaded Harold model; the offline fallback model (no `Harold` node) always stays Harold.
+ */
+function selectClimber(character: THREE.Object3D, id: string, options: AccessoryOptions): THREE.Object3D {
+  limbCache.delete(character);
+  const harold = character.getObjectByName('Harold');
+  if (!harold?.parent) return character;
+  let pip = character.getObjectByName('Pip');
+  if (id === 'pip-penguin' && !pip) {
+    pip = createPenguin(options.material, options.shadows ?? true);
+    pip.position.copy(harold.position); harold.parent.add(pip);
+  }
+  harold.visible = !pip || id !== 'pip-penguin';
+  if (pip) pip.visible = !harold.visible;
+  return harold.visible ? harold : pip!;
+}
+
+const limbCache = new WeakMap<THREE.Object3D, { arms: THREE.Object3D[]; legs: THREE.Object3D[] }>();
+/** The visible climber's Arm_L/Arm_R and Leg_L/Leg_R pivots, in the order ClimberMotion expects. */
+export function climberLimbs(character: THREE.Object3D) {
+  let limbs = limbCache.get(character);
+  if (!limbs) {
+    const pip = character.getObjectByName('Pip'), model = pip?.visible ? pip : character.getObjectByName('Harold') ?? character;
+    const find = (names: string[]) => names.map(name => model.getObjectByName(name)).filter((part): part is THREE.Object3D => !!part);
+    limbs = { arms: find(['Arm_L', 'Arm_R']), legs: find(['Leg_L', 'Leg_R']) };
+    limbCache.set(character, limbs);
+  }
+  return limbs;
+}
+
+function dressAccessories(character: THREE.Object3D, active: THREE.Object3D, items: ReturnType<typeof cosmeticFor>[], options: AccessoryOptions) {
   const stale: THREE.Object3D[] = [];
   character.traverse(object => { if (typeof object.userData.accessorySlot === 'string') stale.push(object); });
   for (const object of stale) {
@@ -54,11 +87,15 @@ function dressAccessories(character: THREE.Object3D, items: ReturnType<typeof co
       for (const material of materialsOf(child)) if (material !== options.material && material.userData.accessoryOwner === character.uuid) material.dispose();
     });
   }
-  const anchor = character.getObjectByName('Body') ?? character;
+  const anchor = active.getObjectByName('Pip_Body') ?? active.getObjectByName('Body') ?? active;
   for (const item of items) {
     const accessory = createAccessory(item, character.uuid, options);
     if (!accessory) continue;
-    if (accessory.anchor === 'head') accessory.object.position.set(...HAROLD_HAT_ORIGIN);
+    if (accessory.anchor === 'head') {
+      // Each climber's body node says where its hat band sits; Harold's is the reference.
+      const origin = anchor.userData.hatOrigin ?? HAROLD_HAT_ORIGIN, scale = anchor.userData.hatScale ?? 1;
+      accessory.object.position.set(origin[0], origin[1], origin[2]); accessory.object.scale.setScalar(scale);
+    } else if (anchor.userData.bodyScale) accessory.object.scale.fromArray(anchor.userData.bodyScale);
     anchor.add(accessory.object);
   }
   resetAccessoryMotion(character);
