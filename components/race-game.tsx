@@ -49,7 +49,7 @@ import {
   type RaceView,
   type RaceVisibility,
 } from '@/lib/race-protocol';
-import { TowerEngine, type Controls } from '@/lib/tower-engine';
+import { TowerEngine, WALL, type Controls } from '@/lib/tower-engine';
 import { TowerInput } from '@/lib/tower-input';
 import { TowerAudio } from '@/lib/tower-audio';
 import { ComboFeedbackTracker } from '@/lib/combo-feedback';
@@ -1018,7 +1018,10 @@ export function RaceGame() {
                 audio.current?.play('combo', milestone);
               for (const event of events) {
                 scene.effect(event, local.engine.time);
-                if (event.type !== 'combo') audio.current?.play(event.type);
+                if (event.type !== 'combo')
+                  audio.current?.play(event.type, undefined, {
+                    pan: Math.max(-1, Math.min(1, event.x / WALL)) * 0.6,
+                  });
               }
             }
             for (const rival of rivals.current.values()) rival.advance(now, dt);

@@ -259,7 +259,8 @@ void test('every bundled effect has provenance, a clean PCM envelope and mix hea
       `${url} is audible`,
     );
   }
-  assert.ok(bytes < 850 * 1024, 'audio download stays small');
+  // Effects decode in the background and never delay play; the wind loop is ~400 KiB of this.
+  assert.ok(bytes < 1100 * 1024, 'audio download stays small');
 });
 
 void test('samples decode once, rotate variants, and survive individual failed downloads', async (t) => {
@@ -421,4 +422,46 @@ void test('unavailable audio devices never break settings or gameplay', () => {
   assert.doesNotThrow(() => audio.setEnabled(true));
   assert.doesNotThrow(() => audio.play('jump'));
   assert.doesNotThrow(() => audio.dispose());
+});
+
+void test('chime melodies, stereo placement and section ambience use loaded samples', async (t) => {
+  mockMedia(t);
+  type PannerStub = AudioNodeStub & { pan: Param };
+  const context = new ContextStub() as ContextStub & { panners: PannerStub[]; createStereoPanner: () => PannerStub };
+  context.panners = [];
+  context.createStereoPanner = () => {
+    const node = Object.assign(new AudioNodeStub(), { pan: new Param() });
+    context.panners.push(node);
+    return node;
+  };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'AudioContext');
+  Object.defineProperty(globalThis, 'AudioContext', { configurable: true, value: class { constructor() { return context; } } });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, 'AudioContext', previous);
+    else Reflect.deleteProperty(globalThis, 'AudioContext');
+  });
+  t.mock.method(globalThis, 'fetch', async () => new Response(new Uint8Array([1])));
+  const audio = new TowerAudio();
+  audio.play('jump');
+  await settle();
+  const oscillators = context.oscillators.length, sources = context.sources.length;
+  context.currentTime = 1;
+  audio.play('combo', 5);
+  assert.equal(context.oscillators.length, oscillators, 'a loaded chime replaces sine notes');
+  const notes = context.sources.slice(sources);
+  assert.equal(notes.length, 3);
+  assert.deepEqual(notes.map(note => Math.round(note.playbackRate.value * 880)), [440, 587, 659], 'notes are pitched from the 880 Hz chime');
+  context.currentTime = 2;
+  audio.play('crumble', 3, { pan: -0.5, rate: 1.1 });
+  assert.equal(context.panners.at(-1)?.pan.value, -0.5);
+  assert.ok(Math.abs(context.sources.at(-1)!.playbackRate.value / 1.1 - 1) < 0.031, 'rate multiplies sample variation');
+  audio.setSection('frozen-belfry');
+  const before = context.sources.length;
+  audio.updateAction(10, 0, true);
+  audio.updateAction(30, 0, true);
+  assert.equal(context.sources.length, before + 1, 'the Belfry tolls once the bell is due');
+  audio.setSection('forgotten-hall');
+  audio.updateAction(60, 0, true);
+  assert.equal(context.sources.length, before + 1, 'other sections stay quiet');
+  audio.dispose();
 });

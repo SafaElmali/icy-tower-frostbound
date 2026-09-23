@@ -1,6 +1,6 @@
 import type { ComboMilestone } from './combo-feedback';
 import { FrenzyRhythm } from './frenzy-rhythm.ts';
-import { TowerSampleBank } from './tower-samples.ts';
+import { INSTRUMENT, TowerSampleBank } from './tower-samples.ts';
 import { TowerMusic } from './tower-music.ts';
 
 const COMBO_MELODIES: Record<ComboMilestone, readonly number[]> = {
@@ -24,7 +24,16 @@ const CUE_COOLDOWNS: Readonly<Record<string, number>> = {
   wraith: 0.3,
   'wraith-tell': 0.3,
   'wraith-dash': 0.2,
+  'crumble-creak-1': 0.1,
+  'crumble-creak-2': 0.1,
+  thunder: 1.2,
+  spring: 0.1,
 };
+
+/** Optional placement for a cue: stereo position (-1..1), pitch, and a start delay in seconds. */
+export type CueOptions = { pan?: number; rate?: number; delay?: number };
+/** Sections with their own occasional ambience, by tower-section id. */
+const BELL_SECTION = 'frozen-belfry';
 
 /** Recorded snow, ice and movement foley with musical cues and offline synthesis. */
 export class TowerAudio {
@@ -43,6 +52,8 @@ export class TowerAudio {
   private voices = new Map<AudioScheduledSourceNode, AudioNode[]>();
   private lastCue = new Map<string, number>();
   private disposed = false;
+  private section = '';
+  private nextToll = -1;
   private init() {
     if (this.context) return this.context;
     const ctx = new AudioContext();
@@ -185,13 +196,24 @@ export class TowerAudio {
       playing && this.enabled && frenzyTime > 0,
     );
     if (beat !== null) this.play(`frenzy-beat-${beat}`);
+    // A distant bell tolls now and then in the Belfry, timed on the run clock.
+    if (!playing || this.section !== BELL_SECTION) this.nextToll = -1;
+    else if (this.nextToll < 0 || time < this.nextToll - 20) this.nextToll = time + 3 + Math.random() * 4;
+    else if (time >= this.nextToll) {
+      this.nextToll = time + 9 + Math.random() * 7;
+      this.play('bell-toll', 3, { pan: (Math.random() < 0.5 ? -1 : 1) * (0.35 + Math.random() * 0.3) });
+    }
   }
-  play(kind: string, comboMilestone: ComboMilestone = 3) {
+  /** The current tower section's id, for section ambience. */
+  setSection(id: string) {
+    this.section = id;
+  }
+  play(kind: string, comboMilestone: ComboMilestone = 3, options: CueOptions = {}) {
     if (!this.enabled || this.disposed) return;
     try {
       const ctx = this.init();
       void ctx.resume().catch(() => {});
-      const now = ctx.currentTime;
+      const now = ctx.currentTime + Math.max(0, options.delay ?? 0);
       this.music?.setPlaying(this.musicEnabled && !this.paused);
       if (
         [
@@ -210,16 +232,29 @@ export class TowerAudio {
       const last = this.lastCue.get(kind);
       if (last !== undefined && now - last < (CUE_COOLDOWNS[kind] ?? 0)) return;
       this.lastCue.set(kind, now);
+      // Position cues across the tower's width; older browsers without a panner stay centred.
+      const pan = Math.max(-1, Math.min(1, options.pan ?? 0));
+      /** Connect one voice to the mix; each voice owns its panner so it can end independently. */
+      const route = (gain: AudioNode): AudioNode[] => {
+        if (!pan || typeof ctx.createStereoPanner !== 'function') {
+          gain.connect(this.master!);
+          return [gain];
+        }
+        const panner = ctx.createStereoPanner();
+        panner.pan.value = pan;
+        gain.connect(panner);
+        panner.connect(this.master!);
+        return [gain, panner];
+      };
       const sample = this.samples?.take(kind);
       if (sample) {
         const source = ctx.createBufferSource();
         const gain = ctx.createGain();
         source.buffer = sample.buffer;
-        source.playbackRate.value = sample.rate;
+        source.playbackRate.value = sample.rate * (options.rate ?? 1);
         gain.gain.value = sample.volume;
         source.connect(gain);
-        gain.connect(this.master!);
-        this.track(source, [gain]);
+        this.track(source, route(gain));
         source.start(now);
         if (!sample.layered) return;
       }
@@ -245,26 +280,52 @@ export class TowerAudio {
         );
         gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
         osc.connect(gain);
+        let nodes: AudioNode[] = [gain];
         if (isRhythm) gain.connect(this.rhythmGain!);
         else {
-          gain.connect(this.master!);
+          nodes = route(gain);
           gain.connect(this.reverb!);
         }
-        this.track(osc, [gain]);
+        this.track(osc, nodes);
         osc.start(time);
         osc.stop(time + duration + 0.03);
       };
+      /** A struck chime note from the sampled instrument, or a sine note while it loads. */
+      const chime = (frequency: number, duration: number, amplitude: number, delay = 0) => {
+        const register = frequency < 440 ? 'low' : 'high';
+        const buffer = this.samples?.instrument(register);
+        if (!buffer) return note(frequency, frequency, duration, amplitude, delay);
+        if (this.voices.size >= 48) return;
+        const source = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        const time = now + delay, ring = duration * 1.6 + 0.25;
+        source.buffer = buffer;
+        source.playbackRate.value = frequency / INSTRUMENT[register].frequency;
+        // The note is peak-balanced to 0.72; bells read louder than sines, so trim a little.
+        gain.gain.setValueAtTime(amplitude * 1.1 * (sample ? 0.65 : 1), time);
+        gain.gain.exponentialRampToValueAtTime(0.0001, time + ring);
+        source.connect(gain);
+        let nodes: AudioNode[] = [gain];
+        if (isRhythm) gain.connect(this.rhythmGain!);
+        else {
+          nodes = route(gain);
+          gain.connect(this.reverb!);
+        }
+        this.track(source, nodes);
+        source.start(time);
+        source.stop(time + ring + 0.03);
+      };
       if (kind === 'gem') {
-        note(1174, 1174, 0.65, 0.13);
-        note(1760, 1760, 0.7, 0.065, 0.07);
-        note(2349, 2349, 0.8, 0.035, 0.11);
+        chime(1174.66, 0.5, 0.12);
+        chime(1760, 0.55, 0.06, 0.07);
+        chime(2349.32, 0.6, 0.03, 0.11);
       } else if (kind === 'combo') {
         const melody = COMBO_MELODIES[comboMilestone];
         melody.forEach((frequency, index) =>
-          note(frequency, frequency, 0.24, 0.055, index * 0.055),
+          chime(frequency, 0.3, 0.06, index * 0.055),
         );
         if (comboMilestone >= 10)
-          note(melody[0] / 2, melody[0] / 2, 0.36, 0.025);
+          chime(melody[0] / 2, 0.45, 0.035);
       } else if (kind === 'land') {
         // A short heel impact followed by a quieter ice tap; no sustained landing drone.
         note(125, 48, 0.11, 0.14, 0, 'triangle');
@@ -286,7 +347,7 @@ export class TowerAudio {
         note(2637, 2093, 0.2, 0.03, 0.02);
         note(3136, 2349, 0.24, 0.022, 0.05);
       } else if (kind === 'wraith') {
-        // A hollow breath as the wraith drifts in.
+        // Fallback only: a hollow breath as the wraith drifts in.
         note(196, 293.66, 0.55, 0.035);
         note(293.66, 220, 0.65, 0.022, 0.1);
       } else if (kind === 'wraith-tell') {
@@ -301,25 +362,32 @@ export class TowerAudio {
         note(670, 220, 0.065, 0.035, 0.055, 'triangle');
       } else if (kind === 'collapse') {
         note(420, 65, 0.15, 0.065, 0, 'triangle');
+      } else if (kind === 'crumble-creak-1' || kind === 'crumble-creak-2') {
+        const high = kind === 'crumble-creak-2';
+        note(high ? 520 : 380, high ? 340 : 250, 0.12, 0.035, 0, 'sawtooth');
+      } else if (kind === 'spring') {
+        note(190, 560, 0.24, 0.06, 0, 'triangle');
       } else if (kind === 'hurt') {
         note(190, 85, 0.19, 0.085, 0, 'triangle');
         note(270, 120, 0.15, 0.04, 0.04);
       } else if (kind === 'stomp') {
         note(146.83, 587.33, 0.2, 0.07, 0, 'triangle');
-        note(880, 1174.66, 0.3, 0.06, 0.07);
+        chime(880, 0.25, 0.05, 0.06);
+        chime(1174.66, 0.3, 0.045, 0.11);
       } else if (kind === 'combo-short') {
         // A gentle falling pair: the chain ended, but nothing went wrong.
-        note(659.25, 587.33, 0.14, 0.04);
-        note(523.25, 392, 0.22, 0.03, 0.09);
+        chime(659.25, 0.18, 0.045);
+        chime(493.88, 0.3, 0.035, 0.1);
       } else if (kind === 'dodge') {
         note(1174.66, 1568, 0.16, 0.035);
       } else if (kind === 'frenzy') {
         [587.33, 739.99, 880, 1174.66].forEach((frequency, i) =>
-          note(frequency, frequency, 0.32, 0.065, i * 0.06),
+          chime(frequency, 0.34, 0.065, i * 0.06),
         );
       } else if (kind === 'frenzy-end') {
-        note(880, 587.33, 0.3, 0.045);
-        note(440, 440, 0.4, 0.025, 0.06);
+        [880, 739.99, 587.33, 440].forEach((frequency, i) =>
+          chime(frequency, 0.28, 0.04 - i * 0.005, i * 0.07),
+        );
       } else if (kind === 'encounter') {
         note(293.66, 293.66, 0.2, 0.065, 0, 'triangle');
         note(440, 440, 0.3, 0.055, 0.14);
@@ -329,7 +397,7 @@ export class TowerAudio {
           293.66, 587.33, 440, 739.99, 293.66, 880, 440, 587.33,
         ][beat];
         if (frequency) {
-          note(frequency, frequency, 0.13, 0.024, 0, 'triangle');
+          chime(frequency, 0.13, 0.03);
           if (beat % 2 === 0) note(96, 48, 0.1, 0.035);
         }
       } else if (kind === 'over') {
@@ -371,6 +439,7 @@ export class TowerAudio {
   resetRun() {
     this.stopVoices();
     this.lastCue.clear();
+    this.nextToll = -1;
     this.rhythm.observe(0, false);
     this.setPaused(false);
   }

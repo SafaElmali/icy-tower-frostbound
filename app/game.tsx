@@ -87,7 +87,7 @@ import { JevInspector } from '@/components/jev-inspector';
 import type { JevDebugRecord, JevLiveState } from '@/lib/jev-debug';
 import { JevPlayer } from '@/lib/jev-player';
 import { TowerInput } from '@/lib/tower-input';
-import { TowerAudio } from '@/lib/tower-audio';
+import { TowerAudio, type CueOptions } from '@/lib/tower-audio';
 import { registerGameTools } from '@/lib/game-tools';
 import {
   TowerEngine,
@@ -97,6 +97,7 @@ import {
   type GameMode,
   type Snapshot,
   type RunReplay,
+  WALL,
 } from '@/lib/tower-engine';
 import {
   bestGhost,
@@ -273,6 +274,7 @@ export default function Home() {
     personalRunBaseline(readPersonalProgress(null), 'arcade'),
   );
   const comboFeedback = useRef(new ComboFeedbackTracker());
+  const lightningHeard = useRef(-1);
   const [callout, setCallout] = useState<HudCalloutData | null>(null);
   const calloutTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -554,11 +556,11 @@ export default function Home() {
     input.current.reset();
     setTouchPressed(freshControls());
   }
-  function tone(type: string, milestone?: ComboMilestone) {
+  function tone(type: string, milestone?: ComboMilestone, options?: CueOptions) {
     if (!soundRef.current) return;
     audio.current ??= new TowerAudio();
     audio.current.setPaused(engine.current?.status !== 'playing');
-    audio.current.play(type, milestone);
+    audio.current.play(type, milestone, options);
   }
   function changeSound(enabled: boolean) {
     soundRef.current = enabled;
@@ -1077,9 +1079,25 @@ export default function Home() {
                   2.2,
                 );
               }
+              audio.current?.setSection(getTowerSection(e.floor).id);
+              if (w.lightningStrikes !== lightningHeard.current) {
+                // Thunder rolls in a moment after each flash, from one side of the tower.
+                if (lightningHeard.current >= 0 && e.status === 'playing')
+                  tone('thunder', undefined, { delay: 0.25 + Math.random() * 0.6, pan: Math.random() * 1.2 - 0.6 });
+                lightningHeard.current = w.lightningStrikes;
+              }
               for (const event of events) {
                 w.effect(event, e.time);
-                if (event.type !== 'combo') tone(event.type);
+                if (event.type !== 'combo')
+                  tone(
+                    event.type === 'crumble-creak' ? `crumble-creak-${event.value === 2 ? 2 : 1}` : event.type,
+                    undefined,
+                    {
+                      // Place cues across the tower width; landings rise in pitch as a combo grows.
+                      pan: Math.max(-1, Math.min(1, event.x / WALL)) * 0.6,
+                      rate: event.type === 'land' ? 1 + Math.min(e.combo, 20) * 0.01 : 1,
+                    },
+                  );
                 if (event.type === 'over' && !aiRun.current) {
                   const progress = recordPersonalProgress(
                     personalProgress.current,

@@ -25,8 +25,35 @@ export const SOUND_SAMPLES: Readonly<Record<string, SampleCue>> = {
     variation: 0,
     layered: true,
   },
-  crumble: { files: ['crumble'], volume: 0.26, variation: 0.03 },
-  collapse: { files: ['collapse'], volume: 0.3, variation: 0.035 },
+  crumble: { files: ['crumble'], volume: 0.45, variation: 0.03 },
+  // One creak per stage: the second is higher and more urgent.
+  'crumble-creak-1': {
+    files: ['crumble-creak-1'],
+    volume: 0.14,
+    variation: 0.02,
+  },
+  'crumble-creak-2': {
+    files: ['crumble-creak-2'],
+    volume: 0.2,
+    variation: 0.02,
+  },
+  collapse: { files: ['collapse'], volume: 0.4, variation: 0.035 },
+  'icicle-shatter': {
+    files: ['icicle-shatter-1', 'icicle-shatter-2'],
+    volume: 0.36,
+    variation: 0.05,
+  },
+  wraith: { files: ['wraith.mp3'], volume: 0.085, variation: 0 },
+  'wraith-tell': {
+    files: ['wraith-tell.mp3'],
+    volume: 0.1,
+    variation: 0,
+    layered: true,
+  },
+  'wraith-dash': { files: ['wraith-dash'], volume: 0.5, variation: 0.03 },
+  spring: { files: ['spring'], volume: 0.17, variation: 0.03 },
+  thunder: { files: ['thunder-1.mp3', 'thunder-2.mp3'], volume: 0.22, variation: 0.06 },
+  'bell-toll': { files: ['bell-toll.mp3'], volume: 0.13, variation: 0.02 },
   hurt: { files: ['hurt'], volume: 0.38, variation: 0.02 },
   stomp: { files: ['stomp'], volume: 0.32, variation: 0.02, layered: true },
   dodge: { files: ['dodge'], volume: 0.2, variation: 0.03 },
@@ -58,13 +85,20 @@ export const SOUND_SAMPLES: Readonly<Record<string, SampleCue>> = {
   over: { files: ['over'], volume: 0.22, variation: 0, layered: true },
 };
 
+/** Struck chime notes; melodies play them at a changed rate, so the timbre is shared. */
+export const INSTRUMENT = {
+  low: { file: 'chime-low', frequency: 220 },
+  high: { file: 'chime-high', frequency: 880 },
+} as const;
 export const WIND_SAMPLE = '/audio/wind-loop.mp3';
+// Short cues are WAV; a few long, timing-tolerant ones carry their own extension.
+const sampleUrl = (file: string) =>
+  file.includes('.') ? `/audio/${file}` : `/audio/${file}.wav`;
 export const SAMPLE_URLS = [
-  ...new Set(
-    Object.values(SOUND_SAMPLES).flatMap((cue) =>
-      cue.files.map((file) => `/audio/${file}.wav`),
-    ),
-  ),
+  ...new Set([
+    ...Object.values(SOUND_SAMPLES).flatMap((cue) => cue.files.map(sampleUrl)),
+    ...Object.values(INSTRUMENT).map(({ file }) => sampleUrl(file)),
+  ]),
   WIND_SAMPLE,
 ];
 
@@ -114,7 +148,7 @@ export class TowerSampleBank {
       : undefined;
     if (!cue || this.abort.signal.aborted) return null;
     const ready = cue.files
-      .map((file) => this.buffers.get(`/audio/${file}.wav`))
+      .map((file) => this.buffers.get(sampleUrl(file)))
       .filter((buffer) => buffer !== undefined);
     if (!ready.length) return null;
     const next = this.nextVariant.get(kind) ?? 0;
@@ -125,6 +159,12 @@ export class TowerSampleBank {
       rate: 1 + (Math.random() * 2 - 1) * cue.variation,
       layered: cue.layered ?? false,
     };
+  }
+
+  /** A decoded instrument note, or null while loading or after a failed download. */
+  instrument(register: keyof typeof INSTRUMENT) {
+    if (this.abort.signal.aborted) return null;
+    return this.buffers.get(sampleUrl(INSTRUMENT[register].file)) ?? null;
   }
 
   dispose() {
