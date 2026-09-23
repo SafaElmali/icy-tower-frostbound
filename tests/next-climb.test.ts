@@ -114,20 +114,20 @@ void test('early learning goals stay focused even when wardrobe progress exists'
 void test('reward suggestions skip owned cosmetics and use closest real single-run best', () => {
   assert.match(
     nextCosmeticReward({ floor: 6, score: 300, combo: 1, stomps: 0 })!,
-    /Frost beanie.*reach floor 10.*best 6/,
+    /Frost bobble hat.*reach floor 10.*best 6/,
   );
   assert.match(
     nextCosmeticReward({ floor: 10, score: 1000, combo: 4, stomps: 0 })!,
     /Glacier stars.*land a 5× combo.*best 4×/,
   );
-  assert.equal(nextCosmeticReward({ floor: 200, score: 25000, combo: 25, stomps: 3 }), null);
+  assert.equal(nextCosmeticReward({ floor: 200, score: 25000, combo: 25, stomps: 5 }), null);
 });
 
 void test('daily reward information uses the same wardrobe and exhausted rewards keep skill context', () => {
   const data = input(6);
   data.daily = true;
   data.achievementProgress = { floor: 6, score: 200, combo: 1, stomps: 0 };
-  assert.match(getNextClimb(data)!.note, /Frost beanie/);
-  data.achievementProgress = { floor: 200, score: 25000, combo: 25, stomps: 3 };
+  assert.match(getNextClimb(data)!.note, /Frost bobble hat/);
+  data.achievementProgress = { floor: 200, score: 25000, combo: 25, stomps: 5 };
   assert.match(getNextClimb(data)!.note, /same layout/);
 });

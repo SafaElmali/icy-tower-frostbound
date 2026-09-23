@@ -112,3 +112,57 @@ void test('the shipped Harold model opens all four limbs into a star and returns
     assert.ok(bound.max.distanceTo(standingLegs[i].max) < 1e-8);
   }
 });
+
+const air = (time: number, vy = -12) => ({ time, grounded: false, vx: 0, vy, status: 'playing' as const, facing: 1 });
+const ground = (time: number, vx = 0) => ({ time, grounded: true, vx, vy: 0, status: 'playing' as const, facing: 1 });
+
+void test('takeoff crouches then stretches; landings squash from the grounded flag alone, like race rivals', () => {
+  const motion = new ClimberMotion();
+  motion.body(ground(1));
+  motion.jump(3, 1);
+  assert.ok(motion.body(air(1.005, 12)).scaleY < .85, 'push-off crouch');
+  assert.ok(motion.body(air(1.09, 12)).scaleY > 1.1, 'springy stretch');
+  // No land event: a rival only reports grounded state.
+  for (let time = 1.2; time < 1.8; time += 1 / 60) motion.body(air(time, -18));
+  const impact = motion.body(ground(1.8));
+  assert.ok(impact.scaleY < .75, `deep landing squash ${impact.scaleY}`);
+  assert.ok(impact.scaleX > 1.1, 'squash keeps volume');
+  const rebound = motion.body(ground(1.8 + Math.PI / 17));
+  assert.ok(rebound.scaleY > 1, 'rebounds past upright');
+  const settled = motion.body(ground(3));
+  assert.ok(Math.abs(settled.scaleY - 1) < .02, 'settles into gentle breathing');
+});
+
+void test('reduced motion, the menu and pauses hold the body still', () => {
+  const motion = new ClimberMotion();
+  motion.body(air(1)); motion.jump(4, 1);
+  assert.deepEqual(motion.body(ground(1.1), true), { scaleX: 1, scaleY: 1, scaleZ: 1, lift: 0, lean: 0 });
+  assert.deepEqual(motion.body({ ...ground(0), status: 'ready' }), { scaleX: 1, scaleY: 1, scaleZ: 1, lift: 0, lean: 0 });
+  motion.body(air(2)); const paused = motion.body({ ...ground(2.05), status: 'paused' });
+  for (let i = 0; i < 20; i++) assert.deepEqual(motion.body({ ...ground(2.05), status: 'paused' }), paused);
+});
+
+void test('hurt flinch, wall kick and combo milestones pose the limbs and then return to normal', () => {
+  const limb = () => ({ rotation: { x: 0, y: 0, z: 0 } }) as unknown as Object3D;
+  const arms = [limb(), limb()], legs = [limb(), limb()], motion = new ClimberMotion();
+  motion.event({ type: 'hurt', x: 0, y: 0 }, 5);
+  motion.applyLimbs({ time: 5.15, grounded: false, vx: 0 }, 0, arms, legs);
+  assert.ok(arms.every(arm => arm.rotation.x < -1.8), 'arms guard the face');
+  assert.ok(motion.body(air(5.05)).lean > .2, 'recoils backward');
+  motion.applyLimbs({ time: 5.15, grounded: false, vx: 0 }, 0, arms, legs, true);
+  assert.ok(arms.every(arm => Math.abs(arm.rotation.x + .5) < 1e-9), 'reduced motion skips reaction poses');
+  motion.event({ type: 'wall', x: 6.1, y: 0 }, 8);
+  assert.ok(motion.body(air(8.02)).lean > .1, 'tips away from the right wall');
+  motion.applyLimbs({ time: 8.08, grounded: false, vx: -5 }, 0, arms, legs);
+  assert.ok(legs[0].rotation.x > .5, 'one leg pushes off');
+  // 3× and 4× are not milestones; jumping from 4× to 6× crosses 5×.
+  motion.event({ type: 'combo', x: 0, y: 0, value: 3 }, 10);
+  motion.event({ type: 'combo', x: 0, y: 0, value: 4 }, 10.5);
+  motion.applyLimbs({ time: 10.7, grounded: true, vx: 0 }, 0, arms, legs);
+  assert.ok(arms.every(arm => Math.abs(arm.rotation.z) < .5));
+  motion.event({ type: 'combo', x: 0, y: 0, value: 6 }, 11);
+  motion.applyLimbs({ time: 11.3, grounded: true, vx: 0 }, 0, arms, legs);
+  assert.ok(arms.every(arm => Math.abs(arm.rotation.z) > 2), 'arms up in a V');
+  motion.applyLimbs({ time: 13, grounded: true, vx: 0 }, 0, arms, legs);
+  assert.ok(arms.every(arm => Math.abs(arm.rotation.z) < .1), 'back to standing');
+});
