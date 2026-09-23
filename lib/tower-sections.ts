@@ -48,6 +48,33 @@ export const TOWER_SECTIONS: readonly TowerSection[] = [
     },
     auroraStrength: 1,
   },
+  {
+    id: 'glacier-vault', name: 'THE GLACIER VAULT', startsAtFloor: 100,
+    palette: {
+      background: 0x0b2027, fog: 0x163540, keyLight: 0xf0fbff, rimLight: 0x9fe8ff,
+      stone: 0x35545d, trim: 0x6f969c, dark: 0x132a32, metal: 0xc4a15c,
+      ice: 0xa8e4ee, flame: 0xffd88a, windowLow: 0x0d2a36, windowHigh: 0x5fb3c4, shaft: 0xbfe9f2,
+    },
+    auroraStrength: .25,
+  },
+  {
+    id: 'stormcrown', name: 'THE STORMCROWN', startsAtFloor: 150,
+    palette: {
+      background: 0x0d1117, fog: 0x1b222b, keyLight: 0xd8e6ff, rimLight: 0x3ee6ff,
+      stone: 0x2e3540, trim: 0x4d5866, dark: 0x14181f, metal: 0x6f7f91,
+      ice: 0x7fd8ff, flame: 0x5cf0ff, windowLow: 0x10151e, windowHigh: 0x3a6b8f, shaft: 0x7ad9ff,
+    },
+    auroraStrength: .4,
+  },
+  {
+    id: 'starfall-summit', name: 'STARFALL SUMMIT', startsAtFloor: 200,
+    palette: {
+      background: 0x060a1f, fog: 0x10163a, keyLight: 0xfff1dc, rimLight: 0xffc36e,
+      stone: 0x252a4d, trim: 0x4a4f82, dark: 0x0d1030, metal: 0xd0a45e,
+      ice: 0x9fb2ff, flame: 0xffc96b, windowLow: 0x0b0f33, windowHigh: 0x8a6bd6, shaft: 0xffd28a,
+    },
+    auroraStrength: 1,
+  },
 ];
 
 export function getTowerSection(floor: number): TowerSection {

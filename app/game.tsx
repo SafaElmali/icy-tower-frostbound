@@ -35,13 +35,19 @@ import { ModePreview } from '@/components/mode-preview';
 import { preventTouchContextMenu } from '@/lib/game-touch';
 import skillGoalStyles from '@/components/skill-goals.module.css';
 import hudStyles from '@/components/game-hud.module.css';
-import { GameHud } from '@/components/game-hud';
+import {
+  GameHud,
+  HudCallout,
+  type HudCalloutData,
+} from '@/components/game-hud';
+import { getTowerSection } from '@/lib/tower-sections';
 import { RunSummaryDialog } from '@/components/run-summary-dialog';
 import { useGameControlKeys } from '@/hooks/use-game-control-keys';
 import { WardrobeDialog } from '@/components/wardrobe';
 import {
   COSMETICS,
   OUTFIT_STORAGE_KEY,
+  ACHIEVEMENT_METRICS,
   advanceProgress,
   isUnlocked,
   normalizeOutfit,
@@ -267,6 +273,16 @@ export default function Home() {
     personalRunBaseline(readPersonalProgress(null), 'arcade'),
   );
   const comboFeedback = useRef(new ComboFeedbackTracker());
+  const [callout, setCallout] = useState<HudCalloutData | null>(null);
+  const calloutTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const sectionShown = useRef(getTowerSection(0).id);
+  function showCallout(data: Omit<HudCalloutData, 'key'>, seconds: number) {
+    clearTimeout(calloutTimer.current);
+    setCallout({ ...data, key: performance.now() });
+    calloutTimer.current = setTimeout(() => setCallout(null), seconds * 1000);
+  }
   const telemetry = useRef(new SoloAnalytics(trackEvent, analyticsId));
   const [remoteRunId, setRemoteRunId] = useState<string | undefined>();
   const lastInput = useRef('unknown');
@@ -434,6 +450,9 @@ export default function Home() {
     firstJumpRef.current = null;
     setFirstJump(null);
     comboFeedback.current.reset();
+    sectionShown.current = getTowerSection(0).id;
+    clearTimeout(calloutTimer.current);
+    setCallout(null);
     guidanceCueId.current = null;
     guidanceShownAt.current = {};
     setGuidanceCue(null);
@@ -1014,6 +1033,25 @@ export default function Home() {
                   setGuidanceCue(cue);
                 }
               }
+              if (
+                !aiRun.current &&
+                events.some((event) => event.type === 'land')
+              ) {
+                const section = getTowerSection(e.floor);
+                if (section.id !== sectionShown.current) {
+                  sectionShown.current = section.id;
+                  showCallout(
+                    {
+                      kind: 'section',
+                      eyebrow: `Floor ${section.startsAtFloor}`,
+                      title: section.name
+                        .toLowerCase()
+                        .replace(/\b\w/g, (c) => c.toUpperCase()),
+                    },
+                    2.8,
+                  );
+                }
+              }
               for (const event of events) {
                 w.effect(event, e.time);
                 if (event.type !== 'combo') tone(event.type);
@@ -1110,11 +1148,12 @@ export default function Home() {
                   floor: e.floor,
                   score: e.score,
                   combo: e.bestCombo,
+                  stomps: e.action.stomps,
                 });
                 if (
-                  progress.floor !== current.progress.floor ||
-                  progress.score !== current.progress.score ||
-                  progress.combo !== current.progress.combo
+                  ACHIEVEMENT_METRICS.some(
+                    (metric) => progress[metric] !== current.progress[metric],
+                  )
                 ) {
                   const earned = COSMETICS.filter(
                     (item) =>
@@ -1577,6 +1616,7 @@ export default function Home() {
               firstJump={game.status === 'playing' ? firstJump : null}
               onSkip={() => saveGuidance(skipGuidance(guidanceProfile.current))}
             />
+            <HudCallout callout={game.status === 'playing' ? callout : null} />
             {game.status === 'playing' && (
               <fieldset
                 className="touch-controls"

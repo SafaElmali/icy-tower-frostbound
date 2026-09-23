@@ -53,7 +53,9 @@ export function nextCosmeticReward(
       ? `reach floor ${item.target}`
       : item.metric === 'score'
         ? `score ${item.target.toLocaleString('en-US')} in one run`
-        : `land a ${item.target}× combo`;
+        : item.metric === 'stomps'
+          ? `stomp ${item.target} bats in one run`
+          : `land a ${item.target}× combo`;
   return `Next reward: ${item.name} · ${requirement} (best ${best.toLocaleString('en-US')}${item.metric === 'combo' ? '×' : ''}).`;
 }
 

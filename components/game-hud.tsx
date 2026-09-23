@@ -154,3 +154,28 @@ export function GameHud({
     </aside>
   );
 }
+
+export type HudCalloutData = {
+  /** Changes on every show so a repeated message replays its entrance. */
+  key: number;
+  kind: 'section' | 'hint';
+  eyebrow: string;
+  title: string;
+};
+
+/** Brief, non-interactive playfield message: new tower sections and rule hints. */
+export function HudCallout({ callout }: { callout: HudCalloutData | null }) {
+  if (!callout) return null;
+  return (
+    <output
+      key={callout.key}
+      className={styles.callout}
+      data-kind={callout.kind}
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      <small>{callout.eyebrow}</small>
+      <strong>{callout.title}</strong>
+    </output>
+  );
+}
