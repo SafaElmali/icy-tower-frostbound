@@ -539,7 +539,9 @@ export class TowerEngine {
     const action = this.action;
     if (this.floor < WRAITH_FLOOR && !action.wraiths.length) return;
     if (!action.wraiths.length) this.wraithCooldown = Math.max(0, this.wraithCooldown - dt);
-    if (canThreaten && this.wraithCooldown === 0 && !action.wraiths.length && !action.encounter) {
+    // Skip a spawn that an imminent encounter would clear before its tell.
+    const encounterSoon = this.floor >= this.nextEncounterFloor - 4;
+    if (canThreaten && this.wraithCooldown === 0 && !action.wraiths.length && !action.encounter && !encounterSoon) {
       const id = this.nextActionId++, side = actorHash(this.seed, id) & 2 ? 1 : -1;
       const x = side * 5.3, y = this.y + 3.4;
       action.wraiths.push({ id, x, y, side, state: 'drift', time: 0, dirX: -side, dirY: 0, startX: x, startY: y, alive: true });

@@ -57,6 +57,12 @@ void test('frost wraiths appear only in version 9 from floor 100, inside the wal
   assert.ok(wraith.y > p.y + 2.5 && wraith.y < engine.cameraY + 4);
   assert.ok(events.some(event => event.type === 'wraith'));
   assert.ok(engine.action.notice?.label === 'FROST WRAITH');
+
+  // No wraith starts when an encounter is a few floors away and would clear it before its tell.
+  const soon = new TowerEngine(); soon.start('practice'); stand(soon, 106);
+  (soon as unknown as { nextEncounterFloor: number }).nextEncounterFloor = 108;
+  step(soon, 10 * 120);
+  assert.equal(soon.action.wraiths.length, 0);
 });
 
 void test('the wraith drifts, then a fixed tell locks its whole dash path before the dash', () => {
