@@ -81,21 +81,28 @@ Each climb starts three fresh challenges: reach floor 30 with an unbroken combo,
 
 ## Unlockable outfits
 
-Open **Menu → Outfits** to change your look. Equip a hat, sweater, and star-trail palette independently; colors update on the climber immediately. The outfit picker shows the same 3D character walking and gently turning, with stars that update as you equip items. Its preview can be paused independently and stays visible while the collection scrolls. The original blue beanie, green knit, and rainbow stars are always available.
+Open **Menu → Outfits** to change your look. Equip a hat, sweater, extra, and star-trail palette independently; changes appear on the climber immediately. Most unlockable hats are real 3D shapes (a bobble hat, crown, trapper, horned helm, wizard hat, propeller cap, and top hat), and extras add a scarf or cape that flutters as you run and fall. Your outfit also appears on your replay ghost and, in races, on every rival. The outfit picker shows the same 3D character walking and gently turning, with stars that update as you equip items. Its preview can be paused independently and stays visible while the collection scrolls. The original blue beanie, green knit, and rainbow stars are always available.
 
 | Achievement | Reward |
 | --- | --- |
-| Reach floor 10 | Frost beanie |
-| Reach floor 50 | Summit beanie |
-| Reach floor 100 | Glacier beanie |
+| Reach floor 10 | Frost bobble hat |
+| Reach floor 25 | Striped scarf |
+| Reach floor 50 | Summit crown |
+| Reach floor 75 | Yeti trapper |
+| Reach floor 100 | Glacier horned helm |
 | Reach floor 150 | Storm knit |
-| Reach floor 200 | Starfall beanie |
+| Reach floor 200 | Starfall wizard hat |
 | Score 1,000 in one run | Berry knit |
 | Score 5,000 in one run | Aurora knit |
+| Score 10,000 in one run | Top hat |
+| Score 15,000 in one run | Royal cape |
 | Score 25,000 in one run | Aurora stars |
 | Stomp 3 bats in one run | Batbane knit |
+| Stomp 5 bats in one run | Bat cape |
 | Land a 5× combo | Glacier stars |
+| Land a 10× combo | Propeller cap |
 | Land a 15× combo | Sunset stars |
+| Land a 20× combo | Aurora scarf |
 | Land a 25× combo | Frenzy stars |
 
 Classic, Party, and Practice all earn rewards as soon as milestones are reached. Personal bests count across sessions, and existing saved floor/score records earn their corresponding rewards. The bat-stomp reward counts stomps from runs played after it was added. Progress and equipped items are stored on this browser; clearing browser storage resets them. If storage is unavailable, the wardrobe works for the current session. Trails still require an airborne combo of at least 2×.

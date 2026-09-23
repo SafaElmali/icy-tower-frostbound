@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COSMETICS, DEFAULT_OUTFIT, EMPTY_PROGRESS, advanceProgress, isUnlocked, normalizeOutfit, readProfile } from '../lib/outfits.ts';
+import { COSMETICS, DEFAULT_OUTFIT, EMPTY_PROGRESS, SLOT_DEFAULTS, advanceProgress, equippedId, isUnlocked, normalizeOutfit, outfitKey, readProfile } from '../lib/outfits.ts';
 
 void test('achievement rewards unlock at the threshold and survive weaker later runs', () => {
   for (const item of COSMETICS.filter(item => item.target > 0)) {
@@ -30,4 +30,25 @@ void test('saved achievements and equipped items round-trip, with safe defaults 
   assert.deepEqual(readProfile('{"progress":{"floor":12,"score":40,"combo":3}}').progress, { floor: 12, score: 40, combo: 3, stomps: 0 });
   assert.deepEqual(normalizeOutfit({ hat: 'sunset', sweater: '<script>', trail: { color: 'red' } }), DEFAULT_OUTFIT);
   assert.deepEqual(normalizeOutfit(undefined), DEFAULT_OUTFIT);
+});
+
+void test('the optional extras slot loads old saves and rows, and is left out at its default', () => {
+  // Saves, leaderboard rows and race profiles from before extras have no accessory key.
+  assert.deepEqual(normalizeOutfit({ hat: 'summit-beanie', sweater: 'aurora-knit', trail: 'glacier' }), { hat: 'summit-beanie', sweater: 'aurora-knit', trail: 'glacier' });
+  assert.equal(equippedId(DEFAULT_OUTFIT, 'accessory'), SLOT_DEFAULTS.accessory);
+  assert.deepEqual(normalizeOutfit({ ...DEFAULT_OUTFIT, accessory: 'no-accessory' }), DEFAULT_OUTFIT);
+  assert.deepEqual(normalizeOutfit({ ...DEFAULT_OUTFIT, accessory: 'bat-cape' }), { ...DEFAULT_OUTFIT, accessory: 'bat-cape' });
+  for (const junk of ['summit-beanie', '<img>', 7, { id: 'bat-cape' }, null]) assert.deepEqual(normalizeOutfit({ ...DEFAULT_OUTFIT, accessory: junk }), DEFAULT_OUTFIT);
+  // Locked extras fall back to none, like every other slot.
+  assert.deepEqual(normalizeOutfit({ accessory: 'bat-cape' }, { ...EMPTY_PROGRESS, stomps: 4 }), DEFAULT_OUTFIT);
+  const profile = { progress: { floor: 25, score: 0, combo: 0, stomps: 0 }, equipped: { ...DEFAULT_OUTFIT, accessory: 'knit-scarf' } };
+  assert.deepEqual(readProfile(JSON.stringify(profile)), profile);
+  assert.notEqual(outfitKey(profile.equipped), outfitKey(DEFAULT_OUTFIT));
+});
+
+void test('existing cosmetic IDs are never renamed or removed, and every slot has a free default', () => {
+  const ids = new Set(COSMETICS.map(item => item.id));
+  for (const id of ['blue-beanie', 'frost-beanie', 'summit-beanie', 'glacier-beanie', 'starfall-beanie', 'green-knit', 'berry-knit', 'aurora-knit', 'storm-knit', 'batbane-knit', 'rainbow', 'glacier', 'sunset', 'frenzy', 'aurora']) assert.ok(ids.has(id), id);
+  assert.equal(ids.size, COSMETICS.length, 'IDs are unique');
+  for (const [slot, id] of Object.entries(SLOT_DEFAULTS)) assert.equal(COSMETICS.find(item => item.id === id)?.target, 0, slot);
 });

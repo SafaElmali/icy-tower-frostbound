@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { animateAccessories } from './character-accessories';
 import { applyCharacterOutfit } from './character-outfit';
 import { ComboStarTrail } from './combo-star-trail';
 import { ClimberMotion } from './climber-motion';
@@ -95,6 +96,7 @@ export class WardrobePreview {
       this.motion.applyLimbs({ time: this.time * Math.PI * 4 / 12.7, grounded: true, vx: 1.5 }, 0, this.arms, this.legs);
       this.model.position.y = this.baseY + .025 * (1 - Math.cos(this.time * Math.PI * 8));
       this.model.rotation.y = .3 * Math.sin(this.time * Math.PI / 2);
+      animateAccessories(this.model, { time: this.time, vx: 1.5, vy: 0, grounded: true });
       this.updateTrail(this.time);
       this.render();
     } else this.lastFrame = null;

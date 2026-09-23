@@ -7,6 +7,18 @@ import {
   Sparkles,
   HardHat,
   ArrowRight,
+  Ban,
+  Crown,
+  Fan,
+  Flag,
+  HatGlasses,
+  Moon,
+  MountainSnow,
+  Ribbon,
+  Shield,
+  Snowflake,
+  WandSparkles,
+  type LucideIcon,
 } from 'lucide-react';
 import { CharacterPreview } from '@/components/wardrobe-preview';
 import { Button } from '@/components/ui/button';
@@ -22,24 +34,65 @@ import {
   OUTFIT_SLOTS,
   cosmeticFor,
   cssColor,
+  equippedId,
   isUnlocked,
+  SLOT_DEFAULTS,
   normalizeOutfit,
+  type Cosmetic,
+  type CosmeticShape,
   type Outfit,
   type OutfitSlot,
   type WardrobeProfile,
 } from '@/lib/outfits';
 import styles from './wardrobe.module.css';
 
-const labels = { hat: 'Hats', sweater: 'Sweaters', trail: 'Star trails' };
-const icons = { hat: HardHat, sweater: Shirt, trail: Sparkles };
+const labels: Record<OutfitSlot, string> = {
+  hat: 'Hats',
+  sweater: 'Sweaters',
+  accessory: 'Extras',
+  trail: 'Star trails',
+};
+const icons: Record<OutfitSlot, LucideIcon> = {
+  hat: HardHat,
+  sweater: Shirt,
+  accessory: Ribbon,
+  trail: Sparkles,
+};
+const shapeIcons: Record<CosmeticShape, LucideIcon> = {
+  bobble: Snowflake,
+  crown: Crown,
+  'horned-helm': Shield,
+  wizard: WandSparkles,
+  trapper: MountainSnow,
+  propeller: Fan,
+  'top-hat': HatGlasses,
+  scarf: Ribbon,
+  cape: Flag,
+  'bat-cape': Moon,
+};
+const notes: Record<OutfitSlot, string> = {
+  hat: 'Hats change your silhouette on every ledge.',
+  sweater: 'Equip a color to see it on your climber.',
+  accessory: 'Scarves and capes flutter as you run and fall.',
+  trail: 'Stars follow airborne combos of 2× or more.',
+};
+const itemIcon = (item: Cosmetic) =>
+  item.shape
+    ? shapeIcons[item.shape]
+    : item.slot === 'accessory'
+      ? Ban
+      : icons[item.slot];
 
 export function OutfitBadges({ outfit }: { outfit?: Outfit }) {
   const safe = normalizeOutfit(outfit);
   return (
     <span className="outfit-badges">
       {OUTFIT_SLOTS.map((slot) => {
-        const item = cosmeticFor(slot, safe[slot]),
-          Icon = icons[slot];
+        const item = cosmeticFor(slot, equippedId(safe, slot)),
+          Icon = itemIcon(item);
+        // Older rows have no extra; keep their badges unchanged.
+        if (item.id === SLOT_DEFAULTS[slot] && slot === 'accessory')
+          return null;
         return (
           <span
             key={slot}
@@ -78,7 +131,7 @@ export function WardrobeDialog({
         <header className={styles.header}>
           <DialogTitle>Make it yours.</DialogTitle>
           <DialogDescription>
-            Pick your colors. Make your mark on the tower.
+            Pick a hat, a cape, your colors. Make your mark on the tower.
           </DialogDescription>
         </header>
         <div className={styles.body}>
@@ -94,7 +147,6 @@ export function WardrobeDialog({
               ))}
             </TabsList>
             {OUTFIT_SLOTS.map((slot) => {
-              const Icon = icons[slot];
               return (
                 <TabsContent key={slot} value={slot} className={styles.panel}>
                   <fieldset className={styles.options}>
@@ -104,7 +156,9 @@ export function WardrobeDialog({
                     {COSMETICS.filter((item) => item.slot === slot).map(
                       (item) => {
                         const unlocked = isUnlocked(item, profile.progress);
-                        const equipped = profile.equipped[slot] === item.id;
+                        const equipped =
+                          equippedId(profile.equipped, slot) === item.id;
+                        const Icon = itemIcon(item);
                         const progress = Math.min(
                           profile.progress[item.metric],
                           item.target,
@@ -177,11 +231,7 @@ export function WardrobeDialog({
                       },
                     )}
                   </fieldset>
-                  <p className={styles.categoryNote}>
-                    {slot === 'trail'
-                      ? 'Stars follow airborne combos of 2× or more.'
-                      : 'Equip a color to see it on your climber.'}
-                  </p>
+                  <p className={styles.categoryNote}>{notes[slot]}</p>
                 </TabsContent>
               );
             })}

@@ -7,11 +7,12 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { applyCharacterOutfit } from './character-outfit';
+import { applyCharacterOutfit, tagCharacterParts } from './character-outfit';
+import { animateAccessories } from './character-accessories';
 import { cloneRaceCharacter, PlayerNameplate } from './race-character';
 import { ClimberMotion } from './climber-motion';
 import { ComboStarTrail } from './combo-star-trail';
-import { cosmeticFor, normalizeOutfit, type Outfit } from './outfits';
+import { DEFAULT_OUTFIT, cosmeticFor, normalizeOutfit, outfitKey, type Outfit } from './outfits';
 import { TowerInterior } from './tower-interior';
 import { PersonalBestMarker } from './personal-best-marker';
 import { LandingGuideWorld, type LandingGuideTarget } from './landing-guide-world';
@@ -45,7 +46,6 @@ export class TowerWorld {
   private cameraY = 5.2;
   private shake = 0;
   private reducedMotion = false;
-  private squish = 0;
   private rotation = .12;
   private legs: THREE.Object3D[] = [];
   private arms: THREE.Object3D[] = [];
@@ -56,6 +56,8 @@ export class TowerWorld {
   private ghostCharacter = new THREE.Group();
   private ghostArms: THREE.Object3D[] = [];
   private ghostLegs: THREE.Object3D[] = [];
+  private ghostMaterial = new THREE.MeshBasicMaterial({ color: 0x91dfff, transparent: true, opacity: .32, depthWrite: false });
+  private outfit: Outfit = DEFAULT_OUTFIT;
   private starTrail = new ComboStarTrail();
   private actionWorld = new TowerActionWorld();
   private lastEngineTime = 0;
@@ -151,10 +153,11 @@ export class TowerWorld {
       this.arms = ['Arm_L', 'Arm_R'].map(n => model.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
     } catch { /* The built-in Harold model keeps the game playable offline. */ }
     if (this.disposed) return;
+    // Tag the beanie before cloning so the ghost can hide it under hat shapes after its materials are swapped.
+    tagCharacterParts(this.character);
     this.ghostCharacter = this.character.clone(true);
-    const ghostMaterial = new THREE.MeshBasicMaterial({ color: 0x91dfff, transparent: true, opacity: .32, depthWrite: false });
     this.ghostCharacter.traverse(o => {
-      if (o instanceof THREE.Mesh) { o.material = ghostMaterial; o.castShadow = false; o.receiveShadow = false; }
+      if (o instanceof THREE.Mesh) { o.material = this.ghostMaterial; o.castShadow = false; o.receiveShadow = false; }
     });
     this.ghostArms = ['Arm_L', 'Arm_R'].map(n => this.ghostCharacter.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
     this.ghostLegs = ['Leg_L', 'Leg_R'].map(n => this.ghostCharacter.getObjectByName(n)).filter((x): x is THREE.Object3D => !!x);
@@ -168,10 +171,13 @@ export class TowerWorld {
         arms: ['Arm_L', 'Arm_R'].map(n => character.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o),
         legs: ['Leg_L', 'Leg_R'].map(n => character.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o) });
     }
+    // An outfit chosen while the model loaded applies to the real model, its ghost and hat shapes.
+    this.setOutfit(this.outfit);
   }
   setOutfit(value: Outfit) {
-    const outfit = normalizeOutfit(value);
-    applyCharacterOutfit(this.character, outfit);
+    const outfit = this.outfit = normalizeOutfit(value);
+    applyCharacterOutfit(this.character, outfit, { shadows: this.high });
+    applyCharacterOutfit(this.ghostCharacter, outfit, { material: this.ghostMaterial, shadows: false });
     this.starTrail.setPalette(cosmeticFor('trail', outfit.trail).colors);
   }
   private makeNoiseTexture() {
@@ -300,11 +306,11 @@ export class TowerWorld {
     ledge.plaque?.material.map?.dispose(); ledge.plaque?.material.dispose();
     this.ledges.delete(ledge.id);
   }
-  setQuality(high: boolean) { this.high = high; this.renderer.shadowMap.enabled = high; this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 1.65 : 1)); this.resize(); }
+  setQuality(high: boolean) { if (high !== this.high) { this.high = high; this.setOutfit(this.outfit); } this.renderer.shadowMap.enabled = high; this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 1.65 : 1)); this.resize(); }
   setPersonalBest(floor: number) { this.bestMarker.setFloor(floor); }
   setReducedMotion(reduced: boolean) {
     this.reducedMotion = reduced;
-    if (reduced) { this.shake = 0; this.squish = 0; }
+    if (reduced) this.shake = 0;
     this.starTrail.mesh.visible = !reduced;
     if (reduced) { for (const fleck of this.flecks) this.root.remove(fleck.mesh); this.flecks.length = 0; }
   }
@@ -321,11 +327,10 @@ export class TowerWorld {
   }
   effect(e: GameEvent, time: number) {
     this.motion.event(e, time);
-    if (e.type === 'land' && !this.reducedMotion) this.squish = .22;
     if (e.type === 'over' && !this.reducedMotion) this.shake = .24;
     if (e.type === 'wall' && !this.reducedMotion) this.shake = .055;
     if (e.type === 'hurt' && !this.reducedMotion) this.shake = .11;
-    if (e.type === 'stomp' && !this.reducedMotion) { this.shake = .05; this.squish = .13; }
+    if (e.type === 'stomp' && !this.reducedMotion) this.shake = .05;
     if (!this.reducedMotion && ['jump', 'land', 'gem', 'wall', 'combo', 'collapse', 'hurt', 'stomp', 'dodge', 'frenzy'].includes(e.type)) {
       const count = e.type === 'gem' || e.type === 'frenzy' ? 22 : e.type === 'combo' || e.type === 'dodge' ? 9 : 12;
       const material = ['hurt', 'collapse'].includes(e.type) ? this.impactFleckMat : ['frenzy', 'stomp', 'dodge'].includes(e.type) ? this.frenzyFleckMat : this.fleckMat;
@@ -342,12 +347,12 @@ export class TowerWorld {
     if (this.reducedMotion) t = 0;
     const menu = e.status === 'ready';
     const simulationDt = e.status === 'playing' ? dt : 0;
-    if (menu || e.time < this.lastEngineTime) { for (const fleck of this.flecks) this.root.remove(fleck.mesh); this.flecks.length = 0; this.shake = this.squish = 0; }
+    if (menu || e.time < this.lastEngineTime) { for (const fleck of this.flecks) this.root.remove(fleck.mesh); this.flecks.length = 0; this.shake = 0; }
     this.lastEngineTime = e.time;
     const actionTime = menu ? t : e.time;
     const aspect = this.renderer.domElement.clientWidth / this.renderer.domElement.clientHeight;
     this.cameraY = damp(this.cameraY, e.cameraY, e.cameraY < this.cameraY ? 10 : 6, dt);
-    this.shake *= Math.exp(-12 * simulationDt); this.squish *= Math.exp(-12 * simulationDt);
+    this.shake *= Math.exp(-12 * simulationDt);
     this.cameraX = damp(this.cameraX, menu ? -.45 : e.x * .16, 2.5, dt);
     this.camera.position.set(this.cameraX + Math.sin(actionTime * 63) * this.shake, this.cameraY + 3.8 + Math.cos(actionTime * 58) * this.shake, 26);
     this.camera.lookAt(0, this.cameraY, 0);
@@ -380,14 +385,15 @@ export class TowerWorld {
     for (const [id, ledge] of this.ledges) if (!keep.has(id)) {
       this.removeLedge(ledge);
     }
-    const pose = this.motion.pose(e);
+    const pose = this.motion.pose(e), body = this.motion.body(e, this.reducedMotion);
     this.tumble.position.set(e.x, e.y + .8 + (menu ? Math.sin(t * 2) * .014 : 0), .05);
-    this.tumble.rotation.z = this.reducedMotion ? 0 : pose.roll;
-    this.character.position.set(0, -.8, 0);
+    this.tumble.rotation.z = this.reducedMotion ? 0 : pose.roll + body.lean;
+    this.character.position.set(0, -.8 + body.lift, 0);
     this.rotation = damp(this.rotation, Math.abs(e.vx) > .25 ? e.facing * .9 : .12, 9, dt); this.character.rotation.y = this.rotation * (1 - pose.spread * .9);
     this.character.rotation.z = damp(this.character.rotation.z, e.vx * -.018 * (1 - pose.spread), 8, dt);
-    this.character.scale.set(1 + this.squish * .45, 1 - this.squish, 1 + this.squish * .3);
-    this.motion.applyLimbs(e, pose.spread, this.arms, this.legs);
+    this.character.scale.set(body.scaleX, body.scaleY, body.scaleZ);
+    this.motion.applyLimbs(e, pose.spread, this.arms, this.legs, this.reducedMotion);
+    animateAccessories(this.character, e, this.reducedMotion);
     const views = Array.isArray(ghosts) ? ghosts : ghosts ? [ghosts] : [];
     const playerViews = views.filter(view => view.appearance === 'player');
     const replay = views.find(view => view.appearance !== 'player');
@@ -401,22 +407,24 @@ export class TowerWorld {
         rival.nameplate.setName(ghost?.name ?? '');
         rival.nameplate.sprite.visible = model.tumble.visible && !!ghost?.name?.trim();
         if (ghost) {
-          const outfit = normalizeOutfit(ghost.outfit), key = `${outfit.hat}/${outfit.sweater}/${outfit.trail}`;
-          if (key !== rival.outfitKey) { applyCharacterOutfit(model.character, outfit); rival.outfitKey = key; }
+          const outfit = normalizeOutfit(ghost.outfit), key = outfitKey(outfit);
+          if (key !== rival.outfitKey) { applyCharacterOutfit(model.character, outfit, { shadows: this.high }); rival.outfitKey = key; }
         }
       }
       if (!ghost || !model.tumble.visible) return;
-      const g = ghost.engine, ghostPose = ghost.motion.pose(g);
+      const g = ghost.engine, ghostPose = ghost.motion.pose(g), ghostBody = ghost.motion.body(g, this.reducedMotion);
       model.tumble.position.set(g.x, g.y + .8, -.35 - index * .12);
       // Stack nearby labels so shared spawn/checkpoint positions stay readable.
       const nearbyLabels = rival ? playerViews.slice(0, index - 1).filter(other =>
         !other.finished && Math.abs(other.engine.x - g.x) < 2.6 && Math.abs(other.engine.y - g.y) < .6).length : 0;
       rival?.nameplate.sprite.position.set(g.x, g.y + 2.05 + nearbyLabels * .45, .25);
       rival?.shield.group.position.set(g.x, g.y + .78, .15 - index * .12);
-      model.tumble.rotation.z = this.reducedMotion ? 0 : ghostPose.roll;
-      model.character.position.set(0, -.8, 0);
+      model.tumble.rotation.z = this.reducedMotion ? 0 : ghostPose.roll + ghostBody.lean;
+      model.character.position.set(0, -.8 + ghostBody.lift, 0);
       model.character.rotation.set(0, (Math.abs(g.vx) > .25 ? g.facing * .9 : .12) * (1 - ghostPose.spread * .9), g.vx * -.018 * (1 - ghostPose.spread));
-      ghost.motion.applyLimbs(g, ghostPose.spread, model.arms, model.legs);
+      model.character.scale.set(ghostBody.scaleX, ghostBody.scaleY, ghostBody.scaleZ);
+      ghost.motion.applyLimbs(g, ghostPose.spread, model.arms, model.legs, this.reducedMotion);
+      animateAccessories(model.character, g, this.reducedMotion);
     });
     this.starTrail.update(e);
     this.actionWorld.update(e, this.reducedMotion);
