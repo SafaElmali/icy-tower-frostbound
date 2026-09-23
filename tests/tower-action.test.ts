@@ -91,7 +91,8 @@ void test('falling ice gives recoverable knockback and invulnerability; near mis
 });
 
 void test('current icicles fall immediately, keep a fixed lane, and can overlap incoming bats', () => {
-  const engine = new TowerEngine(); engine.start('practice'); stand(engine, 22);
+  // Version 9 ice shatters on this broad test ledge; version 8 lets it fall through.
+  const engine = new TowerEngine(73091, true, 8); engine.start('practice'); stand(engine, 22);
   for (let frame = 0; frame < 180 && !engine.action.icicles.length; frame++) step(engine, 1);
   const icicle = engine.action.icicles[0];
   assert.ok(icicle); assert.equal(icicle.state, 'falling');
