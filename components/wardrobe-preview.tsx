@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cosmeticFor, type Outfit } from '@/lib/outfits';
+import { cosmeticFor, equippedId, SLOT_DEFAULTS, type Outfit } from '@/lib/outfits';
 import type { WardrobePreview } from '@/lib/wardrobe-preview';
 
 export function CharacterPreview({ outfit }: { outfit: Outfit }) {
@@ -13,7 +13,8 @@ export function CharacterPreview({ outfit }: { outfit: Outfit }) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [playing, setPlaying] = useState(() => typeof window === 'undefined' || !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const latestPlaying = useRef(playing);
-  const description = `${cosmeticFor('hat', outfit.hat).name}, ${cosmeticFor('sweater', outfit.sweater).name}, ${cosmeticFor('trail', outfit.trail).name}`;
+  const accessory = equippedId(outfit, 'accessory');
+  const description = [cosmeticFor('hat', outfit.hat).name, cosmeticFor('sweater', outfit.sweater).name, ...(accessory === SLOT_DEFAULTS.accessory ? [] : [cosmeticFor('accessory', accessory).name]), cosmeticFor('trail', outfit.trail).name].join(', ');
 
   useEffect(() => {
     latestOutfit.current = outfit;
