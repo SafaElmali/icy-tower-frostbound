@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TOWER_SECTIONS, type TowerSection } from './tower-sections.ts';
+import { decorSectionForBay, SectionDecor, type DecorInstance } from './tower-decor.ts';
 
 const BAY_HEIGHT = 18;
 const BAY_COUNT = 7;
@@ -15,6 +16,12 @@ export class TowerInterior {
   private shaftMaterial: THREE.ShaderMaterial;
   private themeColors: { current: THREE.Color; target: THREE.Color; key: keyof TowerSection['palette']; strength: number }[] = [];
   private sectionId = '';
+  private decor: SectionDecor;
+  private bayDecor: { index: number; kinds: Map<string, DecorInstance>; active: DecorInstance | null }[] = [];
+  private flashMaterials: THREE.MeshStandardMaterial[];
+  private nextStrike = -1;
+  private strikeAge = 9;
+  private flash = 0;
 
   constructor(stoneTexture: THREE.Texture) {
     this.group.name = 'Frozen cathedral interior';
@@ -26,15 +33,62 @@ export class TowerInterior {
     const flame = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffad54).multiplyScalar(2.5), toneMapped: false });
     this.glass = new THREE.ShaderMaterial({
       side: THREE.DoubleSide,
-      uniforms: { time: { value: 0 }, lowColor: { value: new THREE.Color() }, highColor: { value: new THREE.Color() }, aurora: { value: 0 } },
-      vertexShader: 'varying vec3 point; void main(){point=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-      fragmentShader: `varying vec3 point; uniform float time; uniform vec3 lowColor; uniform vec3 highColor; uniform float aurora;
+      uniforms: {
+        time: { value: 0 }, lowColor: { value: new THREE.Color() }, highColor: { value: new THREE.Color() }, aurora: { value: 0 },
+        storm: { value: 0 }, stars: { value: 0 }, crystal: { value: 0 }, frost: { value: 0 }, flash: { value: 0 }, bolt: { value: 0 }, meteors: { value: 1 },
+      },
+      vertexShader: 'varying vec3 point; varying vec3 world; void main(){point=position;world=(modelMatrix*vec4(position,1.)).xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+      // Each section paints its own sky into the same panes: aurora curtains, stars and meteors, prismatic glass, frost, storm clouds and bolts.
+      fragmentShader: `varying vec3 point; varying vec3 world; uniform float time; uniform vec3 lowColor; uniform vec3 highColor; uniform float aurora;
+        uniform float storm; uniform float stars; uniform float crystal; uniform float frost; uniform float flash; uniform float bolt; uniform float meteors;
+        float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+        float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
         void main(){
+          float cell=floor((point.x+4.)/8.); float lx=point.x-cell*8.; float ly=point.y-3.; float h=clamp(ly/10.,0.,1.);
+          vec2 sky=vec2(point.x,world.y);
           float clouds=sin(point.x*1.8+time*.11+sin(point.y*.6-time*.08))*sin(point.y*.8+time*.07);
-          float glow=pow(max(0.,1.-abs(point.x)/2.5),2.);
+          float glow=pow(max(0.,1.-abs(lx)/2.5),2.);
           float curtain=pow(.5+.5*sin(point.x*2.4+sin(point.y*.35+time*.12)*2.),3.);
           vec3 color=mix(lowColor,highColor,.45+clouds*.16+glow*.32);
           color=mix(color,highColor,curtain*aurora*.45);
+          if(stars>.01){
+            color=mix(color,mix(vec3(.01,.012,.05),highColor*.35,h*.6),stars*.55);
+            vec2 g=sky*2.6; vec2 id=floor(g); vec2 f=fract(g)-.5; float r=hash(id);
+            float d=length(f-(vec2(hash(id+1.7),hash(id+4.3))-.5)*.6);
+            color+=vec3(1.,.94,.82)*smoothstep(.09,0.,d)*step(.7,r)*(.55+.45*sin(time*(1.3+r*3.)+r*40.))*stars;
+            if(meteors>.01){
+              float bay=floor(world.y/18.); float mt=time/(2.8+hash(vec2(cell,bay))*2.4)+hash(vec2(cell*3.1,bay+.5));
+              float ph=fract(mt)*3.; vec2 dir=vec2(-.8,-.6);
+              vec2 rel=vec2(lx,ly)-(vec2((hash(vec2(floor(mt),cell))-.2)*4.,10.5)+dir*ph*9.);
+              float along=dot(rel,-dir); float across=abs(rel.x*dir.y-rel.y*dir.x);
+              color+=vec3(1.,.86,.62)*step(0.,along)*(1.-smoothstep(0.,2.6,along))*(1.-smoothstep(0.,.05+along*.025,across))*step(ph,1.)*meteors*stars*1.3;
+            }
+          }
+          if(aurora>.01){
+            float rays=pow(.5+.5*sin(sky.x*2.9+sin(sky.y*.19+time*.22)*2.4+time*.18),4.)*(.6+.4*sin(sky.x*9.+sky.y*.3-time*.7));
+            vec3 tint=mix(vec3(.1,.95,.55),vec3(.7,.35,1.),smoothstep(.55,1.,h+sin(sky.x*.4+time*.1)*.15));
+            color+=tint*rays*smoothstep(.12,.6,h)*aurora*.4;
+          }
+          if(crystal>.01){
+            vec2 c=vec2(lx*1.1+ly*.45,ly*.9-lx*.35); vec2 fc=fract(c)-.5; float facet=abs(fc.x)+abs(fc.y); float shade=hash(floor(c)+cell*7.);
+            vec3 prism=.5+.5*cos(6.2832*(vec3(0.,.33,.67)+shade*.6+h*.5+time*.03));
+            color=mix(color,highColor*(.45+shade*.75)+prism*.13,crystal*.62);
+            color+=highColor*smoothstep(.44,.5,facet)*crystal*.4;
+            color+=vec3(1.,.9,1.)*pow(max(0.,sin(shade*40.+time*1.1)),30.)*(1.-smoothstep(0.,.35,facet))*crystal*.45;
+          }
+          if(frost>.01){
+            float edge=max(smoothstep(1.2,2.25,abs(lx)),smoothstep(2.8,.4,ly));
+            float fern=noise(vec2(lx,ly)*5.)*.6+noise(vec2(lx*13.,ly*9.))*.4;
+            color=mix(color,vec3(.5,.66,.75)+highColor*.25,frost*smoothstep(.5,.64,fern)*edge*.75);
+          }
+          if(storm>.01){
+            vec2 q=vec2(sky.x*.3+time*.06,sky.y*.3-time*.015);
+            float n=noise(q)*.55+noise(q*2.2+3.1)*.3+noise(q*5.3+7.)*.15;
+            color=mix(color,mix(vec3(.015,.02,.03),vec3(.16,.19,.25),smoothstep(.25,.85,n))+highColor*.12*n,storm*.88);
+            float bx=(hash(vec2(bolt,cell))-.5)*2.4+sin(ly*2.3+bolt*7.)*.35+sin(ly*6.1+bolt*3.)*.14;
+            float strike=step(hash(vec2(cell,bolt)),.55)*(1.-smoothstep(.02,.1,abs(lx-bx)))*step(hash(vec2(bolt,cell+2.))*5.,ly);
+            color+=(vec3(.45,.6,.9)*n*.9+vec3(.85,.92,1.)*strike*1.6)*flash*storm;
+          }
           gl_FragColor=vec4(color,1.);
         }`,
     });
@@ -127,6 +181,14 @@ export class TowerInterior {
       const mesh = new THREE.Mesh(merged, material); mesh.receiveShadow = true; template.add(mesh);
     }
     for (let i = 0; i < BAY_COUNT; i++) { const bay = template.clone(); this.bays.push(bay); this.group.add(bay); }
+    // Every bay carries every section's decor up front; recycling only flips which one is visible.
+    this.decor = new SectionDecor({ stone, trim, dark, metal: brass, ice });
+    for (const bay of this.bays) {
+      const kinds = new Map(TOWER_SECTIONS.map(section => [section.id, this.decor.instantiate(section.id)] as const));
+      kinds.forEach(instance => bay.add(instance.group));
+      this.bayDecor.push({ index: NaN, kinds, active: null });
+    }
+    this.flashMaterials = [stone, trim, dark];
     for (const side of [-1, 1]) {
       const lamp = new THREE.PointLight(0xffad61, 12, 12, 2); lamp.position.set(side * 8.6, 6.65, -7.1); this.lamps.push(lamp); this.group.add(lamp);
     }
@@ -154,7 +216,10 @@ export class TowerInterior {
     this.update(5.2, 0, true);
   }
 
-  update(cameraY: number, time: number, high: boolean, section: TowerSection = TOWER_SECTIONS[0], dt = 1 / 60) {
+  /** Lightning strength (0-1) this frame, for a matching boost of the scene's rim light. Always 0 under reduced motion. */
+  get lightning() { return this.flash; }
+
+  update(cameraY: number, time: number, high: boolean, section: TowerSection = TOWER_SECTIONS[0], dt = 1 / 60, reducedMotion = false) {
     const firstTheme = !this.sectionId;
     if (this.sectionId !== section.id) {
       this.sectionId = section.id;
@@ -163,15 +228,54 @@ export class TowerInterior {
     // Only existing materials and uniforms change; no allocation, loading, or collision changes at milestones.
     const blend = firstTheme ? 1 : 1 - Math.exp(-3 * Math.max(0, Number.isFinite(dt) ? dt : 0));
     this.themeColors.forEach(color => color.current.lerp(color.target, blend));
-    this.glass.uniforms.aurora.value += (section.auroraStrength - this.glass.uniforms.aurora.value) * blend;
+    const sky = this.glass.uniforms;
+    sky.aurora.value += (section.auroraStrength - sky.aurora.value) * blend;
+    for (const layer of ['storm', 'stars', 'crystal', 'frost'] as const) sky[layer].value += (section.sky[layer] - sky[layer].value) * blend;
     const center = Math.floor(cameraY / BAY_HEIGHT);
-    // Modulo selects a stable slot: crossing a bay boundary moves only the farthest bay.
+    // Modulo selects a stable slot: crossing a bay boundary moves only the farthest bay, which picks up the decor of its new height.
     for (let index = center - 3; index <= center + 3; index++) {
-      const slot = ((index % BAY_COUNT) + BAY_COUNT) % BAY_COUNT;
+      const slot = ((index % BAY_COUNT) + BAY_COUNT) % BAY_COUNT, decor = this.bayDecor[slot];
       this.bays[slot].position.y = index * BAY_HEIGHT;
+      if (decor.index === index) continue;
+      decor.index = index;
+      const next = decor.kinds.get(decorSectionForBay(index, BAY_HEIGHT).id)!;
+      if (decor.active !== next) { if (decor.active) decor.active.group.visible = false; next.group.visible = true; decor.active = next; }
     }
     this.glass.uniforms.time.value = time;
     this.lamps.forEach((lamp, i) => { lamp.position.y = center * BAY_HEIGHT + 6.65; lamp.intensity = (high ? 13 : 8) + Math.sin(time * 5 + i) * 1.2 + Math.sin(time * 11) * .5; });
     this.shafts.forEach(shaft => { shaft.visible = high; });
+    // Lightning: a rare double strike, never more than two flashes a second, and none at all under reduced motion.
+    const step = Math.min(.1, Math.max(0, Number.isFinite(dt) ? dt : 0));
+    if (reducedMotion || sky.storm.value < .5 || !Number.isFinite(time)) { this.nextStrike = -1; this.strikeAge = 9; }
+    else {
+      if (this.nextStrike < 0 || this.nextStrike - time > 12) this.nextStrike = time + 1.5 + Math.random() * 2;
+      if (time >= this.nextStrike) { this.strikeAge = 0; this.nextStrike = time + 4 + Math.random() * 5; sky.bolt.value = Math.floor(Math.random() * 97); }
+      else this.strikeAge += step;
+    }
+    const age = this.strikeAge;
+    this.flash = age > 1.2 ? 0 : Math.min(1, Math.exp(-age * 14) + (age > .22 ? .65 * Math.exp(-(age - .22) * 8) : 0)) * sky.storm.value;
+    sky.flash.value = this.flash;
+    sky.meteors.value = reducedMotion ? 0 : 1;
+    for (const material of this.flashMaterials) material.emissive.setRGB(.2, .28, .42).multiplyScalar(this.flash);
+    this.decor.animate(time, this.flash, reducedMotion);
+    const t = this.decor.time.value;
+    for (const { active } of this.bayDecor) {
+      if (!active) continue;
+      for (const sway of active.sways) {
+        const gust = sway.gust * Math.sin(t * .37 + sway.phase) * (1 + Math.sin(t * 2.9 + sway.phase * 2) * .5);
+        sway.object.rotation.z = Math.sin(t * sway.speed + sway.phase) * sway.amplitude + gust;
+        sway.object.rotation.x = Math.sin(t * sway.speed * .7 + sway.phase * 1.3) * sway.amplitude * .35;
+      }
+      for (const spin of active.spins) spin.object.rotation.y = t * spin.speed;
+      for (const object of active.highOnly) object.visible = high;
+    }
+  }
+
+  dispose() {
+    this.decor.dispose();
+    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>();
+    this.group.traverse(object => { if (object instanceof THREE.Mesh || object instanceof THREE.Points) { geometries.add(object.geometry); materials.add(object.material as THREE.Material); } });
+    geometries.forEach(geometry => geometry.dispose()); materials.forEach(material => material.dispose());
+    this.group.clear(); this.bays.length = 0; this.bayDecor.length = 0;
   }
 }

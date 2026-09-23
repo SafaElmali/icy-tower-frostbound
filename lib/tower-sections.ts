@@ -9,6 +9,10 @@ export interface TowerSection {
     flame: number; windowLow: number; windowHigh: number; shaft: number;
   };
   auroraStrength: number;
+  /** Window sky layers (0-1) blended like the palette: storm clouds and lightning, stars and meteors, prismatic glass, frost ferns. */
+  sky: { storm: number; stars: number; crystal: number; frost: number };
+  /** Ambient particles across the view: tint, point size, opacity, fall speed, sideways wind, and share of the particle pool. */
+  particles: { color: number; size: number; opacity: number; fall: number; wind: number; density: number };
 }
 
 export const TOWER_SECTIONS: readonly TowerSection[] = [
@@ -20,6 +24,8 @@ export const TOWER_SECTIONS: readonly TowerSection[] = [
       ice: 0x6d8e99, flame: 0xffad54, windowLow: 0x151923, windowHigh: 0x6a4534, shaft: 0x9b7955,
     },
     auroraStrength: 0,
+    sky: { storm: 0, stars: 0, crystal: 0, frost: 0 },
+    particles: { color: 0xffcf99, size: .05, opacity: .5, fall: .3, wind: .05, density: .45 },
   },
   {
     id: 'frozen-belfry', name: 'THE FROZEN BELFRY', startsAtFloor: 25,
@@ -29,6 +35,8 @@ export const TOWER_SECTIONS: readonly TowerSection[] = [
       ice: 0x66adbf, flame: 0x9adfff, windowLow: 0x071727, windowHigh: 0x215e7d, shaft: 0x388cb3,
     },
     auroraStrength: 0,
+    sky: { storm: 0, stars: .2, crystal: 0, frost: 1 },
+    particles: { color: 0xd4f1ff, size: .06, opacity: .7, fall: 1, wind: .25, density: .8 },
   },
   {
     id: 'crystal-spire', name: 'CRYSTAL SPIRE', startsAtFloor: 50,
@@ -38,6 +46,8 @@ export const TOWER_SECTIONS: readonly TowerSection[] = [
       ice: 0x9f81c6, flame: 0xc5a0ff, windowLow: 0x1d1037, windowHigh: 0x684ca2, shaft: 0x9972c5,
     },
     auroraStrength: .15,
+    sky: { storm: 0, stars: 0, crystal: 1, frost: 0 },
+    particles: { color: 0xe2ccff, size: .085, opacity: .85, fall: .22, wind: 0, density: .6 },
   },
   {
     id: 'aurora', name: 'THE AURORA', startsAtFloor: 75,
@@ -47,6 +57,8 @@ export const TOWER_SECTIONS: readonly TowerSection[] = [
       ice: 0x7ac0b7, flame: 0x83f2c4, windowLow: 0x192148, windowHigh: 0x277762, shaft: 0x62cfa6,
     },
     auroraStrength: 1,
+    sky: { storm: 0, stars: .45, crystal: 0, frost: .2 },
+    particles: { color: 0xb8ffe4, size: .06, opacity: .65, fall: .6, wind: .15, density: .65 },
   },
   {
     id: 'glacier-vault', name: 'THE GLACIER VAULT', startsAtFloor: 100,
@@ -56,6 +68,8 @@ export const TOWER_SECTIONS: readonly TowerSection[] = [
       ice: 0xa8e4ee, flame: 0xffd88a, windowLow: 0x0d2a36, windowHigh: 0x5fb3c4, shaft: 0xbfe9f2,
     },
     auroraStrength: .25,
+    sky: { storm: 0, stars: 0, crystal: 0, frost: .7 },
+    particles: { color: 0xeefcff, size: .075, opacity: .72, fall: .85, wind: .1, density: .9 },
   },
   {
     id: 'stormcrown', name: 'THE STORMCROWN', startsAtFloor: 150,
@@ -65,6 +79,8 @@ export const TOWER_SECTIONS: readonly TowerSection[] = [
       ice: 0x7fd8ff, flame: 0x5cf0ff, windowLow: 0x10151e, windowHigh: 0x3a6b8f, shaft: 0x7ad9ff,
     },
     auroraStrength: .4,
+    sky: { storm: 1, stars: 0, crystal: 0, frost: 0 },
+    particles: { color: 0xd6e4ff, size: .06, opacity: .78, fall: 2.8, wind: -2.2, density: 1 },
   },
   {
     id: 'starfall-summit', name: 'STARFALL SUMMIT', startsAtFloor: 200,
@@ -74,6 +90,8 @@ export const TOWER_SECTIONS: readonly TowerSection[] = [
       ice: 0x9fb2ff, flame: 0xffc96b, windowLow: 0x0b0f33, windowHigh: 0x8a6bd6, shaft: 0xffd28a,
     },
     auroraStrength: 1,
+    sky: { storm: 0, stars: 1, crystal: 0, frost: 0 },
+    particles: { color: 0xffe0a3, size: .075, opacity: .85, fall: .3, wind: .35, density: .55 },
   },
 ];
 
