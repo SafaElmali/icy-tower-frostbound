@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RecoveryShield } from './recovery-shield.ts';
+import { crackTexture, crackThreshold } from './crack-texture.ts';
 import { CRUMBLE_DELAY, ICICLE_WARNING_TIME, WRAITH_DASH_LENGTH, WRAITH_DASH_TIME, WRAITH_FADE_TIME, WRAITH_TELL_TIME, type TowerActionState, type CrumbleState, type FrostWraith } from './tower-action.ts';
 import type { GameEvent } from './tower-engine.ts';
 
@@ -19,9 +20,13 @@ type WraithVisual = EnemySlot & {
 };
 type TrailCrystal = { x: number; y: number; born: number; angle: number };
 type Particle = { x: number; y: number; z: number; vx: number; vy: number; vz: number; born: number; life: number; size: number; spin: number; gravity: number; color: THREE.Color; stretch: number };
-type Chunk = { x: number; y: number; vx: number; vy: number; born: number; life: number; w: number; spin: number; color: THREE.Color };
+type Chunk = { x: number; y: number; z: number; vx: number; vy: number; vz: number; born: number; life: number; w: number; h: number; d: number; spin: number; tumble: number; color: THREE.Color };
 type Ring = { mesh: THREE.Mesh; material: THREE.MeshBasicMaterial; born: number; life: number; from: number; to: number; opacity: number; active: boolean };
-export type CrumbleVisual = { group: THREE.Group; timer: THREE.Mesh; cracks: THREE.Group; chips: THREE.Mesh[]; spread: THREE.Group[]; wasBroken: boolean | null };
+/** Thin ice: hairline cracks, fissures that grow in stages once armed, a fracture seam, a countdown bar and falling chips. */
+export type CrumbleVisual = { group: THREE.Group; timer: THREE.Mesh; cracks: THREE.Group; chips: THREE.Mesh[]; spread: THREE.Group[]; glow: THREE.Mesh[]; variant: number; wasBroken: boolean | null };
+type CrackSet = { base: THREE.MeshBasicMaterial[]; glow: THREE.MeshBasicMaterial[][] };
+/** Glowing fissure stages shown as the countdown runs: generations 1, 2, 3 and 4. */
+const CRACK_STAGES = 4;
 const ICE_CAPACITY = 4, BAT_CAPACITY = 4, WRAITH_CAPACITY = 2, CRYSTAL_CAPACITY = 24, TRAIL_CAPACITY = 72;
 const PARTICLE_CAPACITY = 140, CHUNK_CAPACITY = 40, RING_CAPACITY = 6, DASH_SEGMENTS = 11;
 const BAT_POP = .42, HIT_FLASH = .38, VANISH = .3;
@@ -70,6 +75,9 @@ export class TowerActionWorld {
   private iceMaterial = this.material(new THREE.MeshPhysicalMaterial({ color: 0x88eaff, roughness: .15, metalness: .24, clearcoat: 1, emissive: 0x28798e, emissiveIntensity: .6 }));
   private crystalMaterial = this.material(new THREE.MeshPhysicalMaterial({ color: 0xa4ffdf, emissive: 0x58ffc5, emissiveIntensity: 1.2, roughness: .14, metalness: .25, clearcoat: 1 }));
   private batGlow = this.material(this.glowMaterial(0x5fcfff, .5));
+  private textures: THREE.Texture[] = [];
+  /** Two crack patterns (top and front face) so neighbouring thin-ice ledges differ. */
+  private crackSets: CrackSet[] = [0x51f3, 0x2b77].map(seed => this.crackSet(seed));
 
   constructor() {
     this.group.name = 'Tower action';
@@ -87,7 +95,7 @@ export class TowerActionWorld {
     const particleMaterial = this.material(new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
     this.particleMesh = new THREE.InstancedMesh(this.crystalGeometry, particleMaterial, PARTICLE_CAPACITY);
     this.particleMesh.name = 'Hazard burst particles';
-    this.chunkMesh = new THREE.InstancedMesh(this.box, this.material(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .35, metalness: .1, emissive: 0x3a2a12, emissiveIntensity: .35 })), CHUNK_CAPACITY);
+    this.chunkMesh = new THREE.InstancedMesh(this.box, this.material(new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: .12, metalness: .08, clearcoat: 1, emissive: 0x1d5f73, emissiveIntensity: .35 })), CHUNK_CAPACITY);
     this.chunkMesh.name = 'Collapsed ledge debris';
     for (const mesh of [this.particleMesh, this.chunkMesh]) {
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; mesh.count = 0; mesh.visible = false;
@@ -107,6 +115,17 @@ export class TowerActionWorld {
   }
 
   private geometry<T extends THREE.BufferGeometry>(geometry: T): T { this.geometries.add(geometry); return geometry; }
+  private crackSet(seed: number): CrackSet {
+    const faces = [crackTexture(256, 96, seed, 'top'), crackTexture(256, 32, seed + 7, 'front')];
+    this.textures.push(...faces);
+    // Glowing fissures are brighter than white so the bloom pass makes them burn.
+    const material = (map: THREE.Texture, color: number, generation: number, glow: boolean) => this.material(new THREE.MeshBasicMaterial({
+      map, color: glow ? new THREE.Color(color).multiplyScalar(1.7) : color, alphaTest: crackThreshold(generation), transparent: false, toneMapped: !glow, polygonOffset: true, polygonOffsetFactor: glow ? -3 : -2,
+    }));
+    // Unarmed ice shows only its first hairline fractures, in a deep ice blue.
+    return { base: faces.map(map => material(map, 0x0c2a3a, 1, false)),
+      glow: faces.map(map => Array.from({ length: CRACK_STAGES }, (_, stage) => material(map, AMBER, stage + 1, true))) };
+  }
   private material<T extends THREE.Material>(material: T): T { this.materials.add(material); return material; }
   private glowMaterial(color: number, opacity: number, fragmentShader = glowFragment) {
     return new THREE.ShaderMaterial({ transparent: true, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending,
@@ -240,44 +259,30 @@ export class TowerActionWorld {
     return { ...this.slot(), group, stretch, model, arms, tatters, robe, eyes, glow, halo, line, segments, arrow, ghosts, ghostMaterial, state: 'drift', stateTime: 0 };
   }
 
-  /** Cracks belong to the ledge while their shared geometry belongs to this pool. */
-  makeCrumble(width: number): CrumbleVisual {
+  /** Cracks belong to the ledge while their shared geometry and materials belong to this pool. */
+  makeCrumble(width: number, seed = 0): CrumbleVisual {
     const group = new THREE.Group(); group.name = 'Cracked ice warning';
-    const cracks = new THREE.Group(); group.add(cracks);
-    const lay = (parent: THREE.Object3D, material: THREE.Material, paths: number[][][]) => {
-      for (const path of paths) for (let i = 1; i < path.length; i++) {
-        const a = path[i - 1], b = path[i], dx = (b[0] - a[0]) * width, dz = b[1] - a[1];
-        const crack = this.bar(parent, material, (a[0] + b[0]) * width / 2, .009, (a[1] + b[1]) / 2, Math.hypot(dx, dz), .017, .045);
-        crack.rotation.y = -Math.atan2(dz, dx);
-      }
+    const variant = Math.abs(seed) % this.crackSets.length, set = this.crackSets[variant];
+    // Planes sit just proud of the thin-ice slab: its top at y 0, its front face at z .53.
+    const top = (material: THREE.Material, parent: THREE.Object3D) => {
+      const mesh = this.mesh(this.plane, material, parent, 0, .006, -.35); mesh.rotation.x = -Math.PI / 2; mesh.scale.set(width - .1, 1.62, 1); return mesh;
     };
-    /** Front-face fissures: the side of the ledge the camera actually sees. */
-    const face = (parent: THREE.Object3D, material: THREE.Material, points: number[][]) => {
-      for (let i = 1; i < points.length; i++) {
-        const a = points[i - 1], b = points[i], dx = (b[0] - a[0]) * width, dy = b[1] - a[1];
-        const crack = this.bar(parent, material, (a[0] + b[0]) * width / 2, (a[1] + b[1]) / 2, .56, Math.hypot(dx, dy), .04, .02);
-        crack.rotation.z = Math.atan2(dy, dx);
-      }
+    const front = (material: THREE.Material, parent: THREE.Object3D) => {
+      const mesh = this.mesh(this.plane, material, parent, 0, -.15, .545); mesh.scale.set(width - .1, .28, 1); return mesh;
     };
-    lay(cracks, this.darkAmber, [
-      [[-.37, .49], [-.23, .15], [-.3, -.16], [-.14, -.55], [-.21, -1.09]],
-      [[.22, .51], [.14, .2], [.26, -.14], [.16, -.55], [.28, -1.1]],
-      [[-.23, .15], [-.02, -.04], [.14, .2]],
-    ]);
-    // Front-facing seams stay legible on narrow mobile screens.
-    for (const side of [-1, 1]) { const seam = this.bar(cracks, this.amber, side * width * .24, -.14, .55, .027, .28); seam.rotation.z = side * .27; }
-    // Once armed, the fracture spreads in two stages toward the ledge ends and glows.
+    const cracks = new THREE.Group(); cracks.name = 'Hairline cracks'; group.add(cracks);
+    top(set.base[0], cracks); front(set.base[1], cracks);
+    // Once armed the fissures glow amber and grow outward in stages; the seam splits the slab near the end.
     const spread = [new THREE.Group(), new THREE.Group()];
     for (const stage of spread) { stage.visible = false; group.add(stage); }
-    lay(spread[0], this.fissure, [[[-.23, .15], [-.4, .02], [-.46, -.3]], [[.14, .2], [.36, .06], [.42, -.36]], [[-.02, -.04], [.03, -.5], [-.05, -.95]]]);
-    face(spread[0], this.fissure, [[-.24, -.02], [-.33, -.12], [-.28, -.2], [-.38, -.29]]);
-    face(spread[0], this.fissure, [[.24, -.02], [.31, -.1], [.27, -.19], [.36, -.28]]);
-    lay(spread[1], this.fissure, [[[-.4, .02], [-.49, .3]], [[.36, .06], [.48, .34]], [[-.3, -.16], [-.48, -.7]], [[.26, -.14], [.47, -.62]]]);
-    face(spread[1], this.fissure, [[-.47, -.05], [-.36, -.12], [-.1, -.08], [0, -.16], [.12, -.07], [.37, -.13], [.47, -.05]]);
-    this.bar(group, this.darkAmber, 0, -.29, .575, width * .8, .09);
-    const timer = this.bar(group, this.amber, 0, -.29, .6, width * .8, .04); timer.visible = false;
-    const chips = [-1, 0, 1].map(side => { const chip = this.mesh(this.crystalGeometry, this.iceMaterial, group, side * width * .29, -.43, .63); chip.scale.set(.1, .13, .09); chip.visible = false; return chip; });
-    return { group, timer, cracks, chips, spread, wasBroken: null };
+    const glow = [top(set.glow[0][0], spread[0]), front(set.glow[1][0], spread[0])];
+    const seamX = (variant ? -.12 : .08) * width;
+    const seam = this.bar(spread[1], this.fissure, seamX, -.15, .56, .045, .3); seam.rotation.z = variant ? .18 : -.14;
+    this.bar(spread[1], this.fissure, seamX + (variant ? -.06 : .06), .008, -.35, .05, .008, 1.5).rotation.y = variant ? .12 : -.1;
+    this.bar(group, this.darkAmber, 0, -.36, .6, width * .8, .07);
+    const timer = this.bar(group, this.amber, 0, -.36, .63, width * .8, .035); timer.visible = false;
+    const chips = [-1, 0, 1].map(side => { const chip = this.mesh(this.crystalGeometry, this.iceMaterial, group, side * width * .29, -.45, .5); chip.scale.set(.1, .13, .09); chip.visible = false; return chip; });
+    return { group, timer, cracks, chips, spread, glow, variant, wasBroken: null };
   }
 
   updateCrumble(visual: CrumbleVisual, state: CrumbleState, width: number, time: number, reducedMotion: boolean) {
@@ -288,14 +293,17 @@ export class TowerActionWorld {
     visual.timer.visible = active;
     visual.timer.scale.x = width * .8 * remaining;
     visual.timer.position.x = -width * .4 * (1 - remaining);
-    visual.cracks.scale.z = 1 + (1 - remaining) * .025;
-    visual.spread[0].visible = active && progress > .2;
-    // The final stage flickers only with motion allowed; it is steady otherwise.
-    visual.spread[1].visible = active && progress > .55 && (reducedMotion || progress > .8 || Math.sin(time * 40) > -.4);
+    // Fissures grow in four steps as the countdown runs, starting the moment the ice is armed.
+    const stage = Math.min(CRACK_STAGES - 1, Math.floor(progress * CRACK_STAGES));
+    const set = this.crackSets[visual.variant];
+    visual.glow[0].material = set.glow[0][stage]; visual.glow[1].material = set.glow[1][stage];
+    visual.spread[0].visible = active;
+    // The final split flickers only with motion allowed; it is steady otherwise.
+    visual.spread[1].visible = active && progress > .55 && (reducedMotion || progress > .85 || Math.sin(time * 38) > -.35);
     visual.chips.forEach((chip, index) => {
       chip.visible = active && !reducedMotion;
-      const fall = (time * 2.5 + index * .33) % 1;
-      chip.position.y = -.43 - fall * .7; chip.scale.setScalar(.08 * (1 - fall) * (1 + progress * .6));
+      const fall = (time * (2.2 + progress * 2) + index * .33) % 1;
+      chip.position.y = -.45 - fall * .8; chip.scale.setScalar(.08 * (1 - fall) * (1 + progress * .8));
     });
     // The ledge owns this visual; debris is spawned into the action pool on the break.
     if (visual.wasBroken === false && state.broken && !reducedMotion && visual.group.parent) {
@@ -311,6 +319,13 @@ export class TowerActionWorld {
     if (time < this.fxTime - 1e-6) this.clearEffects();
     this.fxTime = time;
     const motion = !this.reducedMotion;
+    if (event.type === 'crumble' && motion) {
+      // The first crack puffs frost off the slab.
+      this.burst(event.x, event.y + .05, 8, time, { colors: [0xf2fbff, 0xbfefff], speed: 1.6, up: 1.2, size: .08, life: .55, gravity: 4 });
+    } else if (event.type === 'crumble-creak' && motion) {
+      // Each creak shakes loose a few shards from under the ledge.
+      this.burst(event.x, event.y - .3, 4 + (event.value ?? 1) * 3, time, { colors: [0x9fe8ff, 0xe4f8ff], speed: 1.4, up: 0, size: .07, life: .6, gravity: 11 });
+    }
     if (event.type === 'stomp') {
       const enemy = this.nearestEnemy(event.x, event.y - .4, 1.4);
       if (enemy) { if (motion) enemy.popAt = time; else enemy.popAt = null; }
@@ -369,17 +384,21 @@ export class TowerActionWorld {
     return ring;
   }
 
+  /** Thin ice breaks into slabs of itself that tumble away, with shards, frost powder and a flash of cold air. */
   private shatterLedge(x: number, y: number, width: number, time: number) {
-    const count = this.high ? 10 : 6;
+    const count = this.high ? 14 : 8, palette = [0x9fdcf0, 0x6fc6e3, 0xbfe9f7, 0x5fbfe0];
     for (let i = 0; i < count; i++) {
       if (this.chunks.length >= CHUNK_CAPACITY) this.chunks.shift();
-      const along = i / (count - 1) - .5;
-      this.chunks.push({ x: x + along * width * .86, y: y - .12, vx: along * 2.4 + (this.random() - .5) * 1.2, vy: .6 + this.random() * 1.8,
-        born: time, life: .95 + this.random() * .35, w: width / count * .9, spin: (this.random() - .5) * 9,
-        color: new THREE.Color(i % 3 === 1 ? 0x9fe8ff : 0xd6b779) });
+      const along = (i + .5) / count - .5, big = i % 3 !== 2;
+      this.chunks.push({ x: x + along * width * .9, y: y - .1 - this.random() * .12, z: -.35 + (this.random() - .5) * .9,
+        vx: along * 2.8 + (this.random() - .5) * 1.4, vy: .4 + this.random() * 2, vz: (this.random() - .5) * 1.2,
+        born: time, life: 1.05 + this.random() * .45, w: width / count * (big ? 1.25 : .7), h: big ? .16 + this.random() * .12 : .1,
+        d: big ? .5 + this.random() * .6 : .3, spin: (this.random() - .5) * 10, tumble: (this.random() - .5) * 7,
+        color: new THREE.Color(palette[i % palette.length]) });
     }
-    this.burst(x, y - .1, 12, time, { colors: [0xffd08a, 0xdffaff], speed: 2.6, up: 1.5, size: .07, life: .6, gravity: 10 });
-    const dust = this.ring(x, y - .05, .3, Math.max(1.4, width * .55), .45, 0xffe2b0, .5, time);
+    this.burst(x, y - .1, this.high ? 22 : 12, time, { colors: [0xdffaff, 0x88eaff, 0xffffff], speed: 3.4, up: 2.4, size: .09, life: .7, gravity: 12, stretch: 1.6 });
+    this.burst(x, y + .05, this.high ? 14 : 8, time, { colors: [0xf2fbff], speed: 1.2, up: .6, size: .12, life: 1.1, gravity: 1.5 });
+    const dust = this.ring(x, y - .05, .3, Math.max(1.6, width * .6), .5, 0xd9f6ff, .6, time);
     if (dust) dust.mesh.rotation.x = -Math.PI / 2 * .82;
   }
 
@@ -593,10 +612,10 @@ export class TowerActionWorld {
     this.particleMesh.instanceMatrix.needsUpdate = true; if (this.particleMesh.instanceColor) this.particleMesh.instanceColor.needsUpdate = true;
     this.chunks = this.chunks.filter(c => time - c.born < c.life);
     this.chunks.forEach((c, index) => {
-      c.vy -= 14 * dt; c.x += c.vx * dt; c.y += c.vy * dt;
+      c.vy -= 14 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt;
       const age = Math.max(0, time - c.born), shrink = Math.min(1, (c.life - age) / .25);
-      this.transform.position.set(c.x, c.y, .1); this.transform.rotation.set(age * c.spin * .4, 0, age * c.spin);
-      this.transform.scale.set(c.w * shrink, .3 * shrink, .6 * shrink);
+      this.transform.position.set(c.x, c.y, c.z); this.transform.rotation.set(age * c.tumble, age * c.spin * .3, age * c.spin);
+      this.transform.scale.set(c.w * shrink, c.h * shrink, c.d * shrink);
       this.transform.updateMatrix(); this.chunkMesh.setMatrixAt(index, this.transform.matrix); this.chunkMesh.setColorAt(index, c.color);
     });
     this.chunkMesh.count = this.chunks.length; this.chunkMesh.visible = this.chunks.length > 0;
@@ -642,6 +661,7 @@ export class TowerActionWorld {
     if (this.disposed) return; this.disposed = true;
     this.shield.dispose(); this.trail.dispose(); this.particleMesh.dispose(); this.chunkMesh.dispose();
     this.geometries.forEach(geometry => geometry.dispose()); this.materials.forEach(material => material.dispose());
+    this.textures.forEach(texture => texture.dispose());
     this.group.clear(); this.trailCrystals.length = 0; this.particles.length = 0; this.chunks.length = 0;
   }
 }

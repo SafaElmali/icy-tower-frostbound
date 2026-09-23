@@ -222,6 +222,8 @@ export class TowerInterior {
 
   /** Lightning strength (0-1) this frame, for a matching boost of the scene's rim light. Always 0 under reduced motion. */
   get lightning() { return this.flash; }
+  /** Count of lightning strikes so far, so audio can answer each one with thunder. */
+  strikes = 0;
 
   update(cameraY: number, time: number, high: boolean, section: TowerSection = TOWER_SECTIONS[0], dt = 1 / 60, reducedMotion = false) {
     const firstTheme = !this.sectionId;
@@ -252,7 +254,7 @@ export class TowerInterior {
     if (reducedMotion || sky.storm.value < .5 || !Number.isFinite(time)) { this.nextStrike = -1; this.strikeAt = -Infinity; }
     else {
       if (this.nextStrike < 0 || this.nextStrike - time > 12 || time < this.strikeAt) { this.nextStrike = time + 1.5 + Math.random() * 2; this.strikeAt = -Infinity; }
-      if (time >= this.nextStrike) { this.strikeAt = time; this.nextStrike = time + 4 + Math.random() * 5; sky.bolt.value = Math.floor(Math.random() * 97); }
+      if (time >= this.nextStrike) { this.strikeAt = time; this.strikes++; this.nextStrike = time + 4 + Math.random() * 5; sky.bolt.value = Math.floor(Math.random() * 97); }
     }
     // Timed from the clock rather than frame steps so a slow frame rate can't stretch a flash.
     const age = time - this.strikeAt;

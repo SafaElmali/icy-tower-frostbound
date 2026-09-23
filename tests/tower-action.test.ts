@@ -226,3 +226,13 @@ void test('hazard and reward actor counts stay bounded across long simulation se
     assert.ok(engine.action.icicles.length <= 2); assert.ok(engine.action.bats.length <= 2); assert.ok(engine.action.crystals.length <= 16);
   }
 });
+
+void test('thin ice creaks twice while it gives way, then collapses, without changing its timing', () => {
+  const engine = new TowerEngine(); engine.start('practice');
+  const p = stand(engine, 20); p.crumble = { remaining: null, broken: false };
+  const events: { type: string; value?: number }[] = [];
+  for (let i = 0; i < 200 && !p.crumble.broken; i++) { engine.tick(1 / 120, freshControls()); events.push(...engine.drainEvents()); }
+  const cues = events.filter(e => ['crumble', 'crumble-creak', 'collapse'].includes(e.type)).map(e => e.type === 'crumble-creak' ? `creak-${e.value}` : e.type);
+  assert.deepEqual(cues, ['crumble', 'creak-1', 'creak-2', 'collapse']);
+  assert.ok(Math.abs(engine.time - CRUMBLE_DELAY) < 2 / 120, 'the ledge still breaks on schedule');
+});

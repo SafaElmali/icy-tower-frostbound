@@ -12,7 +12,7 @@ export type QuickChallenge = {
   progress: number; target: number; status: 'active' | 'complete' | 'failed' | 'missed';
 };
 export type Platform = { floor?: number; route?: 'approach' | 'safe' | 'shortcut' | 'merge'; id: number; x: number; y: number; width: number; gem: boolean; collected: boolean; moving: boolean; spring: boolean; origin: number; phase: number; crumble?: CrumbleState };
-export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over' | 'icicle-warning' | 'bat-warning' | 'crumble' | 'collapse' | 'hurt' | 'stomp' | 'dodge' | 'frenzy' | 'frenzy-end' | 'encounter' | 'combo-short' | 'icicle-shatter' | 'wraith' | 'wraith-tell' | 'wraith-dash'; x: number; y: number; value?: number; spinDirection?: number };
+export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over' | 'icicle-warning' | 'bat-warning' | 'crumble' | 'collapse' | 'hurt' | 'stomp' | 'dodge' | 'frenzy' | 'frenzy-end' | 'encounter' | 'combo-short' | 'icicle-shatter' | 'wraith' | 'wraith-tell' | 'wraith-dash' | 'crumble-creak' | 'spring'; x: number; y: number; value?: number; spinDirection?: number };
 export type FailureEvidence = { kind: 'left-ledge'; floor: number } | { kind: 'frost-on-ledge' | 'fell' | 'frost' };
 export const FLOOR_HEIGHT = 2.35;
 export const WALL = 6.4;
@@ -368,7 +368,7 @@ export class TowerEngine {
           if (landing.spring) {
             this.vy = (19 + Math.abs(this.vx) * .25) * this.jumpMultiplier;
             this.grounded = false; this.standingId = -1; this.coyote = 0; this.jumpBuffer = 0;
-            this.emit('jump', this.vx);
+            this.emit('jump', this.vx); this.emit('spring');
           }
         }
       }
@@ -450,7 +450,13 @@ export class TowerEngine {
     for (const p of this.platforms) {
       if (this.grounded && this.standingId === p.id && p.crumble?.remaining === null) { this.armCrumble(p); continue; }
       if (!p.crumble || p.crumble.broken || p.crumble.remaining === null) continue;
+      const before = p.crumble.remaining;
       p.crumble.remaining = Math.max(0, p.crumble.remaining - dt);
+      // Audio-only cues as the ice gives way: two creaks at one and two thirds.
+      for (const stage of [1, 2]) {
+        const at = CRUMBLE_DELAY * (1 - stage / 3);
+        if (before > at && p.crumble.remaining <= at) this.events.push({ type: 'crumble-creak', x: p.x, y: p.y, value: stage });
+      }
       if (p.crumble.remaining < 1e-8) {
         p.crumble.remaining = 0; p.crumble.broken = true;
         this.events.push({ type: 'collapse', x: p.x, y: p.y });

@@ -46,7 +46,7 @@ Party keeps the rising frost and combo scoring, with its own online rankings and
 
 Current runs add five action mechanics using the existing move and jump controls:
 
-- **Crumbling ice:** cracked amber ledges begin appearing at floor 8 and break 1.15 seconds after landing. Jump away while the warning bar drains; broken ledges cannot catch a fall.
+- **Crumbling ice:** thin ledges of translucent blue ice, with dark hairline cracks and no stone base, begin appearing at floor 8 and break 1.15 seconds after landing. Landing arms them: the cracks glow amber and spread in four steps, the ice creaks twice and shudders harder, and a warning bar drains underneath. When it breaks, the slab shatters into tumbling chunks. Broken ledges cannot catch a fall.
 - **Falling icicles:** from floor 12, shards fall immediately without a marked lane or countdown. Each shard keeps its original horizontal position instead of tracking the player. Normal drops start 3.5 seconds apart. Close dodges award 75 points.
 - **Frost bats:** from floor 20, winged enemies enter immediately without spawn circles, starting 5.5 seconds apart. Bats and icicles can overlap, with up to two of each active. Both spawn intervals shorten by 15% pressure per 50-floor tier, up to five tiers. Landing on top bounces you upward and awards 350 points. Side hits and icicles give a short upward recovery impulse and 1.65 seconds of protection, and break the combo.
 - **Combo frenzy:** earning a 10-floor combo charge through combo jumps activates six seconds of stronger jumps, bonus crystal trails, and a rhythmic sound cue. Further frenzy charges require new higher-floor landings after the burst ends; breaking the combo clears the charge.

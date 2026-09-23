@@ -20,6 +20,7 @@ import { LandingGuideWorld, type LandingGuideTarget } from './landing-guide-worl
 import { getTowerSection } from './tower-sections';
 import { TowerEngine, type GameEvent, type Platform } from './tower-engine';
 import { TowerActionWorld, type CrumbleVisual } from './tower-action-world';
+import { CRUMBLE_DELAY } from './tower-action';
 import { RecoveryShield } from './recovery-shield';
 
 type ClimberView = {
@@ -59,6 +60,8 @@ export class TowerWorld {
   private actionWorld = new TowerActionWorld();
   private lastEngineTime = 0;
   private interior: TowerInterior;
+  /** Lightning strikes seen so far; the game answers each new one with thunder. */
+  get lightningStrikes() { return this.interior.strikes; }
   private particles = new SectionParticles();
   private bestMarker = new PersonalBestMarker();
   private landingGuide = new LandingGuideWorld();
@@ -78,7 +81,9 @@ export class TowerWorld {
   private env: THREE.WebGLRenderTarget;
   private stone: THREE.MeshStandardMaterial;
   private snowMat = new THREE.MeshStandardMaterial({ color: 0xc2dfdf, roughness: .79, metalness: .03 });
-  private crackedIceMat = new THREE.MeshPhysicalMaterial({ color: 0xd6b779, roughness: .35, metalness: .12, clearcoat: .8, emissive: 0x765020, emissiveIntensity: .32 });
+  // Thin ice: glassy pale blue, clearly unlike snow-capped stone, the gold shortcut or the pink spring.
+  private crackedIceMat = new THREE.MeshPhysicalMaterial({ color: 0x5fbfe0, roughness: .06, metalness: .05, clearcoat: 1, clearcoatRoughness: .04, emissive: 0x145e7a, emissiveIntensity: .5, transparent: true, opacity: .84 });
+  private thinIceCoreMat = new THREE.MeshStandardMaterial({ color: 0x1f6f8f, roughness: .3, metalness: .1, emissive: 0x0a3446, emissiveIntensity: .5 });
   private iceMat: THREE.MeshPhysicalMaterial;
   private gold = new THREE.MeshStandardMaterial({ color: 0x9a7350, metalness: .8, roughness: .38 });
   private springMat = new THREE.MeshStandardMaterial({ color: 0xff70bf, emissive: 0xb02677, emissiveIntensity: .55, metalness: .4, roughness: .3 });
@@ -263,10 +268,16 @@ export class TowerWorld {
   }
   private makeLedge(p: Platform, party: boolean): Ledge {
     const group = new THREE.Group(); group.position.set(p.x, p.y, 0); this.root.add(group);
-    this.mesh(new RoundedBoxGeometry(p.width, .35, 1.7, 2, .07), this.stone, group, 0, -.23, -.35);
-    this.mesh(new RoundedBoxGeometry(p.width + .06, .13, 1.76, 3, .055), p.crumble ? this.crackedIceMat : p.spring ? this.springMat : p.route === 'shortcut' ? this.routeMat : this.snowMat, group, 0, -.065, -.35);
-    this.mesh(new THREE.BoxGeometry(p.width - .12, .05, .05), this.iceMat, group, 0, -.12, .53);
-    this.mesh(new THREE.BoxGeometry(p.width - .15, .055, 1.6), this.gold, group, 0, -.4, -.35);
+    if (p.crumble) {
+      // A single slab of clouded ice with a darker core, resting on the stone brackets.
+      this.mesh(new RoundedBoxGeometry(p.width + .06, .3, 1.76, 3, .06), this.crackedIceMat, group, 0, -.15, -.35);
+      this.mesh(new THREE.BoxGeometry(p.width - .5, .12, 1.3), this.thinIceCoreMat, group, 0, -.17, -.4);
+    } else {
+      this.mesh(new RoundedBoxGeometry(p.width, .35, 1.7, 2, .07), this.stone, group, 0, -.23, -.35);
+      this.mesh(new RoundedBoxGeometry(p.width + .06, .13, 1.76, 3, .055), p.spring ? this.springMat : p.route === 'shortcut' ? this.routeMat : this.snowMat, group, 0, -.065, -.35);
+      this.mesh(new THREE.BoxGeometry(p.width - .12, .05, .05), this.iceMat, group, 0, -.12, .53);
+      this.mesh(new THREE.BoxGeometry(p.width - .15, .055, 1.6), this.gold, group, 0, -.4, -.35);
+    }
     for (let i = 0; i < Math.ceil(p.width * 2.8); i++) {
       const depth = .14 + Math.abs(Math.sin(i * 7.13 + p.id)) * .57;
       const icicle = this.mesh(new THREE.ConeGeometry(.045 + (i % 3) * .013, depth, 5), this.iceMat, group, -p.width / 2 + .14 + i * .35, -.31 - depth / 2, .4);
@@ -274,7 +285,7 @@ export class TowerWorld {
     }
     for (const side of [-1, 1]) {
       const bracket = this.mesh(new THREE.BoxGeometry(.13, .56, .32), this.stone, group, side * (p.width / 2 - .32), -.65, -.72); bracket.rotation.x = -.4;
-      this.mesh(new THREE.IcosahedronGeometry(.075, 1), this.gold, group, side * (p.width / 2 - .15), -.24, .52);
+      if (!p.crumble) this.mesh(new THREE.IcosahedronGeometry(.075, 1), this.gold, group, side * (p.width / 2 - .15), -.24, .52);
     }
     if (p.spring) {
       for (const side of [-1, 1]) for (let i = 0; i < 4; i++) {
@@ -286,7 +297,7 @@ export class TowerWorld {
     if (p.gem) { gem = this.mesh(new THREE.OctahedronGeometry(.21, 0), party ? this.partyGemMat : this.gemMat, group, 0, 1.05, 0); gem.scale.y = 1.55; }
     this.batchMeshes(group, gem);
     const plaque = p.id > 0 && p.id % 10 === 0 ? this.makeFloorPlaque(p.id, group) : undefined;
-    const crumble = p.crumble ? this.actionWorld.makeCrumble(p.width) : undefined;
+    const crumble = p.crumble ? this.actionWorld.makeCrumble(p.width, p.id) : undefined;
     if (crumble) group.add(crumble.group);
     return { group, gem, plaque, crumble, platform: p, id: p.id };
   }
@@ -324,9 +335,11 @@ export class TowerWorld {
     if (e.type === 'wall' && !this.reducedMotion) this.shake = .055;
     if (e.type === 'hurt' && !this.reducedMotion) this.shake = .11;
     if (e.type === 'stomp' && !this.reducedMotion) this.shake = .05;
+    if (e.type === 'collapse' && !this.reducedMotion) this.shake = Math.max(this.shake, .045);
+    if (e.type === 'crumble-creak' && !this.reducedMotion) this.shake = Math.max(this.shake, .012 * (e.value ?? 1));
     if (!this.reducedMotion && ['jump', 'land', 'gem', 'wall', 'combo', 'collapse', 'hurt', 'stomp', 'dodge', 'frenzy'].includes(e.type)) {
       const count = e.type === 'gem' || e.type === 'frenzy' ? 22 : e.type === 'combo' || e.type === 'dodge' ? 9 : 12;
-      const material = ['hurt', 'collapse'].includes(e.type) ? this.impactFleckMat : ['frenzy', 'stomp', 'dodge'].includes(e.type) ? this.frenzyFleckMat : this.fleckMat;
+      const material = e.type === 'hurt' ? this.impactFleckMat : ['frenzy', 'stomp', 'dodge'].includes(e.type) ? this.frenzyFleckMat : this.fleckMat;
       for (let i = 0; i < count; i++) {
         if (this.flecks.length >= 240) this.root.remove(this.flecks.shift()!.mesh);
         const mesh = new THREE.Mesh(this.fleckGeometry, material); mesh.position.set(e.x + (Math.random() - .5) * .5, e.y + .08, .2); this.root.add(mesh);
@@ -372,7 +385,12 @@ export class TowerWorld {
       ledge.group.visible = !p.crumble?.broken;
       if (p.crumble && ledge.crumble) {
         this.actionWorld.updateCrumble(ledge.crumble, p.crumble, p.width, e.time, this.reducedMotion);
-        if (!this.reducedMotion && p.crumble.remaining !== null && !p.crumble.broken) ledge.group.position.x += Math.sin(e.time * 39 + p.id) * .018;
+        if (!this.reducedMotion && p.crumble.remaining !== null && !p.crumble.broken) {
+          // The shudder builds as the ice gives way.
+          const giving = 1 - Math.max(0, p.crumble.remaining) / CRUMBLE_DELAY;
+          ledge.group.position.x += Math.sin(e.time * 39 + p.id) * (.006 + giving * giving * .04);
+          ledge.group.position.y += Math.sin(e.time * 53 + p.id * 2) * giving * .012;
+        }
       }
       if (ledge.gem) { ledge.gem.visible = !p.collected && !p.crumble?.broken; ledge.gem.rotation.y = this.reducedMotion ? .5 : actionTime * 1.8; ledge.gem.position.y = 1.05 + (this.reducedMotion ? 0 : Math.sin(actionTime * 2.4 + p.id) * .14); }
     }
@@ -450,7 +468,7 @@ export class TowerWorld {
     this.root.remove(this.landingGuide.group);
     this.landingGuide.dispose();
     this.rivals.forEach(rival => { rival.nameplate.dispose(); rival.shield.group.removeFromParent(); rival.shield.dispose(); });
-    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>([this.springMat, this.partyGemMat, this.gemMat, this.routeMat, this.crackedIceMat, this.impactFleckMat, this.frenzyFleckMat]), textures = new Set<THREE.Texture>();
+    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>([this.springMat, this.partyGemMat, this.gemMat, this.routeMat, this.crackedIceMat, this.thinIceCoreMat, this.impactFleckMat, this.frenzyFleckMat]), textures = new Set<THREE.Texture>();
     this.scene.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Points) { geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m); } });
     for (const m of materials) { for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value); m.dispose(); }
     geometries.forEach(g => g.dispose()); textures.forEach(t => t.dispose()); this.env.dispose(); this.fleckGeometry.dispose(); this.fleckMat.dispose(); this.composer.dispose(); this.bloom.dispose(); this.renderer.dispose();
