@@ -104,8 +104,9 @@ export default function HowToPlay() {
               airborne beside a wall to launch up and away.
             </li>
             <li>
-              <strong>Keep the chain.</strong> Land on new higher floors within
-              3.8 seconds to extend your combo.
+              <strong>Keep the chain.</strong> Jump two or more floors at a
+              time, landing within 3.8 seconds, to extend your combo. A
+              one-floor hop ends it.
             </li>
             <li>
               <strong>Stay ahead of the frost.</strong> Automatic scrolling

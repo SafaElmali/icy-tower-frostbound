@@ -14,7 +14,7 @@ export const SKILL_GOALS: readonly SkillGoal[] = [
   { id: 'floor-5', title: 'Reach floor 5', description: 'Land on floor 5 or higher. Take your time finding the next ledge.', requires: [], targets: [{ metric: 'floor', target: 5, label: 'Floors' }] },
   { id: 'crystal-1', title: 'Collect one crystal', description: 'Touch a floating crystal on your climb.', requires: [], targets: [{ metric: 'gems', target: 1, label: 'Crystals' }] },
   { id: 'wall-1', title: 'Perform one wall rebound', description: 'Hit a wall at speed while airborne to bounce back into the tower.', requires: [], targets: [{ metric: 'wallJumps', target: 1, label: 'Rebounds' }] },
-  { id: 'combo-3', title: 'Land a 3-floor combo', description: 'Keep landing on higher ledges before the combo timer expires.', requires: ['floor-5'], targets: [{ metric: 'bestCombo', target: 3, label: 'Combo' }] },
+  { id: 'combo-3', title: 'Land a 3-floor combo', description: 'Jump two or more floors at a time before the combo timer expires.', requires: ['floor-5'], targets: [{ metric: 'bestCombo', target: 3, label: 'Combo' }] },
   { id: 'floor-15', title: 'Reach floor 15', description: 'Use momentum to climb higher in one run.', requires: ['floor-5', 'combo-3'], targets: [{ metric: 'floor', target: 15, label: 'Floors' }] },
   { id: 'crystal-5', title: 'Collect five crystals', description: 'Collect five crystals in a single run. Choose your detours carefully.', requires: ['crystal-1'], targets: [{ metric: 'gems', target: 5, label: 'Crystals' }] },
   { id: 'wall-3', title: 'Perform three wall rebounds', description: 'Make three airborne rebounds in one run.', requires: ['wall-1'], targets: [{ metric: 'wallJumps', target: 3, label: 'Rebounds' }] },

@@ -1,6 +1,6 @@
 # Combo jumps, Season 2 and the upper tower
 
-Date: 2026-09-23. Status: approved for implementation.
+Date: 2026-09-23. Status: implemented after the user asked to proceed; visual review pending.
 
 ## Evidence
 

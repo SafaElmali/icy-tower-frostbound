@@ -40,7 +40,7 @@ export const gameplayFaq = [
   {
     question: 'How do I jump higher and keep a combo?',
     answer:
-      'Run to build momentum before jumping. Release the jump key or button before jumping again. While airborne beside a wall, release and tap jump to launch up and away. Land on new higher floors within 3.8 seconds to keep a combo. Automatic scrolling starts at floor 5 in Classic and Party.',
+      'Run to build momentum before jumping. Release the jump key or button before jumping again. While airborne beside a wall, release and tap jump to launch up and away. Keep a combo by chaining jumps that climb two or more floors, landing within 3.8 seconds each time; a one-floor hop ends the chain. Automatic scrolling starts at floor 5 in Classic and Party.',
   },
   {
     question: 'Can I race a friend online?',

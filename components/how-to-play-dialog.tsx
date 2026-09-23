@@ -39,9 +39,9 @@ const mechanics = [
     id: 'combo',
     Icon: Link2,
     title: 'Keep your chain alive',
-    tip: 'Reach a new higher floor within 3.8 seconds.',
+    tip: 'Jump two or more floors at a time, landing within 3.8 seconds.',
     detail:
-      'Keep landing on higher floors to continue your combo and leave a colorful star trail. Collect crystals and skip floors to raise your score.',
+      'Each jump that climbs two or more floors continues your combo and leaves a colorful star trail. A one-floor hop still counts, but ends the chain, so run first. Collect crystals and skip floors to raise your score.',
   },
   {
     id: 'frost',
@@ -63,7 +63,7 @@ const mechanics = [
     id: 'frenzy',
     Icon: Zap,
     title: 'Earn a frenzy',
-    tip: 'Chain 10 new floors for six seconds of boosted jumps.',
+    tip: 'Chain a 10-floor combo for six seconds of boosted jumps.',
     detail:
       'Frenzy adds bonus crystal trails. Keep your combo alive to recharge after it ends. Higher up, brief ice showers and collapsing stairs test your reflexes, followed by breathing room. Your movement and jump controls stay the same.',
   },
