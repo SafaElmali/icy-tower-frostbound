@@ -62,8 +62,7 @@ export function RaceLobbyBrowser({
     <section className={styles.browser} aria-labelledby="open-lobbies-heading">
       <header>
         <div>
-          <p className={styles.kicker}>FIND YOUR RIVALS</p>
-          <h2 id="open-lobbies-heading">Open lobbies</h2>
+          <h2 id="open-lobbies-heading">Find your rivals.</h2>
         </div>
         <button
           className={styles.refreshLobbies}
@@ -85,19 +84,24 @@ export function RaceLobbyBrowser({
         <output className={styles.browserEmpty}>Finding open lobbies…</output>
       ) : result.lobbies.length === 0 ? (
         <div className={styles.browserEmpty}>
-          <Users size={28} />
-          <strong>The tower is quiet.</strong>
+          <div className={styles.emptySeats} aria-hidden="true">
+            <span>
+              <Users size={24} />
+            </span>
+            <span />
+            <span />
+            <span />
+          </div>
+          <strong>Start the next race.</strong>
           <span>
-            Be the first to plant a flag.
-            <br />
-            Open a lobby and let the others come to you.
+            No open lobbies right now. Host a race and bring the others to you.
           </span>
           <button
             className={styles.emptyAction}
             onClick={onHost}
             disabled={disabled}
           >
-            Host a lobby <ArrowRight size={16} aria-hidden="true" />
+            Set up a lobby <ArrowRight size={16} aria-hidden="true" />
           </button>
         </div>
       ) : (

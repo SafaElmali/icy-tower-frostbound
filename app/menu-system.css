@@ -19,7 +19,10 @@
 /* Shared visual language for game menus; gameplay HUD styling stays independent. */
 :root {
   --menu-ink: #e4eeeb;
-  --menu-muted: #a2bac4;
+  --menu-muted: #aec4cc;
+  --menu-border: #a0c0c233;
+  --menu-ice: #b5e6cb;
+  --menu-hud: #0a1c29f2;
   --menu-gold: #cdb78e;
   --menu-panel: linear-gradient(135deg, #192f39fa, #091a24fa);
 }
@@ -193,4 +196,100 @@ body .run-summary .retry-hint {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Native browser affordances follow the same palette as the in-game menus. */
+:root {
+  color-scheme: dark;
+}
+::selection {
+  background: #cdb78e;
+  color: #10232e;
+}
+input,
+textarea {
+  caret-color: var(--menu-ice);
+}
+a:focus-visible {
+  outline: 2px solid var(--menu-gold);
+  outline-offset: 4px;
+}
+
+body .run-overlay {
+  position: fixed;
+  z-index: 40;
+  outline: none;
+}
+.run-summary h2:focus {
+  outline: none;
+}
+body .run-summary > .run-ranking {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  border: 1px solid var(--menu-border);
+  border-radius: 3px;
+  color: var(--menu-ink);
+  background: transparent;
+  font-size: 13px;
+}
+body .run-summary > .run-ranking > svg:last-child {
+  margin-left: auto;
+}
+body .run-summary > .run-ranking:hover {
+  background: #aec4cc14;
+}
+body .leave-climb-dialog[data-slot='dialog-content'] {
+  max-width: 420px;
+  padding: 32px;
+  border-radius: 3px;
+}
+body .leave-climb-dialog [data-slot='dialog-title'] {
+  padding-right: 20px;
+  font:
+    400 32px/1.2 Georgia,
+    serif;
+}
+body .leave-climb-dialog [data-slot='dialog-description'] {
+  color: var(--menu-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.leave-climb-dialog button[data-slot='button'] {
+  min-height: 44px;
+}
+.leave-climb-dialog .keep-climbing {
+  background: var(--menu-ice);
+  color: #17303a;
+}
+@media (min-width: 1000px) {
+  body .run-overlay.is-paused {
+    justify-items: start;
+    padding-left: 8%;
+  }
+}
+html[data-reduced-motion='true'] [data-slot='dialog-content'],
+html[data-reduced-motion='true'] [data-slot='dialog-overlay'] {
+  animation: none !important;
+  transition: none !important;
+}
+
+.summary-close {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--menu-border);
+  border-radius: 3px;
+  color: var(--menu-ink);
+  background: var(--menu-hud);
+}
+.summary-close:hover {
+  background: #29414c;
 }

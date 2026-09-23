@@ -7,10 +7,10 @@ export function NextClimb(props: NextClimbInput) {
   if (!goal) return null;
   return (
     <section className={styles.card} aria-label="Your next climb">
-      <span className={styles.label}>
-        <Target size={13} aria-hidden="true" /> NEXT CLIMB
-      </span>
-      <strong className={styles.title}>{goal.title}</strong>
+      <h3 className={styles.title}>
+        <Target size={16} aria-hidden="true" />
+        <span>Next climb: {goal.title}</span>
+      </h3>
       <div className={styles.progress}>
         {goal.progress.map((item) => (
           <span key={item.label}>

@@ -78,12 +78,15 @@ export function GameHud({
             {game.combo}× <small>combo</small>
           </span>
         )}
-        <progress
-          className={styles.momentum}
-          aria-label="Momentum"
-          value={Math.min(game.speed, 8.4)}
-          max={8.4}
-        />
+        <div className={styles.momentumGroup}>
+          <span aria-hidden="true">Momentum</span>
+          <progress
+            className={styles.momentum}
+            aria-label="Momentum — run to jump higher"
+            value={Math.min(game.speed, 8.4)}
+            max={8.4}
+          />
+        </div>
       </div>
       {!guidance && !firstJump && (
         <div className={styles.goal}>

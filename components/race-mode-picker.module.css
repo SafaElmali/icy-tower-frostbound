@@ -7,52 +7,65 @@
 }
 .picker legend {
   padding: 0 0 10px;
-  color: #c6d9dc;
-  font-size: 12px;
+  color: #eef8f3;
+  font-size: 13px;
+  font-weight: 600;
 }
 .picker > div {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 .picker label {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 15px 12px;
-  border: 1px solid #b4d6e02e;
-  background: #07171d40;
+  gap: 8px;
+  padding: 14px 12px;
+  border: 1px solid #b4c9ce29;
+  border-radius: 8px;
+  background: transparent;
   cursor: pointer;
 }
 .picker label:has(input:checked) {
-  background: #b8e6ee12;
-  border-color: #b8e6ee99;
+  background: #d8f2f0;
+  border-color: #d8f2f0;
 }
 .picker label:has(input:focus-visible) {
-  outline: 2px solid #e9f9f4;
+  outline: 2px solid #ffb389;
   outline-offset: 3px;
 }
 .picker input {
   flex-shrink: 0;
   margin: 3px 0 0;
-  accent-color: #b8e6ee;
+  accent-color: #285965;
 }
 .picker strong {
   display: block;
-  color: #e1eeee;
+  color: #eef8f3;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 650;
 }
 .picker small {
   display: block;
-  margin-top: 6px;
-  color: #a1bcc5;
-  font-size: 11px;
-  line-height: 1.6;
+  margin-top: 5px;
+  color: #b4c9ce;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.picker label:has(input:checked) strong {
+  color: #123c48;
+}
+.picker label:has(input:checked) small {
+  color: #365966;
 }
 .picker:disabled {
   opacity: 0.6;
 }
 .picker:disabled label {
   cursor: default;
+}
+@media (max-width: 360px) {
+  .picker > div {
+    grid-template-columns: 1fr;
+  }
 }

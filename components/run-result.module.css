@@ -1,0 +1,345 @@
+.shell {
+  position: relative;
+  width: min(760px, 100%);
+  color: #eef8f3;
+}
+.pauseShell {
+  width: min(440px, 100%);
+}
+body :global(.run-overlay.is-paused).pauseOverlay {
+  justify-items: center;
+  padding: 24px;
+}
+.shell > :global(.summary-close) {
+  top: 16px;
+  right: 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #eef8f308;
+  color: #b4c9ce;
+}
+body :global(.overlay) .card {
+  width: 100%;
+  padding: 32px;
+  border: 0;
+  border-radius: 16px;
+  background: #0c202a;
+  box-shadow: 0 28px 100px #0008;
+  scrollbar-color: #395761 #0c202a;
+  scrollbar-width: thin;
+  animation: result-arrive 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.overview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin: 16px 0 26px;
+  align-items: start;
+}
+.outcome {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+body .card .outcome h2 {
+  order: -1;
+  max-width: none;
+  margin: 0 0 8px;
+  color: #eef8f3;
+  font-family: 'Frostbound Display', sans-serif;
+  font-weight: 800;
+  font-style: italic;
+  font-size: clamp(48px, 6vw, 72px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+body .card :global(.run-context) {
+  color: #b4c9ce;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+  margin: 24px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.metrics dt {
+  color: #b4c9ce;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.metrics dd {
+  color: #eef8f3;
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 650;
+  line-height: 1.2;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.metrics dd span {
+  color: #b4c9ce;
+  font-size: 0.75em;
+  margin-left: 2px;
+}
+body .card :global(.run-highlight) {
+  margin: 18px 0 0;
+  font-size: 12px;
+  color: #b4c9ce;
+}
+body .card :global(.run-highlight.is-record) {
+  color: #ffb389;
+}
+body :global(.overlay) .card > :global(.start-button) {
+  margin: 0;
+  min-height: 56px;
+  border: 0;
+  border-radius: 10px;
+  background: #d8f2f0;
+  color: #123c48;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  box-shadow: none;
+}
+body :global(.overlay) .card > :global(.start-button):hover {
+  background: #eef8f3;
+}
+body .card > :global(.retry-hint) {
+  display: block;
+  margin: 8px 0 0;
+  color: #b4c9ce;
+  font-size: 11px;
+}
+.extras {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+}
+.extras:empty {
+  display: none;
+}
+.extras > button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  height: auto;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #061720;
+  color: #eef8f3;
+  text-align: left;
+  white-space: normal;
+  font-size: 13px;
+}
+.extras > button:hover {
+  background: #1b3541;
+}
+.extras > button > svg {
+  flex-shrink: 0;
+  color: #b4c9ce;
+}
+.extras > button > svg:last-child {
+  margin-left: auto;
+}
+.extras > :global(.run-unlock) {
+  color: #ffb389;
+}
+.extras :global(.run-unlock) small {
+  color: #b4c9ce;
+  font-size: 12px;
+}
+body .card :global(.run-summary-actions) {
+  justify-content: space-between;
+  margin-top: 20px;
+  padding-top: 12px;
+  border-color: #b4c9ce26;
+}
+body .card :global(.run-summary-actions) button {
+  color: #b4c9ce;
+  font-size: 12px;
+}
+.shell button:focus-visible {
+  outline: 2px solid #ffb389;
+  outline-offset: 3px;
+}
+@keyframes result-arrive {
+  from {
+    transform: translateY(12px);
+    clip-path: inset(0 0 3% round 16px);
+  }
+  to {
+    transform: translateY(0);
+    clip-path: inset(0 round 16px);
+  }
+}
+@media (max-width: 600px) {
+  body :global(.overlay) .card {
+    padding: 24px;
+  }
+  .overview {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin: 14px 0 24px;
+  }
+  .outcome {
+    padding-right: 16px;
+  }
+  body .card .outcome h2 {
+    font-size: 56px;
+  }
+  .metrics {
+    margin-top: 18px;
+  }
+  body .card :global(.run-highlight) {
+    margin-top: 12px;
+  }
+  body .card > :global(.retry-hint) {
+    display: none;
+  }
+  .extras {
+    margin-top: 12px;
+  }
+  body .card :global(.run-summary-actions) {
+    margin-top: 12px;
+    padding-top: 8px;
+  }
+  .shell > :global(.summary-close) {
+    top: 12px;
+    right: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body :global(.overlay) .card {
+    animation: none;
+  }
+}
+:global(html[data-reduced-motion='true']) .card {
+  animation: none !important;
+}
+/* Daily follow-up uses the same secondary action rhythm as rankings. */
+.extras > div {
+  margin-top: 0;
+  text-align: left;
+}
+.extras > div > button {
+  display: flex;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #061720;
+  color: #eef8f3;
+  font-size: 13px;
+}
+.extras > div > button:hover {
+  background: #1b3541;
+}
+.extras > div > button > svg:last-child {
+  margin-left: auto;
+}
+.extras > div > p {
+  margin: 8px 0 4px;
+  color: #b4c9ce;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* A short interruption: current run, resume, then supporting actions. */
+body :global(.overlay) .pauseCard {
+  padding: 32px 32px 20px;
+  text-align: left;
+}
+body .pauseCard h2 {
+  max-width: none;
+  padding-right: 44px;
+  margin: 0;
+  color: #eef8f3;
+  font:
+    italic 800 56px/1 'Frostbound Display',
+    sans-serif;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+}
+.pauseDescription {
+  margin: 10px 0 0;
+  color: #b4c9ce;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.pauseMetrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin: 28px 0;
+  font-variant-numeric: tabular-nums;
+}
+.pauseMetrics > div + div {
+  padding-left: 24px;
+  border-left: 1px solid #b4c9ce26;
+}
+.pauseMetrics dt {
+  margin-bottom: 6px;
+  color: #b4c9ce;
+  font-size: 13px;
+}
+.pauseMetrics dd {
+  margin: 0;
+  color: #eef8f3;
+  font-size: 28px;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.pauseCard :global(.pause-options) {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pauseCard :global(.pause-options) > button[data-slot='button'] {
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: #061720;
+  color: #b4c9ce;
+}
+.pauseCard :global(.pause-options) > button:hover {
+  background: #1b3541;
+  color: #eef8f3;
+}
+.pauseCard :global(.pause-options) > button > svg:last-child {
+  display: none;
+}
+body .pauseCard :global(.run-summary-actions) {
+  justify-content: center;
+  margin-top: 20px;
+  padding-top: 12px;
+}
+body .pauseCard :global(.run-summary-actions) button {
+  font-size: 13px;
+}
+@media (max-width: 480px) {
+  body :global(.run-overlay.is-paused).pauseOverlay {
+    padding: 16px;
+  }
+  body :global(.overlay) .pauseCard {
+    padding: 28px 24px 16px;
+  }
+  body .pauseCard h2 {
+    font-size: 48px;
+  }
+}

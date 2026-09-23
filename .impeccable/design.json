@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-22T23:55:42.704204+00:00",
+  "title": "Design System: Frostbound Homepage",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Frost white"
+      },
+      "accent": {
+        "role": "secondary",
+        "displayName": "Warm peach"
+      },
+      "ice": {
+        "role": "primary",
+        "displayName": "Launch ice"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Arcade wordmark",
+        "purpose": "Homepage title; local Barlow Condensed ExtraBold Italic."
+      },
+      "multiplayer-title": {
+        "displayName": "Multiplayer entry title",
+        "purpose": "Shared Frostbound Display from app/globals.css; fluid to 64px, 48px at ≤760px, 44px at ≤480px."
+      },
+      "multiplayer-section": {
+        "displayName": "Multiplayer section heading",
+        "purpose": "Lobby browser and host headings: 34px, 32px at ≤480px."
+      },
+      "settings-heading": {
+        "displayName": "Settings group heading",
+        "purpose": "Shared global Frostbound Display; 28px desktop, 24px at ≤600px."
+      },
+      "result-heading": {
+        "displayName": "Completed-run floor",
+        "purpose": "Uppercase italic outcome heading; 56px at ≤600px."
+      },
+      "result-metric": {
+        "displayName": "Run metric",
+        "purpose": "Points and combo with tabular numerals."
+      },
+      "goal-title": {
+        "displayName": "Next goal",
+        "purpose": "Single heading combining Next climb: and the reachable goal; ink-colored 600 18px/1.35, 16px at ≤600px, with a peach 16px Target icon."
+      },
+      "pause-heading": {
+        "displayName": "Paused heading",
+        "purpose": "Italic uppercase; 56px, reducing to 48px at ≤480px."
+      },
+      "pause-label": {
+        "displayName": "Pause labels",
+        "purpose": "13px metric labels, secondary actions and title action."
+      },
+      "pause-description": {
+        "displayName": "Pause supporting copy",
+        "purpose": "15px supporting sentence."
+      },
+      "pause-action": {
+        "displayName": "Resume label",
+        "purpose": "15px primary action; minimum control height is 56px."
+      },
+      "pause-metric": {
+        "displayName": "Paused run values",
+        "purpose": "28px tabular floor and points."
+      }
+    },
+    "shadows": [
+      {
+        "name": "launch",
+        "value": "inset 0 2px 0 #fff, inset 0 -4px 0 #98cbd1, 0 8px 30px #020e1880",
+        "purpose": "Tactile primary launch button only."
+      },
+      {
+        "name": "wordmark",
+        "value": "0 5px 20px #00101bbb",
+        "purpose": "Text separation from live scenery."
+      },
+      {
+        "name": "run-result",
+        "value": "0 28px 100px #0008",
+        "purpose": "Completed-run board only."
+      },
+      {
+        "name": "wardrobe",
+        "value": "0 28px 100px #0008",
+        "purpose": "Character menu shell only."
+      },
+      {
+        "name": "how-to-play",
+        "value": "0 28px 100px #0008",
+        "purpose": "Scoped how-to-play dialog shell."
+      },
+      {
+        "name": "pause-menu",
+        "value": "0 28px 100px #0008",
+        "purpose": "Scoped pause panel; inherited from the shared result card."
+      }
+    ],
+    "motion": [
+      {
+        "name": "entrance",
+        "value": "650ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Single hero reveal; suppressed for reduced motion."
+      },
+      {
+        "name": "button",
+        "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Launch hover and activation."
+      },
+      {
+        "name": "settings-switch",
+        "value": "150ms",
+        "purpose": "Switch background-color; suppressed by system and application reduced motion."
+      },
+      {
+        "name": "result-arrive",
+        "value": "360ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "TranslateY(12px) to zero and clip-path inset(0 0 3% round 16px) to inset(0 round 16px); disabled by system and application reduced motion."
+      },
+      {
+        "name": "wardrobe-tabs",
+        "value": "color 150ms ease, background 150ms ease",
+        "purpose": "Wardrobe category state changes only; disabled by system and application reduced motion."
+      },
+      {
+        "name": "how-to-play-states",
+        "value": "150ms",
+        "purpose": "Tab color/background, summary background and chevron transform; disabled by system and application reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "1000px"
+      },
+      {
+        "name": "stacked",
+        "value": "700px"
+      },
+      {
+        "name": "small-phone",
+        "value": "370px"
+      },
+      {
+        "name": "multiplayer-equal-columns",
+        "value": "950px"
+      },
+      {
+        "name": "multiplayer-stacked",
+        "value": "760px"
+      },
+      {
+        "name": "multiplayer-phone",
+        "value": "480px"
+      },
+      {
+        "name": "race-mode-stacked",
+        "value": "360px"
+      },
+      {
+        "name": "settings-stacked-flat",
+        "value": "600px"
+      },
+      {
+        "name": "result-stacked",
+        "value": "600px"
+      },
+      {
+        "name": "wardrobe-compact",
+        "value": "720px"
+      },
+      {
+        "name": "wardrobe-stacked",
+        "value": "560px"
+      },
+      {
+        "name": "how-to-play-phone",
+        "value": "540px"
+      },
+      {
+        "name": "how-to-play-single-column",
+        "value": "360px"
+      },
+      {
+        "name": "how-to-play-short-height",
+        "value": "550px",
+        "purpose": "max-height media query; compact header/footer."
+      },
+      {
+        "name": "pause-phone",
+        "value": "480px",
+        "purpose": "Pause heading, panel padding and overlay gutters."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Begin ascent",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary launch control; loading and failure are provided by game state.",
+      "html": "<button class=\"home-play\">Begin ascent</button>",
+      "css": ".home-play{width:100%;min-height:70px;padding:16px 24px;border:2px solid #f0ffff;border-radius:8px;background:#d8f2f0;color:#123c48;font:650 20px sans-serif;text-align:left;box-shadow:inset 0 2px 0 #fff,inset 0 -4px 0 #98cbd1,0 8px 30px #020e1880;transition:transform 180ms,background-color 180ms}.home-play:hover{background:#effff8;transform:translateY(-3px)}.home-play:active{transform:translateY(1px)}.home-play:focus-visible{outline:2px solid #ffb389;outline-offset:4px}@media(prefers-reduced-motion:reduce){.home-play{transition:none}.home-play:hover,.home-play:active{transform:none}}"
+    },
+    {
+      "name": "Mode preview",
+      "kind": "preview",
+      "refersTo": "menu-preview",
+      "description": "Selected game mode details beside native radios above 600px; stacks below, hiding the decorative diagram. Arcade is ice blue, party peach, practice green.",
+      "html": "<div class=\"preview\" data-mode=\"arcade\" style=\"--menu-muted:#b4c9ce\"><svg class=\"routeArt\" viewBox=\"0 0 320 160\" fill=\"none\" aria-hidden=\"true\"><path d=\"M22 137H102M129 97H206M224 48H296\" stroke=\"currentColor\" stroke-width=\"7\"/><path d=\"M58 128Q108 40 159 88Q202 -2 260 39\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-dasharray=\"4 6\" opacity=\".65\"/><circle cx=\"58\" cy=\"128\" r=\"5\" fill=\"currentColor\"/><circle cx=\"159\" cy=\"88\" r=\"5\" fill=\"currentColor\"/><circle cx=\"260\" cy=\"39\" r=\"5\" fill=\"currentColor\"/></svg><div class=\"previewCopy\"><h3>Beat the frost.</h3><p>Keep your momentum. Every floor buys a little more time.</p><ul><li>Rising frost</li><li>Ranked runs</li></ul></div></div>",
+      "css": ".preview {\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  justify-content: center;\n  color: #b8e5e8;\n  padding: 0 8px;\n}\n.preview[data-mode='party'] {\n  color: #ffb389;\n}\n.preview[data-mode='practice'] {\n  color: #b4d9b5;\n}\n.routeArt {\n  display: block;\n  width: 100%;\n  height: 138px;\n  margin-top: -8px;\n}\n.previewCopy h3 {\n  margin: 10px 0 8px;\n  font:\n    italic 800 34px/1.1 'Frostbound Display',\n    sans-serif;\n  letter-spacing: -0.015em;\n  text-transform: uppercase;\n}\n.previewCopy p {\n  margin: 0;\n  max-width: 32ch;\n  font-size: 13px;\n  line-height: 1.6;\n  color: var(--menu-muted);\n}\n.previewCopy ul {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px 18px;\n  margin: 16px 0 0;\n  padding: 0;\n  list-style: none;\n  font-size: 11px;\n  color: #d4e5e6;\n}\n.previewCopy li {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n.previewCopy li::before {\n  content: '';\n  width: 4px;\n  height: 4px;\n  border-radius: 50%;\n  background: currentColor;\n}\n@media (max-width: 600px) {\n.preview {\n    padding: 0;\n  }\n.routeArt {\n    display: none;\n  }\n.previewCopy h3 {\n    font-size: 28px;\n    margin-top: 0;\n  }\n.previewCopy p {\n    max-width: none;\n  }\n.previewCopy ul {\n    margin-top: 10px;\n  }\n}"
+    },
+    {
+      "name": "Race mode picker",
+      "kind": "input",
+      "refersTo": "race-mode-selected",
+      "description": "Actual RaceModePicker markup and CSS: native Classic/Party radios, light selected labels, keyboard focus and disabled states. Two columns stack at ≤360px.",
+      "html": "<fieldset class=\"picker\"><legend>Race mode</legend><div><label aria-label=\"Classic: Standard gravity. Every jump counts.\"><input type=\"radio\" name=\"race-mode\" value=\"arcade\" checked><span><strong>Classic</strong><small>Standard gravity. Every jump counts.</small></span></label><label aria-label=\"Party: Low gravity, springs, and crystal double jumps.\"><input type=\"radio\" name=\"race-mode\" value=\"party\"><span><strong>Party</strong><small>Low gravity, springs, and crystal double jumps.</small></span></label></div></fieldset>",
+      "css": ".picker {\n  min-width: 0;\n  border: 0;\n  padding: 0;\n  margin: 0 0 22px;\n  text-align: left;\n}\n.picker legend {\n  padding: 0 0 10px;\n  color: #eef8f3;\n  font-size: 13px;\n  font-weight: 600;\n}\n.picker > div {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 8px;\n}\n.picker label {\n  display: flex;\n  align-items: flex-start;\n  gap: 8px;\n  padding: 14px 12px;\n  border: 1px solid #b4c9ce29;\n  border-radius: 8px;\n  background: transparent;\n  cursor: pointer;\n}\n.picker label:has(input:checked) {\n  background: #d8f2f0;\n  border-color: #d8f2f0;\n}\n.picker label:has(input:focus-visible) {\n  outline: 2px solid #ffb389;\n  outline-offset: 3px;\n}\n.picker input {\n  flex-shrink: 0;\n  margin: 3px 0 0;\n  accent-color: #285965;\n}\n.picker strong {\n  display: block;\n  color: #eef8f3;\n  font-size: 14px;\n  font-weight: 650;\n}\n.picker small {\n  display: block;\n  margin-top: 5px;\n  color: #b4c9ce;\n  font-size: 12px;\n  line-height: 1.5;\n}\n.picker label:has(input:checked) strong {\n  color: #123c48;\n}\n.picker label:has(input:checked) small {\n  color: #365966;\n}\n.picker:disabled {\n  opacity: 0.6;\n}\n.picker:disabled label {\n  cursor: default;\n}\n@media (max-width: 360px) {\n  .picker > div {\n    grid-template-columns: 1fr;\n  }\n}\n"
+    },
+    {
+      "name": "Settings audio row",
+      "kind": "input",
+      "refersTo": "settings-group",
+      "description": "Small static preview of the actual muted-music row: selected music remains independently configurable while Game sound is off. Native checkbox switch semantics stand in for the shared Base UI Switch; production owns state and callbacks.",
+      "html": "<section class=\"ds-settings\"><h3>Audio</h3><div class=\"ds-setting\"><label class=\"ds-copy\" for=\"ds-music\"><strong id=\"ds-music-label\">Background music</strong><span id=\"ds-music-description\">Turn on game sound to hear music.</span></label><div class=\"ds-control\"><input class=\"ds-switch\" id=\"ds-music\" type=\"checkbox\" role=\"switch\" checked aria-labelledby=\"ds-music-label\" aria-describedby=\"ds-music-description\"><span class=\"ds-state\" aria-hidden=\"true\"><span class=\"ds-muted\">Muted</span><span class=\"ds-off\">Off</span></span></div></div><div class=\"ds-note\">All audio is muted. Your music choice is kept.</div></section>",
+      "css": ".ds-settings{background:#061720;color:#eef8f3;padding:22px 20px 16px;border-radius:12px;font-family:sans-serif}.ds-settings h3{margin:0 0 16px;font:italic 800 28px/1.1 \"Frostbound Display\",sans-serif;text-transform:uppercase;letter-spacing:-.015em}.ds-setting{display:grid;grid-template-columns:minmax(0,1fr) 48px;align-items:center;gap:14px;min-height:102px;border-top:1px solid #b4c9ce22}.ds-copy{display:flex;flex-direction:column;gap:6px;padding-block:14px;cursor:pointer}.ds-copy strong{font-size:14px;line-height:1.4;font-weight:600}.ds-copy>span{font-size:12px;line-height:1.6;color:#b4c9ce}.ds-control{display:flex;flex-direction:column;align-items:center;gap:8px;padding-block:12px}.ds-switch{appearance:none;box-sizing:border-box;display:block;margin:0;width:44px;height:26px;padding:3px;border:1px solid #7b9aa666;border-radius:999px;background:#263e4b;cursor:pointer;transition:background-color 150ms}.ds-switch:before{content:\"\";display:block;width:18px;height:18px;border-radius:50%;background:#95b2c0}.ds-switch:checked{background:#d8f2f0;border-color:#d8f2f0}.ds-switch:checked:before{transform:translateX(18px);background:#244752}.ds-switch:focus-visible{outline:2px solid #ffb389;outline-offset:4px}.ds-state{color:#b4c9ce;font-size:11px;line-height:1}.ds-switch:checked+.ds-state{color:#d8f2f0}.ds-off,.ds-switch:not(:checked)+.ds-state .ds-muted{display:none}.ds-switch:not(:checked)+.ds-state .ds-off{display:inline}.ds-note{padding-top:15px;border-top:1px solid #b4c9ce22;color:#ffcbab;font-size:11px;line-height:1.6}@media(max-width:600px){.ds-settings{padding:0;border-radius:0;background:transparent}.ds-settings h3{font-size:24px}.ds-setting{min-height:74px}.ds-copy{padding-block:10px}.ds-note{padding-top:10px}}@media(prefers-reduced-motion:reduce){.ds-switch{transition:none}}:host-context(html[data-reduced-motion=\"true\"]) .ds-switch{transition:none}"
+    },
+    {
+      "name": "Completed-run split board",
+      "kind": "custom",
+      "refersTo": "run-result",
+      "description": "Compact static layout sample with illustrative values, not live player data. Production supplies dialog behavior and conditional actions. Uses the shared globally registered display font.",
+      "html": "<section class=\"ds-result\"><div class=\"ds-result-grid\"><div><h2>Floor 24</h2><p class=\"ds-result-context\">Classic</p><dl class=\"ds-result-metrics\"><div><dt>Points</dt><dd>2,400</dd></div><div><dt>Combo</dt><dd>8</dd></div></dl></div><section class=\"ds-result-goal\" aria-label=\"Your next climb\"><h3><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><circle cx=\"12\" cy=\"12\" r=\"6\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/></svg><span>Next climb: Reach floor 30</span></h3></section></div><button class=\"ds-result-retry\">Try again</button></section>",
+      "css": ".ds-result{max-width:760px;padding:32px;border-radius:16px;background:#0c202a;color:#eef8f3;font-family:inherit;box-shadow:0 28px 100px #0008}.ds-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin:16px 0 26px;align-items:start}.ds-result h2{margin:0 0 8px;font:italic 800 clamp(48px,6vw,72px)/1 \"Frostbound Display\",sans-serif;letter-spacing:-.02em;text-transform:uppercase;text-wrap:balance}.ds-result-context{margin:0;color:#b4c9ce;font-size:12px;line-height:1.5;letter-spacing:.04em}.ds-result-metrics{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin:24px 0 0;font-variant-numeric:tabular-nums}.ds-result-metrics dt{color:#b4c9ce;font-size:12px;margin-bottom:4px}.ds-result-metrics dd{margin:0;font-size:clamp(22px,3vw,28px);font-weight:650;line-height:1.2;overflow-wrap:anywhere}.ds-result-goal{margin:0;padding:4px 0 0 24px;border-left:1px solid #b4c9ce26;text-align:left}.ds-result-goal h3{display:flex;align-items:baseline;gap:8px;margin:0 28px 0 0;color:#eef8f3;font-size:18px;font-weight:600;line-height:1.35;text-wrap:balance}.ds-result-goal h3 svg{flex-shrink:0;align-self:flex-start;margin-top:4px;color:#ffb389}.ds-result-retry{width:100%;min-height:56px;border:0;border-radius:10px;background:#d8f2f0;color:#123c48;font-family:inherit;font-size:15px;font-weight:700;letter-spacing:.01em;cursor:pointer}.ds-result-retry:hover{background:#eef8f3}.ds-result-retry:focus-visible{outline:2px solid #ffb389;outline-offset:3px}@media(max-width:600px){.ds-result{padding:24px}.ds-result-grid{grid-template-columns:1fr;gap:24px;margin:14px 0 24px}.ds-result h2{font-size:56px}.ds-result-metrics{margin-top:18px}.ds-result-goal{border-left:0;border-top:1px solid #b4c9ce26;padding:18px 0 0}.ds-result-goal h3{font-size:16px}}"
+    },
+    {
+      "name": "Character menu choice",
+      "kind": "input",
+      "refersTo": "wardrobe-option",
+      "description": "Tiny sidebar sample of the native outfit radio and locked progress row. Illustrative floor 6, not live player data; production provides tabs, live preview, immediate equip, and the persistent Done/saving footer.",
+      "html": "<fieldset class=\"ds-wardrobe\"><legend>Hats</legend><label class=\"ds-wardrobe-row\"><input type=\"radio\" name=\"ds-wardrobe-hat\" checked aria-label=\"Blue beanie\"><span><strong>Blue beanie</strong><small>A tower classic</small></span><em>Equipped</em></label><label class=\"ds-wardrobe-row\"><input type=\"radio\" name=\"ds-wardrobe-hat\" disabled aria-label=\"Frost beanie\" aria-describedby=\"ds-wardrobe-unlock\"><span><strong>Frost beanie</strong><small id=\"ds-wardrobe-unlock\">First ascent · Reach floor 10</small><progress value=\"6\" max=\"10\" aria-label=\"Frost beanie unlock progress\"></progress></span><em>6 / 10</em></label></fieldset>",
+      "css": ".ds-wardrobe{margin:0;padding:16px;border:0;background:#0c202a;color:#eef8f3;font-family:inherit}.ds-wardrobe legend{padding:0 8px;font-size:13px}.ds-wardrobe-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 61px;align-items:center;gap:12px;min-height:96px;padding:14px 8px;border-bottom:1px solid #b4c9ce26;cursor:pointer}.ds-wardrobe-row:has(input:checked){background:#eef8f306}.ds-wardrobe-row:hover:not(:has(input:disabled)){background:#eef8f30c}.ds-wardrobe-row:has(input:disabled){cursor:default}.ds-wardrobe-row input{position:absolute;width:1px;height:1px;opacity:0}.ds-wardrobe-row:has(input:focus-visible){outline:2px solid #ffb389;outline-offset:-2px;border-radius:6px}.ds-wardrobe-row strong{display:block;font-size:14px;line-height:1.4;font-weight:600}.ds-wardrobe-row small{display:block;margin-top:5px;color:#b4c9ce;font-size:12px;line-height:1.45}.ds-wardrobe-row em{font-style:normal;font-size:11px;line-height:1.5;color:#b4c9ce;font-variant-numeric:tabular-nums;text-align:center}.ds-wardrobe-row:has(input:checked) em{color:#ffb389}.ds-wardrobe-row progress{display:block;margin-top:5px;width:100%;height:3px;border:0;border-radius:3px;overflow:hidden;appearance:none;background:#29414c;accent-color:#d8f2f0}.ds-wardrobe-row progress::-webkit-progress-bar{background:#29414c}.ds-wardrobe-row progress::-webkit-progress-value{background:#d8f2f0}.ds-wardrobe-row progress::-moz-progress-bar{background:#d8f2f0}"
+    },
+    {
+      "name": "Daily tower panel",
+      "kind": "custom",
+      "description": "Tiny static date/record/action sample with an illustrative UTC date and empty record. Production owns original share/archive callbacks and fieldset loading state; banner and share dialog are outside this preview.",
+      "html": "<section class=\"ds-daily\"><div class=\"ds-daily-date\"><time datetime=\"2026-09-23\">23 September 2026</time><span>Classic · Daily route · UTC</span></div><div class=\"ds-daily-best\"><strong>Set your first best.</strong><span>Finish a climb, then come back to beat it.</span></div><div class=\"ds-daily-actions\"><button type=\"button\" class=\"ds-daily-start\">Climb this tower</button><button type=\"button\" class=\"ds-daily-share\">Share tower</button></div><p class=\"ds-daily-note\">A new tower arrives every day at <strong>00:00 UTC.</strong><br>Shared links always keep their original tower.</p></section>",
+      "css": ".ds-daily{padding:32px;background:#0c202a;color:#eef8f3;font-family:inherit;text-align:left}.ds-daily-date{padding:24px 0;border-block:1px solid #b4c9ce26}.ds-daily-date time{display:block;font-size:28px;font-weight:600;line-height:1.2;letter-spacing:-.02em;font-variant-numeric:tabular-nums}.ds-daily-date span,.ds-daily-best span{display:block;color:#b4c9ce;font-size:12px;line-height:1.5;margin-top:8px}.ds-daily-best{padding:26px 0}.ds-daily-best strong{font-size:16px;font-weight:600;line-height:1.4}.ds-daily-best span{margin-top:6px}.ds-daily-actions{display:flex;gap:12px}.ds-daily-actions button{min-height:54px;padding:12px 18px;border:0;border-radius:10px;font-family:inherit;font-size:14px;cursor:pointer;transition:background 150ms}.ds-daily-start{flex:1;background:#d8f2f0;color:#123c48;font-weight:700}.ds-daily-start:hover{background:#eef8f3}.ds-daily-share{background:#061720;color:#eef8f3}.ds-daily-share:hover{background:#24424f}.ds-daily-actions button:disabled{opacity:.5;cursor:wait}.ds-daily button:focus-visible{outline:2px solid #ffb389;outline-offset:3px}.ds-daily-note{margin:24px 0 0;padding-top:18px;border-top:1px solid #b4c9ce26;color:#b4c9ce;font-size:11px;line-height:1.6}.ds-daily-note strong{font-weight:600}@media(max-width:540px){.ds-daily{padding:26px 22px}.ds-daily-date{padding:22px 0}.ds-daily-date time{font-size:23px}.ds-daily-best{padding:24px 0}.ds-daily-actions{flex-direction:column;gap:8px}.ds-daily-share{min-height:44px!important}.ds-daily-note{margin-top:20px;padding-top:16px}}@media(prefers-reduced-motion:reduce){.ds-daily-actions button{transition:none}}:host-context(html[data-reduced-motion=\"true\"]) .ds-daily-actions button{transition:none}"
+    },
+    {
+      "name": "How-to-play keycap and disclosure",
+      "kind": "custom",
+      "refersTo": "guide-keycap",
+      "description": "Small interactive native-disclosure sample of the scoped tabbed guide. Production provides Controls / Climbing / Modes & more, touch guidance and persistent practice/play footer; this is not the standalone guide page or a working tab preview.",
+      "html": "<section class=\"ds-guide\"><div class=\"ds-guide-row\"><strong>Jump</strong><span class=\"ds-guide-keys\"><kbd>Space</kbd><span>/</span><kbd>W</kbd><span>/</span><kbd>↑</kbd></span><p>Release before each jump. More speed means more height.</p></div><details class=\"ds-guide-detail\"><summary><span><strong>Jump from the walls</strong><small>Release, then jump beside a wall to push up and away.</small></span><svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"/></svg></summary><p>This works even at low speed. Land on a platform or jump from the opposite wall before boosting from the same wall again. Fast automatic rebounds still work.</p></details></section>",
+      "css": ".ds-guide{padding:20px;background:#0c202a;color:#eef8f3;font-family:inherit}.ds-guide-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px 20px;padding:18px 0;border-bottom:1px solid #b4c9ce26}.ds-guide-row>strong{font-size:17px;font-weight:600}.ds-guide-keys{display:flex;align-items:center;gap:6px;color:#b4c9ce;font-size:11px}.ds-guide-keys kbd{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 8px;border:1px solid #b4c9ce40;border-radius:5px;background:#061720;color:#eef8f3;font-family:inherit;font-size:12px;font-weight:500;line-height:1}.ds-guide-row p{grid-column:1/-1;margin:0;color:#b4c9ce;font-size:13px;line-height:1.6}.ds-guide-detail{border-bottom:1px solid #b4c9ce26}.ds-guide-detail summary{display:grid;grid-template-columns:minmax(0,1fr) 16px;align-items:center;gap:14px;min-height:84px;padding:16px 4px;list-style:none;cursor:pointer;transition:background 150ms}.ds-guide-detail summary::-webkit-details-marker{display:none}.ds-guide-detail summary::marker{content:\"\"}.ds-guide-detail summary:hover,.ds-guide-detail[open] summary{background:#eef8f308}.ds-guide-detail strong{display:block;font-size:15px;font-weight:600;line-height:1.5}.ds-guide-detail small{display:block;margin-top:4px;color:#b4c9ce;font-size:12px;line-height:1.55}.ds-guide-detail svg{color:#b4c9ce;transition:transform 150ms}.ds-guide-detail[open] svg{transform:rotate(180deg)}.ds-guide-detail>p{margin:0;padding:0 24px 20px 4px;color:#b4c9ce;font-size:13px;line-height:1.75}.ds-guide-detail summary:focus-visible{outline:2px solid #ffb389;outline-offset:3px}@media(max-width:540px){.ds-guide-keys{gap:4px}.ds-guide-keys kbd{min-width:24px;height:28px;padding:0 5px;font-size:11px}.ds-guide-row>strong{font-size:15px}}@media(max-width:360px){.ds-guide-row{grid-template-columns:1fr}}@media(prefers-reduced-motion:reduce){.ds-guide-detail summary,.ds-guide-detail svg{transition:none}}:host-context(html[data-reduced-motion=\"true\"]) .ds-guide-detail summary,:host-context(html[data-reduced-motion=\"true\"]) .ds-guide-detail svg{transition:none}"
+    },
+    {
+      "name": "Pause menu",
+      "kind": "custom",
+      "refersTo": "pause-menu",
+      "description": "Illustrative paused-run preview with sample values; static controls. Production provides Base UI focus, resume shortcuts, settings/help and leave confirmation. Uses the shared result-arrive motion with system/application reduced-motion suppression.",
+      "html": "<section class=\"ds-pause\"><button class=\"ds-pause-close\" aria-label=\"Resume climb\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m18 6-12 12M6 6l12 12\"/></svg></button><h2>Paused.</h2><p>The tower can wait.</p><dl><div><dt>Floor</dt><dd>24</dd></div><div><dt>Points</dt><dd>12,480</dd></div></dl><button class=\"ds-pause-resume\">Resume climb</button><div class=\"ds-pause-options\"><button>Settings</button><button>How to play</button></div><footer><button>Back to title</button></footer></section>",
+      "css": ".ds-pause{position:relative;max-width:376px;padding:32px 32px 20px;border-radius:16px;background:#0c202a;color:#eef8f3;box-shadow:0 28px 100px #0008;font-family:inherit;text-align:left}.ds-pause h2{margin:0;padding-right:44px;font:italic 800 56px/1 \"Frostbound Display\",sans-serif;letter-spacing:-.025em;text-transform:uppercase}.ds-pause p{margin:10px 0 0;color:#b4c9ce;font-size:15px;line-height:1.5}.ds-pause dl{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:28px 0;font-variant-numeric:tabular-nums}.ds-pause dl>div+div{padding-left:24px;border-left:1px solid #b4c9ce26}.ds-pause dt{margin-bottom:6px;color:#b4c9ce;font-size:13px}.ds-pause dd{margin:0;font-size:28px;font-weight:650;line-height:1.2;overflow-wrap:anywhere}.ds-pause button{font-family:inherit;cursor:pointer;border:0;border-radius:10px}.ds-pause-resume{width:100%;min-height:56px;background:#d8f2f0;color:#123c48;font-size:15px;font-weight:700;letter-spacing:.01em}.ds-pause-resume:hover{background:#eef8f3}.ds-pause-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.ds-pause-options button{min-height:48px;padding:12px 8px;background:#061720;color:#b4c9ce;font-size:13px}.ds-pause-options button:hover{background:#1b3541;color:#eef8f3}.ds-pause footer{display:flex;justify-content:center;margin-top:20px;padding-top:12px;border-top:1px solid #b4c9ce26}.ds-pause footer button{min-height:44px;padding:0 8px;background:transparent;color:#b4c9ce;font-size:13px;font-weight:400}.ds-pause footer button:hover{color:#eef8f3}.ds-pause-close{position:absolute;top:16px;right:16px;display:grid;place-items:center;width:44px;height:44px;background:#eef8f308;color:#b4c9ce}.ds-pause button:focus-visible{outline:2px solid #ffb389;outline-offset:3px}@media(max-width:600px){.ds-pause-close{top:12px;right:12px}}@media(max-width:480px){.ds-pause{padding:28px 24px 16px}.ds-pause h2{font-size:48px}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Winter arcade",
+    "overview": "A centered game title screen over the actual live tower. Scope includes the homepage and the redesigned game menu shell, multiplayer entry, and settings extension; other game surfaces preserve their existing systems.",
+    "keyCharacteristics": [
+      "Condensed italic wordmark",
+      "Icy launch control",
+      "Visible live scenery",
+      "Flat activity rail"
+    ],
+    "rules": [
+      {
+        "name": "Scene first",
+        "body": "Keep the live tower visible between foreground regions.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Use factual scores and milestones",
+      "Retain accessible names for icon controls",
+      "Honor reduced motion"
+    ],
+    "donts": [
+      "Apply the button bevel to every surface",
+      "Treat this homepage contract as a redesign of gameplay HUDs"
+    ]
+  }
+}

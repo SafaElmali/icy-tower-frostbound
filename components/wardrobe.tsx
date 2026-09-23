@@ -1,38 +1,213 @@
 'use client';
 
-import { Check, LockKeyhole, Shirt, Sparkles, HardHat } from 'lucide-react';
+import {
+  Check,
+  LockKeyhole,
+  Shirt,
+  Sparkles,
+  HardHat,
+  ArrowRight,
+} from 'lucide-react';
 import { CharacterPreview } from '@/components/wardrobe-preview';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { COSMETICS, OUTFIT_SLOTS, cosmeticFor, cssColor, isUnlocked, normalizeOutfit, type Outfit, type OutfitSlot, type WardrobeProfile } from '@/lib/outfits';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  COSMETICS,
+  OUTFIT_SLOTS,
+  cosmeticFor,
+  cssColor,
+  isUnlocked,
+  normalizeOutfit,
+  type Outfit,
+  type OutfitSlot,
+  type WardrobeProfile,
+} from '@/lib/outfits';
+import styles from './wardrobe.module.css';
 
 const labels = { hat: 'Hats', sweater: 'Sweaters', trail: 'Star trails' };
 const icons = { hat: HardHat, sweater: Shirt, trail: Sparkles };
 
 export function OutfitBadges({ outfit }: { outfit?: Outfit }) {
   const safe = normalizeOutfit(outfit);
-  return <span className="outfit-badges">{OUTFIT_SLOTS.map(slot => {
-    const item = cosmeticFor(slot, safe[slot]), Icon = icons[slot];
-    return <span key={slot} title={item.name} style={{ color: cssColor(item.colors[0]) }}><Icon size={16} aria-hidden="true" /><span className="sr-only">{item.name}</span></span>;
-  })}</span>;
+  return (
+    <span className="outfit-badges">
+      {OUTFIT_SLOTS.map((slot) => {
+        const item = cosmeticFor(slot, safe[slot]),
+          Icon = icons[slot];
+        return (
+          <span
+            key={slot}
+            title={item.name}
+            style={{ color: cssColor(item.colors[0]) }}
+          >
+            <Icon size={16} aria-hidden="true" />
+            <span className="sr-only">{item.name}</span>
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
-export function WardrobeDialog({ open, onOpenChange, profile, onEquip, storageAvailable }: {
-  open: boolean; onOpenChange: (open: boolean) => void; profile: WardrobeProfile;
-  onEquip: (slot: OutfitSlot, id: string) => void; storageAvailable: boolean;
+export function WardrobeDialog({
+  open,
+  onOpenChange,
+  profile,
+  onEquip,
+  storageAvailable,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  profile: WardrobeProfile;
+  onEquip: (slot: OutfitSlot, id: string) => void;
+  storageAvailable: boolean;
 }) {
-  const earned = COSMETICS.filter(item => item.target > 0 && isUnlocked(item, profile.progress)).length;
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="wardrobe-card">
-    <div className="wardrobe-heading"><span className="eyebrow">EARNED ON THE ASCENT</span><DialogTitle>Your climbing kit.</DialogTitle><DialogDescription>Reach milestones in Classic, Party, or Practice to unlock new colors.</DialogDescription></div>
-    <div className="wardrobe-equipped"><div><span>Equipped</span><OutfitBadges outfit={profile.equipped} /></div><strong>{earned} / 6 rewards unlocked</strong></div>
-    <div className="wardrobe-body">{open && <CharacterPreview outfit={profile.equipped} />}<div className="wardrobe-collection">{OUTFIT_SLOTS.map(slot => <section key={slot} aria-labelledby={`wardrobe-${slot}`}><h3 id={`wardrobe-${slot}`}>{labels[slot]}</h3><div className="wardrobe-options">{COSMETICS.filter(item => item.slot === slot).map(item => {
-      const unlocked = isUnlocked(item, profile.progress), equipped = profile.equipped[slot] === item.id, Icon = icons[slot];
-      return <Button key={item.id} variant="ghost" className={`wardrobe-item ${equipped ? 'is-equipped' : ''}`} disabled={!unlocked} aria-pressed={equipped} onClick={() => onEquip(slot, item.id)} aria-label={`${item.name}. ${unlocked ? equipped ? 'Equipped' : 'Equip' : `Locked. ${item.achievement}`}`}>
-        <span className="wardrobe-swatch" style={{ color: cssColor(item.colors[0]) }}><Icon size={32} strokeWidth={1.5} aria-hidden="true" /><span>{item.colors.map(color => <i key={color} style={{ background: cssColor(color) }} />)}</span></span>
-        <strong>{item.name}</strong><span className="wardrobe-achievement">{item.achievement}</span>
-        <span className="wardrobe-item-status">{equipped ? <><Check size={14} /> Equipped</> : unlocked ? 'Equip' : <><LockKeyhole size={13} /> {Math.min(profile.progress[item.metric], item.target).toLocaleString()} / {item.target.toLocaleString()}</>}</span>
-      </Button>;
-    })}</div></section>)}</div></div>
-    <p className="wardrobe-note">{storageAvailable ? 'Unlocks and your kit are saved on this browser.' : 'Browser storage is unavailable. Your kit lasts for this session.'} Your equipped kit appears beside new leaderboard scores. Star trails appear during airborne combos of 2× or more.</p>
-  </DialogContent></Dialog>;
+  const rewards = COSMETICS.filter((item) => item.target > 0);
+  const earned = rewards.filter((item) =>
+    isUnlocked(item, profile.progress),
+  ).length;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={styles.card}>
+        <header className={styles.header}>
+          <DialogTitle>Make it yours.</DialogTitle>
+          <DialogDescription>
+            Pick your colors. Make your mark on the tower.
+          </DialogDescription>
+        </header>
+        <div className={styles.body}>
+          <aside className={styles.preview} aria-label="Equipped character">
+            {open && <CharacterPreview outfit={profile.equipped} />}
+          </aside>
+          <Tabs defaultValue="hat" className={styles.collection}>
+            <TabsList aria-label="Outfit category" className={styles.tabs}>
+              {OUTFIT_SLOTS.map((slot) => (
+                <TabsTrigger key={slot} value={slot}>
+                  {labels[slot]}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {OUTFIT_SLOTS.map((slot) => {
+              const Icon = icons[slot];
+              return (
+                <TabsContent key={slot} value={slot} className={styles.panel}>
+                  <fieldset className={styles.options}>
+                    <legend className="sr-only">
+                      Choose {labels[slot].toLowerCase()}
+                    </legend>
+                    {COSMETICS.filter((item) => item.slot === slot).map(
+                      (item) => {
+                        const unlocked = isUnlocked(item, profile.progress);
+                        const equipped = profile.equipped[slot] === item.id;
+                        const progress = Math.min(
+                          profile.progress[item.metric],
+                          item.target,
+                        );
+                        return (
+                          <label
+                            key={item.id}
+                            className={styles.option}
+                            data-equipped={equipped || undefined}
+                            data-locked={!unlocked || undefined}
+                          >
+                            <input
+                              type="radio"
+                              name={`wardrobe-${slot}`}
+                              value={item.id}
+                              checked={equipped}
+                              disabled={!unlocked}
+                              onChange={() => onEquip(slot, item.id)}
+                              aria-label={item.name}
+                              aria-describedby={`wardrobe-${item.id}-description`}
+                            />
+                            <span className={styles.swatch} aria-hidden="true">
+                              <Icon
+                                size={27}
+                                strokeWidth={1.5}
+                                style={{ color: cssColor(item.colors[0]) }}
+                              />
+                              <span>
+                                {item.colors.map((color) => (
+                                  <i
+                                    key={color}
+                                    style={{ background: cssColor(color) }}
+                                  />
+                                ))}
+                              </span>
+                            </span>
+                            <span className={styles.itemCopy}>
+                              <strong>{item.name}</strong>
+                              <span id={`wardrobe-${item.id}-description`}>
+                                {item.achievement}
+                              </span>
+                              {!unlocked && (
+                                <progress
+                                  value={progress}
+                                  max={item.target}
+                                  aria-label={`${item.name} unlock progress`}
+                                />
+                              )}
+                            </span>
+                            <span className={styles.itemState}>
+                              {equipped ? (
+                                <>
+                                  <Check size={17} aria-hidden="true" />
+                                  <span>Equipped</span>
+                                </>
+                              ) : unlocked ? (
+                                <span>Equip</span>
+                              ) : (
+                                <>
+                                  <LockKeyhole size={15} aria-hidden="true" />
+                                  <span>
+                                    {progress.toLocaleString()} /{' '}
+                                    {item.target.toLocaleString()}
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          </label>
+                        );
+                      },
+                    )}
+                  </fieldset>
+                  <p className={styles.categoryNote}>
+                    {slot === 'trail'
+                      ? 'Stars follow airborne combos of 2× or more.'
+                      : 'Equip a color to see it on your climber.'}
+                  </p>
+                </TabsContent>
+              );
+            })}
+            <p className={styles.progressNote}>
+              <Sparkles size={15} aria-hidden="true" />
+              <span>
+                <strong>
+                  {earned} / {rewards.length}
+                </strong>{' '}
+                rewards unlocked in Classic, Party, or Practice.
+              </span>
+            </p>
+          </Tabs>
+        </div>
+        <footer className={styles.footer}>
+          <p>
+            {storageAvailable
+              ? 'Your kit saves automatically on this browser.'
+              : 'Storage is unavailable. Your kit lasts for this session.'}
+            <span>Shown beside your new leaderboard scores.</span>
+          </p>
+          <Button onClick={() => onOpenChange(false)}>
+            Done <ArrowRight size={18} aria-hidden="true" />
+          </Button>
+        </footer>
+      </DialogContent>
+    </Dialog>
+  );
 }

@@ -12,11 +12,8 @@ import {
   CircleHelp,
   Footprints,
   Settings2,
-  Music2,
   Sparkles,
-  Wind,
   Ghost,
-  Maximize2,
   Menu,
   Play,
   RotateCcw,
@@ -26,18 +23,21 @@ import {
   Target,
   Trophy,
   Users,
-  Volume2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HowToPlayDialog } from '@/components/how-to-play-dialog';
-import { Switch } from '@/components/ui/switch';
+import { GameSettings } from '@/components/game-settings';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import menuStyles from './game-menu.module.css';
+import resultStyles from '@/components/run-result.module.css';
 import { TitleMenu } from '@/components/title-menu';
+import { ModePreview } from '@/components/mode-preview';
 import { preventTouchContextMenu } from '@/lib/game-touch';
 import skillGoalStyles from '@/components/skill-goals.module.css';
 import hudStyles from '@/components/game-hud.module.css';
 import { GameHud } from '@/components/game-hud';
+import { RunSummaryDialog } from '@/components/run-summary-dialog';
+import { useGameControlKeys } from '@/hooks/use-game-control-keys';
 import { WardrobeDialog } from '@/components/wardrobe';
 import {
   COSMETICS,
@@ -133,6 +133,7 @@ import {
   type ComboMilestone,
 } from '@/lib/combo-feedback';
 import { DailyTowerCard, DailyTowerBanner } from '@/components/daily-tower';
+import dailyStyles from '@/components/daily-tower.module.css';
 import {
   todayDailyTower,
   decodeDailyTower,
@@ -202,6 +203,11 @@ export default function Home() {
   const [menuTab, setMenuTab] = useState('play');
   const returnToMenu = useRef(false);
   const [runDetailsOpen, setRunDetailsOpen] = useState(false);
+  const [pendingActivity, setPendingActivity] = useState<{
+    label: string;
+    run: () => void;
+    restore: () => void;
+  } | null>(null);
   const [challengesOpen, setChallengesOpen] = useState(false);
   const goalsTitle = useRef<HTMLHeadingElement>(null);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
@@ -388,6 +394,13 @@ export default function Home() {
     preference.addEventListener('change', apply);
     return () => preference.removeEventListener('change', apply);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.reducedMotion = String(reducedMotion);
+    return () => {
+      delete document.documentElement.dataset.reducedMotion;
+    };
+  }, [reducedMotion]);
 
   function startRun(e: TowerEngine, selectedMode: GameMode, source = 'button') {
     returnToMenu.current = false;
@@ -593,32 +606,58 @@ export default function Home() {
     url.searchParams.delete('daily');
     window.history.replaceState(window.history.state, '', url);
   }
-  function playDaily(selected: DailyTower, source = 'daily_panel') {
-    if (!ready) return;
-    leaveChallenge();
-    telemetry.current.event('daily_tower_selected', {
-      daily_date: selected.date,
-      selection_source: source,
-    });
-    dailyRef.current = selected;
-    setDaily(selected);
-    setDailyChoice(selected);
-    window.history.replaceState(
-      window.history.state,
-      '',
-      dailyTowerUrl(window.location.href, selected),
-    );
+  function requestActivity(label: string, run: () => void) {
+    const status = engine.current?.status;
+    if (status !== 'playing' && status !== 'paused') {
+      run();
+      return;
+    }
+    if (status === 'playing') pause('change_activity');
+    const origin = { menuOpen, dailyOpen, help };
+    setMenuOpen(false);
     setDailyOpen(false);
-    begin('arcade');
+    setHelp(false);
+    setPendingActivity({
+      label,
+      run,
+      restore: () => {
+        setMenuOpen(origin.menuOpen);
+        setDailyOpen(origin.dailyOpen);
+        setHelp(origin.help);
+      },
+    });
+  }
+
+  function playDaily(selected: DailyTower, source = 'daily_panel') {
+    requestActivity('Start daily tower', () => {
+      if (!ready) return;
+      leaveChallenge();
+      telemetry.current.event('daily_tower_selected', {
+        daily_date: selected.date,
+        selection_source: source,
+      });
+      dailyRef.current = selected;
+      setDaily(selected);
+      setDailyChoice(selected);
+      window.history.replaceState(
+        window.history.state,
+        '',
+        dailyTowerUrl(window.location.href, selected),
+      );
+      setDailyOpen(false);
+      begin('arcade');
+    });
   }
   function guidedPractice() {
-    if (!ready) return;
-    leaveChallenge();
-    leaveDaily();
-    saveGuidance(replayGuidance());
-    begin('practice');
-    telemetry.current.event('guided_practice_started', {
-      entry_surface: 'solo',
+    requestActivity('Start practice', () => {
+      if (!ready) return;
+      leaveChallenge();
+      leaveDaily();
+      saveGuidance(replayGuidance());
+      begin('practice');
+      telemetry.current.event('guided_practice_started', {
+        entry_surface: 'solo',
+      });
     });
   }
   function openDailyShare(selected: DailyTower) {
@@ -646,23 +685,25 @@ export default function Home() {
     setLeaderboardOpen(true);
   }
   function menu() {
-    jev.current?.stop();
-    jev.current = null;
-    aiRun.current = false;
-    setJevMessage('');
-    setRunDetailsOpen(false);
-    if (engine.current)
-      telemetry.current.terminal(engine.current, 'abandoned', {
-        reason: 'menu',
-      });
-    if (measuredRun.current)
-      analytics.current?.abandonRun(measuredRun.current, 'menu');
-    measuredRun.current = null;
-    ghost.current = null;
-    setRace(null);
-    engine.current?.menu();
-    resetInput();
-    if (engine.current) setGame(engine.current.snapshot());
+    requestActivity('Return to title', () => {
+      jev.current?.stop();
+      jev.current = null;
+      aiRun.current = false;
+      setJevMessage('');
+      setRunDetailsOpen(false);
+      if (engine.current)
+        telemetry.current.terminal(engine.current, 'abandoned', {
+          reason: 'menu',
+        });
+      if (measuredRun.current)
+        analytics.current?.abandonRun(measuredRun.current, 'menu');
+      measuredRun.current = null;
+      ghost.current = null;
+      setRace(null);
+      engine.current?.menu();
+      resetInput();
+      if (engine.current) setGame(engine.current.snapshot());
+    });
   }
 
   function fromMenu(action: () => void) {
@@ -919,6 +960,7 @@ export default function Home() {
               setGame(e.snapshot());
             },
           });
+          let lastSnapshotStatus = e.status;
           const animate = (now: number) => {
             if (disposed) return;
             const dt = Math.min((now - (last || now)) / 1000, 0.1);
@@ -1147,8 +1189,13 @@ export default function Home() {
               const landingGuide =
                 e.status === 'playing' ? firstJumpRef.current : null;
               w.render(e, dt, now / 1000, ghost.current, landingGuide);
-              if (now - sync > 65 || events.length) {
+              if (
+                (e.status === 'playing' && now - sync > 65) ||
+                e.status !== lastSnapshotStatus ||
+                events.length
+              ) {
                 setGame(e.snapshot());
+                lastSnapshotStatus = e.status;
                 if (aiRun.current && jev.current)
                   setJevLive(jev.current.liveState(e));
                 setRace(ghost.current?.snapshot(e) ?? null);
@@ -1230,10 +1277,11 @@ export default function Home() {
       const active = e.status === 'playing';
       if (
         ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'Space'].includes(event.code) &&
-        (active || !button)
+        active &&
+        !button
       )
         event.preventDefault();
-      if (active && !aiRun.current) {
+      if (active && !button && !aiRun.current) {
         if (event.code === 'KeyA' || event.code === 'ArrowLeft')
           input.current.press(source, 'left');
         if (event.code === 'KeyD' || event.code === 'ArrowRight')
@@ -1378,6 +1426,14 @@ export default function Home() {
     setTouchPressed({ ...input.current.controls });
   };
   const touchEvents = {
+    ...useGameControlKeys(
+      input.current,
+      game.status === 'playing' && !aiRun.current,
+      () => {
+        lastInput.current = 'keyboard';
+        setTouchPressed({ ...input.current.controls });
+      },
+    ),
     onPointerDown: pressTouch,
     onPointerMove: moveTouch,
     onPointerUp: releaseTouch,
@@ -1562,63 +1618,135 @@ export default function Home() {
           </>
         )}
         {(game.status === 'paused' || game.status === 'over') && (
-          <div className="overlay">
+          <RunSummaryDialog
+            open={
+              !error &&
+              !graphicsReconnecting &&
+              !menuOpen &&
+              !help &&
+              !runDetailsOpen &&
+              !leaderboardOpen &&
+              !wardrobeOpen &&
+              !dailyOpen &&
+              !dailyShare &&
+              !sharedRun &&
+              !challengesOpen &&
+              !measurementsOpen &&
+              !pendingActivity
+            }
+            paused={game.status === 'paused'}
+            onContinue={() =>
+              game.status === 'paused'
+                ? pause()
+                : aiRun.current
+                  ? beginJev()
+                  : begin()
+            }
+            onExit={menu}
+            returnFocus={() =>
+              engine.current?.status === 'playing'
+                ? canvas.current
+                : engine.current?.status === 'ready'
+                  ? document.querySelector<HTMLElement>('[data-start-climb]')
+                  : false
+            }
+          >
             <section
-              className="result-card run-summary"
+              className={`result-card run-summary ${resultStyles.card} ${game.status === 'paused' ? resultStyles.pauseCard : ''}`}
               aria-label={
                 game.status === 'paused' ? 'Paused climb' : 'Climb result'
               }
             >
-              <span className="run-context">
-                {game.status === 'paused'
-                  ? 'PAUSED'
-                  : daily
-                    ? `DAILY TOWER · ${daily.date}`
-                    : challenge
-                      ? 'FRIEND CHALLENGE'
-                      : `${MODE_LABELS[game.mode].toUpperCase()} CLIMB`}
-              </span>
-              <h2>
-                {game.status === 'paused' ? (
-                  'The tower can wait.'
-                ) : (
-                  <>Floor {game.floor}.</>
+              <div
+                className={
+                  game.status === 'over' ? resultStyles.overview : undefined
+                }
+              >
+                <div
+                  className={
+                    game.status === 'over' ? resultStyles.outcome : undefined
+                  }
+                >
+                  {game.status === 'over' && (
+                    <span className="run-context">
+                      {daily
+                        ? `DAILY TOWER · ${daily.date}`
+                        : challenge
+                          ? 'FRIEND CHALLENGE'
+                          : `${MODE_LABELS[game.mode].toUpperCase()} CLIMB`}
+                    </span>
+                  )}
+                  <h2 id="run-summary-heading" tabIndex={-1}>
+                    {game.status === 'paused' ? (
+                      'Paused.'
+                    ) : (
+                      <>Floor {game.floor}.</>
+                    )}
+                  </h2>
+                  {game.status === 'paused' && (
+                    <p className={resultStyles.pauseDescription}>
+                      The tower can wait.
+                    </p>
+                  )}
+                  {game.status === 'over' ? (
+                    <dl
+                      className={resultStyles.metrics}
+                      id="run-summary-metrics"
+                    >
+                      <div>
+                        <dt>Points</dt>
+                        <dd>{game.score.toLocaleString()}</dd>
+                      </div>
+                      <div>
+                        <dt>Best combo</dt>
+                        <dd>
+                          {game.bestCombo}
+                          <span>×</span>
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : (
+                    <dl
+                      className={resultStyles.pauseMetrics}
+                      id="run-summary-metrics"
+                    >
+                      <div>
+                        <dt>Floor</dt>
+                        <dd>{game.floor}</dd>
+                      </div>
+                      <div>
+                        <dt>Points</dt>
+                        <dd>{game.score.toLocaleString()}</dd>
+                      </div>
+                    </dl>
+                  )}
+                  {game.status === 'over' &&
+                    !aiRun.current &&
+                    (challenge || game.floor > 0 || runBaseline.floor > 0) && (
+                      <p
+                        className={`run-highlight ${(challenge ? game.floor > challenge.floor : game.floor > runBaseline.floor) ? 'is-record' : ''}`}
+                      >
+                        {challenge
+                          ? game.floor > challenge.floor
+                            ? 'Challenge beaten!'
+                            : `Challenge target · Floor ${challenge.floor + 1}`
+                          : game.floor > runBaseline.floor
+                            ? 'New personal best!'
+                            : `Personal best · ${runBaseline.floor} floors`}
+                      </p>
+                    )}
+                </div>
+                {game.status === 'over' && !aiRun.current && (
+                  <NextClimb
+                    snapshot={game}
+                    baseline={runBaseline}
+                    skills={skills}
+                    achievementProgress={profile.progress}
+                    challengeFloor={challenge?.floor}
+                    daily={!!daily}
+                  />
                 )}
-              </h2>
-              <p className="run-metrics">
-                {game.status === 'paused'
-                  ? `Floor ${game.floor}`
-                  : `${game.score.toLocaleString()} points`}
-                <span aria-hidden="true"> · </span>
-                {game.status === 'paused'
-                  ? `${game.score.toLocaleString()} points`
-                  : `${game.bestCombo}× best combo`}
-              </p>
-              {game.status === 'over' &&
-                !aiRun.current &&
-                (challenge || game.floor > 0 || runBaseline.floor > 0) && (
-                  <p
-                    className={`run-highlight ${(challenge ? game.floor > challenge.floor : game.floor > runBaseline.floor) ? 'is-record' : ''}`}
-                  >
-                    {challenge
-                      ? game.floor > challenge.floor
-                        ? 'Challenge beaten!'
-                        : `Challenge target · Floor ${challenge.floor + 1}`
-                      : game.floor > runBaseline.floor
-                        ? 'New personal best!'
-                        : `Personal best · ${runBaseline.floor} floors`}
-                  </p>
-                )}
-              {game.status === 'over' && !aiRun.current && (
-                <NextClimb
-                  snapshot={game}
-                  baseline={runBaseline}
-                  skills={skills}
-                  achievementProgress={profile.progress}
-                  challengeFloor={challenge?.floor}
-                  daily={!!daily}
-                />
-              )}
+              </div>
               <Button
                 className="start-button"
                 onClick={() =>
@@ -1639,7 +1767,7 @@ export default function Home() {
                 (game.status === 'over' || jev.current?.finished)
                   ? 'WATCH JEV AGAIN'
                   : game.status === 'paused'
-                    ? 'RESUME CLIMB'
+                    ? 'Resume climb'
                     : daily
                       ? 'RETRY DAILY TOWER'
                       : challenge
@@ -1652,65 +1780,87 @@ export default function Home() {
                   or press <kbd>ENTER</kbd>
                 </span>
               )}
-              {game.status === 'over' && newOutfits.length > 0 && (
-                <Button
-                  variant="ghost"
-                  className="run-unlock"
-                  onClick={openWardrobe}
-                >
-                  <Shirt size={18} aria-hidden="true" />
-                  <span>
-                    Unlocked: {newOutfits.join(', ')}
-                    <small>Try on your reward</small>
-                  </span>
-                  <ChevronRight size={16} aria-hidden="true" />
-                </Button>
-              )}
-              {game.status === 'over' &&
-                !challenge &&
-                !daily &&
-                game.mode !== 'practice' &&
-                game.floor < 5 &&
-                runBaseline.floor < 5 && (
+              <div
+                className={
+                  game.status === 'over' ? resultStyles.extras : undefined
+                }
+              >
+                {game.status === 'over' && newOutfits.length > 0 && (
                   <Button
                     variant="ghost"
-                    className="run-practice"
-                    onClick={guidedPractice}
+                    className="run-unlock"
+                    onClick={openWardrobe}
                   >
-                    <Footprints size={16} aria-hidden="true" />
-                    Practice without rising frost
+                    <Shirt size={18} aria-hidden="true" />
+                    <span>
+                      Unlocked: {newOutfits.join(', ')}
+                      <small>Try on your reward</small>
+                    </span>
+                    <ChevronRight size={16} aria-hidden="true" />
                   </Button>
                 )}
-              {game.status === 'over' &&
-                !challenge &&
-                game.mode !== 'practice' &&
-                (daily || Math.max(game.floor, runBaseline.floor) >= 5) &&
-                newOutfits.length === 0 && (
-                  <DailyReturn
-                    daily={daily}
-                    onStartToday={() => playDaily(todayDailyTower(), 'results')}
-                  />
+                {game.status === 'over' &&
+                  !challenge &&
+                  !daily &&
+                  game.mode !== 'practice' &&
+                  game.floor < 5 &&
+                  runBaseline.floor < 5 && (
+                    <Button
+                      variant="ghost"
+                      className="run-practice"
+                      onClick={guidedPractice}
+                    >
+                      <Footprints size={16} aria-hidden="true" />
+                      Practice without rising frost
+                    </Button>
+                  )}
+                {game.status === 'over' &&
+                  !challenge &&
+                  game.mode !== 'practice' &&
+                  (daily || Math.max(game.floor, runBaseline.floor) >= 5) &&
+                  newOutfits.length === 0 && (
+                    <DailyReturn
+                      daily={daily}
+                      onStartToday={() =>
+                        playDaily(todayDailyTower(), 'results')
+                      }
+                    />
+                  )}
+                {game.status === 'paused' && (
+                  <div className="pause-options">
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        changeMenuTab('settings');
+                        setMenuOpen(true);
+                      }}
+                    >
+                      <Settings2 size={17} />
+                      Settings
+                      <ChevronRight size={16} />
+                    </Button>
+                    <Button variant="ghost" onClick={() => setHelp(true)}>
+                      <CircleHelp size={17} />
+                      How to play
+                      <ChevronRight size={16} />
+                    </Button>
+                  </div>
                 )}
-              {game.status === 'paused' && (
-                <div className="pause-options">
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      changeMenuTab('settings');
-                      setMenuOpen(true);
-                    }}
-                  >
-                    <Settings2 size={17} />
-                    Settings
-                    <ChevronRight size={16} />
-                  </Button>
-                  <Button variant="ghost" onClick={() => setHelp(true)}>
-                    <CircleHelp size={17} />
-                    How to play
-                    <ChevronRight size={16} />
-                  </Button>
-                </div>
-              )}
+                {game.status === 'over' &&
+                  !aiRun.current &&
+                  game.mode !== 'practice' &&
+                  game.floor > 0 && (
+                    <Button
+                      variant="outline"
+                      className="run-ranking"
+                      onClick={openLeaderboard}
+                    >
+                      <Trophy size={16} aria-hidden="true" /> Submit score &
+                      rankings
+                      <ChevronRight size={16} aria-hidden="true" />
+                    </Button>
+                  )}
+              </div>
               <div className="run-summary-actions">
                 {game.status === 'over' && !aiRun.current && (
                   <Button
@@ -1725,8 +1875,44 @@ export default function Home() {
                 </Button>
               </div>
             </section>
-          </div>
+          </RunSummaryDialog>
         )}
+        <Dialog
+          open={!!pendingActivity}
+          onOpenChange={(open) => {
+            if (!open) {
+              pendingActivity?.restore();
+              setPendingActivity(null);
+            }
+          }}
+        >
+          <DialogContent className="leave-climb-dialog">
+            <DialogTitle>Leave this climb?</DialogTitle>
+            <DialogDescription>
+              You’re on floor {game.floor}. This unfinished run will end; your
+              saved records stay with you.
+            </DialogDescription>
+            <Button
+              className="keep-climbing"
+              onClick={() => {
+                pendingActivity?.restore();
+                setPendingActivity(null);
+              }}
+            >
+              Keep this climb
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const action = pendingActivity?.run;
+                setPendingActivity(null);
+                action?.();
+              }}
+            >
+              {pendingActivity?.label}
+            </Button>
+          </DialogContent>
+        </Dialog>
         <Dialog
           open={runDetailsOpen && game.status === 'over'}
           onOpenChange={setRunDetailsOpen}
@@ -1820,19 +2006,16 @@ export default function Home() {
         <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
           <DialogContent className={menuStyles.dialog}>
             <div className={menuStyles.header}>
-              <div className={menuStyles.eyebrow}>
-                <Snowflake aria-hidden="true" /> FROSTBOUND
-              </div>
               <DialogTitle className={menuStyles.title}>
                 {menuTab === 'play'
-                  ? 'Choose your ascent.'
+                  ? 'Choose your climb.'
                   : menuTab === 'progress'
-                    ? 'Every climb counts.'
-                    : 'Make yourself at home.'}
+                    ? 'Your ascent.'
+                    : 'Your settings.'}
               </DialogTitle>
               <DialogDescription className={menuStyles.description}>
                 {menuTab === 'play'
-                  ? 'Find your rhythm. Then push a little further.'
+                  ? 'Three ways up. Find yours.'
                   : menuTab === 'progress'
                     ? 'Your milestones, your climbing kit, your place on the tower.'
                     : 'Fine-tune the sound, atmosphere, and feel of your climb.'}
@@ -1859,70 +2042,73 @@ export default function Home() {
               </TabsList>
               <div className={menuStyles.body}>
                 <TabsContent value="play" className={menuStyles.panel}>
-                  <fieldset
-                    className={menuStyles.modes}
-                    disabled={active || !!challenge || !!daily}
-                  >
-                    <legend>CHOOSE YOUR MODE</legend>
-                    <div className={menuStyles.modeGrid}>
-                      {(
-                        [
-                          {
-                            value: 'arcade',
-                            label: 'Classic',
-                            description:
-                              'The original endless climb. Outrun the rising frost.',
-                            Icon: Snowflake,
-                          },
-                          {
-                            value: 'party',
-                            label: 'Party',
-                            description:
-                              'Low gravity, spring platforms, and double jumps.',
-                            Icon: Sparkles,
-                          },
-                          {
-                            value: 'practice',
-                            label: 'Practice',
-                            description:
-                              'Learn at your own pace. No rising frost. Unranked.',
-                            Icon: Footprints,
-                          },
-                        ] as const
-                      ).map(({ value, label, description, Icon }) => (
-                        <label className={menuStyles.modeCard} key={value}>
-                          <input
-                            type="radio"
-                            name="game-mode"
-                            aria-label={label}
-                            value={value}
-                            checked={mode === value}
-                            onChange={() => {
-                              if (value !== mode)
-                                trackEvent('mode_selected', {
-                                  surface: 'solo',
-                                  previous_mode: mode,
-                                  mode: value,
-                                });
-                              setMode(value);
-                              if (engine.current) {
-                                engine.current.start(
-                                  value,
-                                  engine.current.seed,
-                                  CURRENT_RULES_VERSION,
-                                );
-                                engine.current.status = 'ready';
-                                setGame(engine.current.snapshot());
-                              }
-                            }}
-                          />
-                          <Icon aria-hidden="true" />
-                          <strong>{label}</strong>
-                          <small>{description}</small>
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
+                  <div className={menuStyles.modeChooser}>
+                    <fieldset
+                      className={menuStyles.modes}
+                      disabled={active || !!challenge || !!daily}
+                    >
+                      <legend className="sr-only">Choose your mode</legend>
+                      <div className={menuStyles.modeGrid}>
+                        {(
+                          [
+                            {
+                              value: 'arcade',
+                              label: 'Classic',
+                              description:
+                                'The original endless climb. Outrun the rising frost.',
+                              Icon: Snowflake,
+                            },
+                            {
+                              value: 'party',
+                              label: 'Party',
+                              description:
+                                'Low gravity, spring platforms, and double jumps.',
+                              Icon: Sparkles,
+                            },
+                            {
+                              value: 'practice',
+                              label: 'Practice',
+                              description:
+                                'Learn at your own pace. No rising frost. Unranked.',
+                              Icon: Footprints,
+                            },
+                          ] as const
+                        ).map(({ value, label, description, Icon }) => (
+                          <label className={menuStyles.modeCard} key={value}>
+                            <input
+                              type="radio"
+                              name="game-mode"
+                              aria-label={label}
+                              value={value}
+                              checked={mode === value}
+                              onChange={() => {
+                                if (value !== mode)
+                                  trackEvent('mode_selected', {
+                                    surface: 'solo',
+                                    previous_mode: mode,
+                                    mode: value,
+                                  });
+                                setMode(value);
+                                if (engine.current) {
+                                  engine.current.start(
+                                    value,
+                                    engine.current.seed,
+                                    CURRENT_RULES_VERSION,
+                                  );
+                                  engine.current.status = 'ready';
+                                  setGame(engine.current.snapshot());
+                                }
+                              }}
+                            />
+                            <Icon aria-hidden="true" />
+                            <strong>{label}</strong>
+                            <small>{description}</small>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <ModePreview mode={mode} />
+                  </div>
                   {(active || challenge || daily) && (
                     <p className={menuStyles.note}>
                       {active
@@ -1936,7 +2122,7 @@ export default function Home() {
                     className={menuStyles.group}
                     aria-labelledby="menu-play-heading"
                   >
-                    <h3 id="menu-play-heading">Explore the tower</h3>
+                    <h3 id="menu-play-heading">More ways to climb</h3>
                     {JEV_ENABLED && (
                       <Button
                         className={menuStyles.row}
@@ -1956,7 +2142,24 @@ export default function Home() {
                       variant="ghost"
                       render={
                         // oxlint-disable-next-line next/no-html-link-for-pages -- Vinext's client router fails in the static Netlify export.
-                        <a href="/race" aria-label="Multiplayer lobbies" />
+                        <a
+                          href="/race"
+                          aria-label="Multiplayer lobbies"
+                          onClick={(event) => {
+                            if (
+                              !active ||
+                              event.metaKey ||
+                              event.ctrlKey ||
+                              event.shiftKey ||
+                              event.altKey
+                            )
+                              return;
+                            event.preventDefault();
+                            requestActivity('Go to multiplayer', () => {
+                              window.location.href = '/race';
+                            });
+                          }}
+                        />
                       }
                       nativeButton={false}
                     >
@@ -1990,7 +2193,7 @@ export default function Home() {
                       className={menuStyles.row}
                       variant="ghost"
                       disabled={!ready}
-                      onClick={() => fromMenu(guidedPractice)}
+                      onClick={guidedPractice}
                     >
                       <Footprints aria-hidden="true" />
                       <span>
@@ -2092,146 +2295,58 @@ export default function Home() {
                   </section>
                 </TabsContent>
                 <TabsContent value="settings" className={menuStyles.panel}>
-                  <section
-                    className={menuStyles.settingGroup}
-                    aria-labelledby="menu-audio-heading"
-                  >
-                    <h3 id="menu-audio-heading">Audio</h3>
-                    <div className={menuStyles.settingRow}>
-                      <Volume2 aria-hidden="true" />
-                      <span>
-                        <label id="setting-sound-label" htmlFor="setting-sound">
-                          Sound
-                        </label>
-                        <small>All game audio, including music</small>
-                      </span>
-                      <Switch
-                        className={menuStyles.switch}
-                        id="setting-sound"
-                        aria-labelledby="setting-sound-label"
-                        checked={sound}
-                        onCheckedChange={changeSound}
-                      />
-                    </div>
-                    <div className={menuStyles.settingRow}>
-                      <Music2 aria-hidden="true" />
-                      <span>
-                        <label id="setting-music-label" htmlFor="setting-music">
-                          Background music
-                        </label>
-                        <small>
-                          {sound
-                            ? 'A soundtrack for your ascent'
-                            : 'Unmute sound to hear music'}
-                        </small>
-                      </span>
-                      <Switch
-                        className={menuStyles.switch}
-                        id="setting-music"
-                        aria-labelledby="setting-music-label"
-                        checked={music}
-                        onCheckedChange={(enabled) => {
-                          trackEvent('setting_changed', {
-                            surface: 'solo',
-                            setting: 'music',
-                            previous_value: music,
-                            value: enabled,
-                            source: 'user',
-                          });
-                          setMusic(enabled);
-                          audio.current ??= new TowerAudio();
-                          audio.current.setMusicEnabled(enabled);
-                        }}
-                      />
-                    </div>
-                  </section>
-                  <section
-                    className={menuStyles.settingGroup}
-                    aria-labelledby="menu-display-heading"
-                  >
-                    <h3 id="menu-display-heading">Display & comfort</h3>
-                    <div className={menuStyles.settingRow}>
-                      <Wind aria-hidden="true" />
-                      <span>
-                        <label
-                          id="setting-motion-label"
-                          htmlFor="setting-motion"
-                        >
-                          Reduce motion
-                        </label>
-                        <small>Less camera shake and movement</small>
-                      </span>
-                      <Switch
-                        className={menuStyles.switch}
-                        id="setting-motion"
-                        aria-labelledby="setting-motion-label"
-                        checked={reducedMotion}
-                        onCheckedChange={changeMotion}
-                      />
-                    </div>
-                    <div className={menuStyles.settingRow}>
-                      <Sparkles aria-hidden="true" />
-                      <span>
-                        <label
-                          id="setting-quality-label"
-                          htmlFor="setting-quality"
-                        >
-                          High quality effects
-                        </label>
-                        <small>
-                          Richer lighting. Turn off for smoother play.
-                        </small>
-                      </span>
-                      <Switch
-                        className={menuStyles.switch}
-                        id="setting-quality"
-                        aria-labelledby="setting-quality-label"
-                        checked={quality}
-                        onCheckedChange={(enabled) => {
-                          trackEvent('setting_changed', {
-                            surface: 'solo',
-                            setting: 'quality',
-                            previous_value: quality,
-                            value: enabled,
-                            source: 'user',
-                          });
-                          setQuality(enabled);
-                          world.current?.setQuality(enabled);
-                        }}
-                      />
-                    </div>
-                  </section>
-                  <div className={menuStyles.fullscreen}>
-                    <Button
-                      className={menuStyles.row}
-                      variant="ghost"
-                      onClick={() => {
-                        const request = document.fullscreenElement
-                          ? document.exitFullscreen()
-                          : document.documentElement.requestFullscreen?.();
-                        if (!request)
-                          trackEvent('fullscreen_failed', {
-                            surface: 'solo',
-                            error_code: 'unavailable',
-                          });
-                        void request?.catch(() => {
-                          trackEvent('fullscreen_failed', {
-                            surface: 'solo',
-                            error_code: 'rejected',
-                          });
-                          setToast('Fullscreen is unavailable in this view.');
-                          setTimeout(() => setToast(''), 3500);
+                  <GameSettings
+                    sound={sound}
+                    music={music}
+                    reducedMotion={reducedMotion}
+                    quality={quality}
+                    onSound={changeSound}
+                    onMotion={changeMotion}
+                    onMusic={(enabled) => {
+                      trackEvent('setting_changed', {
+                        surface: 'solo',
+                        setting: 'music',
+                        previous_value: music,
+                        value: enabled,
+                        source: 'user',
+                      });
+                      setMusic(enabled);
+                      audio.current ??= new TowerAudio();
+                      audio.current.setMusicEnabled(enabled);
+                    }}
+                    onQuality={(enabled) => {
+                      trackEvent('setting_changed', {
+                        surface: 'solo',
+                        setting: 'quality',
+                        previous_value: quality,
+                        value: enabled,
+                        source: 'user',
+                      });
+                      setQuality(enabled);
+                      world.current?.setQuality(enabled);
+                    }}
+                    onFullscreen={() => {
+                      const request = document.fullscreenElement
+                        ? document.exitFullscreen()
+                        : document.documentElement.requestFullscreen?.();
+                      if (!request) {
+                        trackEvent('fullscreen_failed', {
+                          surface: 'solo',
+                          error_code: 'unavailable',
                         });
-                      }}
-                    >
-                      <Maximize2 aria-hidden="true" />
-                      <span>
-                        Toggle fullscreen
-                        <small>Give the tower a little more room</small>
-                      </span>
-                      <ChevronRight aria-hidden="true" />
-                    </Button>
-                  </div>
+                        setToast('Fullscreen is unavailable in this view.');
+                        setTimeout(() => setToast(''), 3500);
+                      }
+                      void request?.catch(() => {
+                        trackEvent('fullscreen_failed', {
+                          surface: 'solo',
+                          error_code: 'rejected',
+                        });
+                        setToast('Fullscreen is unavailable in this view.');
+                        setTimeout(() => setToast(''), 3500);
+                      });
+                    }}
+                  />
                 </TabsContent>
               </div>
             </Tabs>
@@ -2271,10 +2386,10 @@ export default function Home() {
           open={dailyOpen}
           onOpenChange={(open) => closeFeature(setDailyOpen, open)}
         >
-          <DialogContent className="result-card help-card daily-dialog">
-            <DialogTitle>A new route each day.</DialogTitle>
+          <DialogContent className={dailyStyles.dialog}>
+            <DialogTitle>Daily tower.</DialogTitle>
             <DialogDescription>
-              Everyone gets the same Classic tower. Retry as often as you like.
+              One shared route. As many tries as it takes.
             </DialogDescription>
             <fieldset disabled={!ready} className="daily-options">
               <DailyTowerCard

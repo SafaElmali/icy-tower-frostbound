@@ -1,0 +1,415 @@
+body .card[data-slot='dialog-content'] {
+  display: flex;
+  flex-direction: column;
+  width: calc(100vw - 32px);
+  max-width: 880px;
+  max-height: calc(100dvh - 32px);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  background: #0c202a;
+  color: #eef8f3;
+  box-shadow: 0 28px 100px #0008;
+  --tw-ring-shadow: 0 0 #0000;
+}
+.header {
+  padding: 30px 32px 24px;
+  flex-shrink: 0;
+}
+body .card [data-slot='dialog-title'] {
+  margin: 0 48px 12px 0;
+  color: #eef8f3;
+  font:
+    italic 800 46px/1 'Frostbound Display',
+    sans-serif;
+  text-transform: uppercase;
+  letter-spacing: -0.025em;
+}
+body .card [data-slot='dialog-description'] {
+  margin: 0;
+  color: #b4c9ce;
+  font-size: 14px;
+  line-height: 1.5;
+}
+body .card [data-slot='dialog-close'] {
+  top: 20px;
+  right: 20px;
+  border: 0;
+  border-radius: 10px;
+  background: #eef8f308;
+  color: #b4c9ce;
+}
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.2fr);
+  gap: 28px;
+  padding: 0 32px 28px;
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-color: #395761 #0c202a;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+.preview {
+  min-width: 0;
+}
+.card :global(.wardrobe-preview) {
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: 0;
+  background: #061720;
+}
+.card :global(.wardrobe-preview-stage) {
+  height: 290px;
+  min-height: 0;
+}
+.card :global(.wardrobe-preview figcaption) {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 0;
+  background: #061720;
+}
+.card :global(.wardrobe-preview figcaption strong) {
+  font-size: 16px;
+  font-weight: 600;
+  color: #eef8f3;
+}
+.card :global(.wardrobe-preview figcaption span) {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #b4c9ce;
+}
+.card :global(.wardrobe-preview .preview-playback) {
+  font-size: 12px;
+  min-height: 44px;
+  margin: 0 0 0 -8px;
+  color: #b4c9ce;
+}
+.collection[data-slot='tabs'] {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.tabs[data-slot='tabs-list'] {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  height: auto;
+  padding: 4px;
+  background: #061720;
+  border-radius: 10px;
+}
+.tabs [data-slot='tabs-trigger'] {
+  min-height: 42px;
+  padding: 8px;
+  border: 0;
+  border-radius: 7px;
+  color: #b4c9ce;
+  font-size: 13px;
+  box-shadow: none;
+  transition:
+    color 150ms,
+    background 150ms;
+}
+.tabs [data-slot='tabs-trigger'][data-active] {
+  background: #24424f;
+  color: #eef8f3;
+}
+.panel[data-slot='tabs-content'] {
+  flex: 0 0 auto;
+  padding-top: 14px;
+}
+.options {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 61px;
+  gap: 12px;
+  align-items: center;
+  min-height: 96px;
+  padding: 14px 8px;
+  border-bottom: 1px solid #b4c9ce26;
+  cursor: pointer;
+}
+.option[data-equipped] {
+  background: #eef8f306;
+}
+.option:hover:not([data-locked]) {
+  background: #eef8f30c;
+}
+.option[data-locked] {
+  cursor: default;
+}
+.option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.option:has(input:focus-visible) {
+  outline: 2px solid #ffb389;
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+.swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.swatch > span {
+  display: flex;
+  gap: 2px;
+}
+.swatch i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.itemCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.itemCopy strong {
+  color: #eef8f3;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.itemCopy > span {
+  color: #b4c9ce;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.itemState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #b4c9ce;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.option[data-equipped] .itemState {
+  color: #ffb389;
+}
+.itemCopy progress {
+  display: block;
+  width: 100%;
+  height: 3px;
+  border: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  appearance: none;
+  background: #29414c;
+  accent-color: #d8f2f0;
+}
+.itemCopy progress::-webkit-progress-bar {
+  background: #29414c;
+}
+.itemCopy progress::-webkit-progress-value {
+  background: #d8f2f0;
+}
+.itemCopy progress::-moz-progress-bar {
+  background: #d8f2f0;
+}
+.categoryNote {
+  color: #b4c9ce;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 14px 0 0;
+}
+.progressNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #b4c9ce;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: auto 0 0;
+  padding-top: 20px;
+}
+.progressNote svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #ffb389;
+}
+.progressNote strong {
+  color: #eef8f3;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-shrink: 0;
+  padding: 20px 32px;
+  background: #081b23;
+}
+.footer p {
+  color: #b4c9ce;
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 0;
+}
+.footer p span {
+  display: block;
+}
+.footer > button {
+  height: 48px;
+  min-width: 140px;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 10px;
+  background: #d8f2f0;
+  color: #123c48;
+  font-size: 14px;
+  font-weight: 650;
+}
+.footer > button:hover {
+  background: #eef8f3;
+}
+.card button:focus-visible {
+  outline: 2px solid #ffb389;
+  outline-offset: 3px;
+}
+@media (max-width: 720px) {
+  .header {
+    padding: 26px 24px 20px;
+  }
+  body .card [data-slot='dialog-title'] {
+    font-size: 40px;
+  }
+  .body {
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.2fr);
+    gap: 20px;
+    padding: 0 24px 24px;
+  }
+  .option {
+    gap: 8px;
+    grid-template-columns: 28px minmax(0, 1fr) 54px;
+    padding-inline: 4px;
+  }
+  .card :global(.wardrobe-preview-stage) {
+    height: 250px;
+  }
+  .card :global(.wardrobe-preview figcaption) {
+    padding: 14px;
+  }
+  .footer {
+    padding: 18px 24px;
+  }
+}
+@media (max-width: 560px) {
+  body .card[data-slot='dialog-content'] {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+  .header {
+    padding: 24px 20px 18px;
+  }
+  body .card [data-slot='dialog-title'] {
+    font-size: 35px;
+    margin-bottom: 10px;
+  }
+  body .card [data-slot='dialog-description'] {
+    font-size: 12px;
+  }
+  body .card [data-slot='dialog-close'] {
+    top: 14px;
+    right: 12px;
+  }
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 0 20px 20px;
+  }
+  .card :global(.wardrobe-preview) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .card :global(.wardrobe-preview-stage) {
+    height: 148px;
+  }
+  .card :global(.wardrobe-preview figcaption) {
+    padding: 12px;
+    gap: 4px;
+    align-content: center;
+  }
+  .card :global(.wardrobe-preview figcaption strong) {
+    font-size: 14px;
+  }
+  .card :global(.wardrobe-preview figcaption span) {
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .card :global(.wardrobe-preview .preview-playback) {
+    font-size: 11px;
+    min-height: 36px;
+  }
+  .tabs [data-slot='tabs-trigger'] {
+    font-size: 12px;
+    min-height: 40px;
+  }
+  .panel[data-slot='tabs-content'] {
+    padding-top: 8px;
+  }
+  .option {
+    min-height: 84px;
+    grid-template-columns: 28px minmax(0, 1fr) 54px;
+  }
+  .itemCopy strong {
+    font-size: 13px;
+  }
+  .itemCopy > span {
+    font-size: 11px;
+  }
+  .categoryNote {
+    font-size: 11px;
+    margin-top: 10px;
+  }
+  .progressNote {
+    font-size: 11px;
+    padding-top: 12px;
+  }
+  .footer {
+    padding: 14px 20px;
+    gap: 16px;
+  }
+  .footer p {
+    font-size: 10px;
+  }
+  .footer > button {
+    min-width: 92px;
+    height: 44px;
+    padding: 0 14px;
+    gap: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tabs [data-slot='tabs-trigger'] {
+    transition: none;
+  }
+}
+:global(html[data-reduced-motion='true']) .tabs [data-slot='tabs-trigger'] {
+  transition: none;
+}

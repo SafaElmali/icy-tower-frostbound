@@ -29,8 +29,8 @@
   align-items: center;
   gap: 10px;
   color: #9fb7be;
-  font-size: 10px;
-  letter-spacing: 2px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
 }
 .topbar button {
   display: inline-flex;
@@ -40,8 +40,8 @@
   min-height: 44px;
   padding: 8px 12px;
   background: #10252b80;
-  border: 1px solid #cae8ea20;
-  border-radius: 3px;
+  border: 0;
+  border-radius: 8px;
   color: #d5e4e2;
   font-size: 12px;
 }
@@ -725,7 +725,7 @@
   }
   .hud {
     top: 76px;
-    width: 340px;
+    width: min(340px, calc(100% - 32px));
     padding: 10px 16px;
   }
   .raceStatus {

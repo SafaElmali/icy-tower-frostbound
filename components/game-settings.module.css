@@ -1,0 +1,231 @@
+.settings {
+  color: #eef8f3;
+}
+.groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.group {
+  min-width: 0;
+  padding: 22px 20px 16px;
+  border-radius: 12px;
+  background: #061720;
+}
+.group > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.group > header svg {
+  width: 22px;
+  height: 22px;
+  color: #b8e5e8;
+  stroke-width: 1.6;
+}
+.group h3 {
+  margin: 0;
+  font:
+    italic 800 28px/1.1 'Frostbound Display',
+    sans-serif;
+  text-transform: uppercase;
+  letter-spacing: -0.015em;
+}
+.group > p {
+  margin: 10px 0 16px;
+  color: #b4c9ce;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 14px;
+  min-height: 102px;
+  border-top: 1px solid #b4c9ce22;
+}
+.copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-height: 80px;
+  padding-block: 14px;
+  cursor: pointer;
+}
+.copy strong {
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.copy > span {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #b4c9ce;
+}
+.control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-block: 12px;
+}
+.switch[data-slot='switch'] {
+  width: 44px;
+  height: 26px;
+  padding: 3px;
+  border: 1px solid #7b9aa666;
+  background: #263e4b;
+  transition: background-color 150ms;
+}
+.switch[data-slot='switch'][data-checked] {
+  background: #d8f2f0;
+  border-color: #d8f2f0;
+}
+.switch [data-slot='switch-thumb'] {
+  width: 18px;
+  height: 18px;
+  background: #95b2c0;
+  translate: none;
+}
+.switch[data-checked] [data-slot='switch-thumb'] {
+  transform: translateX(18px);
+  background: #244752;
+}
+.switch[data-unchecked] [data-slot='switch-thumb'] {
+  transform: translateX(0);
+}
+.state {
+  color: #b4c9ce;
+  font-size: 11px;
+  line-height: 1;
+}
+.state[data-on='true'] {
+  color: #d8f2f0;
+}
+.groupNote {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-height: 42px;
+  padding-top: 15px;
+  border-top: 1px solid #b4c9ce22;
+  color: #b4c9ce;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.groupNote > span {
+  flex-shrink: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #b8e5e8;
+}
+.groupNote[data-muted='true'] {
+  color: #ffcbab;
+}
+.groupNote[data-muted='true'] > span {
+  background: #ffb389;
+}
+.fullscreen {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 20px 0 0;
+  border-top: 1px solid #b4c9ce29;
+}
+.fullscreen > svg {
+  width: 26px;
+  height: 26px;
+  color: #ffb389;
+  stroke-width: 1.5;
+}
+.fullscreen h3 {
+  margin: 0;
+  color: #eef8f3;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.fullscreen p {
+  margin: 5px 0 0;
+  color: #b4c9ce;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.fullscreen button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 12px 14px;
+  border: 1px solid #b4c9ce44;
+  border-radius: 8px;
+  background: transparent;
+  color: #d8f2f0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+}
+.fullscreen button:hover {
+  background: #b4c9ce0c;
+}
+.settings button:focus-visible {
+  outline: 2px solid #ffb389;
+  outline-offset: 4px;
+}
+@media (max-width: 600px) {
+  .groups {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .group {
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .group > header {
+    margin-bottom: 12px;
+  }
+  .group h3 {
+    font-size: 24px;
+  }
+  .group > p {
+    display: none;
+  }
+  .setting {
+    min-height: 74px;
+  }
+  .copy {
+    min-height: 66px;
+    padding-block: 10px;
+  }
+  .groupNote {
+    display: none;
+  }
+  .groupNote[data-muted='true'] {
+    display: flex;
+    min-height: 0;
+    padding-top: 10px;
+  }
+  .fullscreen {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .fullscreen button {
+    grid-column: 1/-1;
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings * {
+    transition: none !important;
+  }
+}
+:global(html[data-reduced-motion='true']) .settings * {
+  transition: none !important;
+}

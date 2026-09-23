@@ -1,31 +1,30 @@
 .card {
-  margin: 14px 0;
-  padding: 12px 14px;
-  border: 1px solid #afd7da38;
-  border-radius: 10px;
-  background: #18323d66;
+  margin: 0;
+  padding: 4px 0 0 24px;
+  border-left: 1px solid #b4c9ce26;
   text-align: left;
 }
-.label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #a8d2cd;
-  font-size: 9px;
-  letter-spacing: 1.5px;
-}
 .title {
-  display: block;
-  margin-top: 5px;
-  color: #e2f0ed;
-  font-size: 15px;
-  font-weight: 500;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 28px 0 0;
+  color: #eef8f3;
+  font-size: 18px;
+  font-weight: 600;
   line-height: 1.35;
+  text-wrap: balance;
+}
+.title svg {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 4px;
+  color: #ffb389;
 }
 .progress {
   display: flex;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 12px;
+  margin-top: 14px;
 }
 .progress > span {
   flex: 1;
@@ -35,8 +34,8 @@
   display: flex;
   justify-content: space-between;
   gap: 6px;
-  font-size: 10px;
-  color: #9dbcc7;
+  font-size: 12px;
+  color: #b4c9ce;
 }
 .progress b {
   font-weight: 500;
@@ -46,44 +45,47 @@
 .progress progress {
   display: block;
   width: 100%;
-  height: 3px;
-  margin-top: 4px;
+  height: 4px;
+  margin-top: 7px;
   appearance: none;
   border: 0;
   border-radius: 3px;
   overflow: hidden;
   background: #29414c;
-  accent-color: #abd4cd;
+  accent-color: #d8f2f0;
 }
 .progress progress::-webkit-progress-bar {
   background: #29414c;
 }
 .progress progress::-webkit-progress-value {
-  background: #abd4cd;
+  background: #d8f2f0;
 }
 .progress progress::-moz-progress-bar {
-  background: #abd4cd;
+  background: #d8f2f0;
 }
 .tip {
-  margin: 8px 0 0;
-  color: #c5ded8;
+  margin: 12px 0 0;
+  color: #b4c9ce;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 .note {
   display: block;
-  margin-top: 7px;
-  color: #94b4be;
-  font-size: 10px;
-  line-height: 1.4;
+  margin-top: 10px;
+  color: #b4c9ce;
+  font-size: 11px;
+  line-height: 1.5;
 }
-@media (max-height: 600px) {
+@media (max-width: 600px) {
   .card {
-    margin-block: 8px;
-    padding-block: 9px;
+    border-left: 0;
+    border-top: 1px solid #b4c9ce26;
+    padding: 18px 0 0;
   }
-  .progress,
-  .note {
-    display: none;
+  .title {
+    font-size: 16px;
+  }
+  .tip {
+    margin-top: 10px;
   }
 }

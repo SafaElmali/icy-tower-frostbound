@@ -60,6 +60,7 @@ import { RaceProfileEditor } from './race-profile-editor';
 import { RaceEntry } from './race-entry';
 import { RaceModePicker } from './race-mode-picker';
 import { preventTouchContextMenu } from '@/lib/game-touch';
+import { useGameControlKeys } from '@/hooks/use-game-control-keys';
 import type { TowerWorld } from '@/lib/tower-world';
 import { trackEvent, analyticsId } from '@/lib/analytics';
 import { RaceAnalyticsTransitions } from '@/lib/race-analytics';
@@ -131,6 +132,7 @@ export function RaceGame() {
     capture('race_left', { reason });
   }
   const canvas = useRef<HTMLCanvasElement>(null);
+  const resultHeading = useRef<HTMLHeadingElement>(null);
   const world = useRef<TowerWorld | null>(null);
   const connection = useRef<RaceConnection | null>(null);
   const runner = useRef<RaceRunner | null>(null);
@@ -141,7 +143,8 @@ export function RaceGame() {
   const sendSequence = useRef(0);
   const wakePoll = useRef<(() => void) | null>(null);
   const rivals = useRef(new Map<RaceSlot, RaceRival>());
-  const input = useRef(new TowerInput());
+  const [controlInput] = useState(() => new TowerInput());
+  const input = useRef(controlInput);
   const audio = useRef<TowerAudio | null>(null);
   const comboFeedback = useRef(new ComboFeedbackTracker());
   const soundRef = useRef(true);
@@ -831,6 +834,13 @@ export function RaceGame() {
             : null;
     const keyDown = (event: KeyboardEvent) => {
       if (graphics?.blocked) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest(
+          'button, a, input, select, textarea, summary, dialog, [role="dialog"], [role="button"], [role="tab"], [contenteditable]:not([contenteditable="false"])',
+        )
+      )
+        return;
       const local = runner.current,
         current = roomRef.current;
       if (
@@ -860,17 +870,27 @@ export function RaceGame() {
       resetInput();
       audio.current?.setPaused(true);
     };
+    const orientation = window.matchMedia('(orientation: portrait)');
     const focus = () =>
       audio.current?.setPaused(
         !!graphics?.blocked ||
+          document.hidden ||
+          !document.hasFocus() ||
           !runner.current?.started ||
           !!runner.current.recording ||
           roomRef.current?.phase === 'finished',
       );
+    const visibilityChanged = () => {
+      if (document.hidden) blur();
+      else focus();
+    };
     window.addEventListener('keydown', keyDown);
     window.addEventListener('keyup', keyUp);
     window.addEventListener('blur', blur);
     window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', visibilityChanged);
+    window.addEventListener('pagehide', blur);
+    orientation.addEventListener('change', resetInput);
     import('@/lib/tower-world')
       .then(async ({ TowerWorld }) => {
         if (disposed || !canvas.current) return;
@@ -983,6 +1003,7 @@ export function RaceGame() {
                 !local.started ||
                   !!local.recording ||
                   current.phase === 'finished' ||
+                  document.hidden ||
                   !document.hasFocus(),
               );
               const events = local.engine.drainEvents();
@@ -1069,6 +1090,9 @@ export function RaceGame() {
       window.removeEventListener('keyup', keyUp);
       window.removeEventListener('blur', blur);
       window.removeEventListener('focus', focus);
+      document.removeEventListener('visibilitychange', visibilityChanged);
+      window.removeEventListener('pagehide', blur);
+      orientation.removeEventListener('change', resetInput);
     };
   }, []);
 
@@ -1090,9 +1114,22 @@ export function RaceGame() {
     : 0;
   const active =
     !!room?.startAt && clock >= room.startAt && room.phase !== 'finished';
+  const controlKeys = useGameControlKeys(
+    controlInput,
+    active && !blocked && loaded && !renderError && !climbEnded,
+    () => setPressed({ ...input.current.controls }),
+  );
   const waiting = room?.phase === 'waiting';
   const finished = room?.phase === 'finished';
-  const friendOnline = !!friend && clock - friend.lastSeen < RACE_DISCONNECT_MS;
+  useEffect(() => {
+    if (finished) resultHeading.current?.focus({ preventScroll: true });
+  }, [finished]);
+  const friendOnline = friends.some(
+    (player) => clock - player.lastSeen < RACE_DISCONNECT_MS,
+  );
+  const disconnectedFriend = friends.some(
+    (player) => clock - player.lastSeen >= RACE_DISCONNECT_MS,
+  );
   const verifiedDraw =
     room?.reason === 'draw' &&
     room.players.filter((p) => p.result && p.result.kind !== 'forfeit')
@@ -1127,7 +1164,9 @@ export function RaceGame() {
       type="button"
       aria-label={label}
       aria-pressed={pressed[control]}
+      data-control={control}
       disabled={!loaded || !!renderError}
+      {...controlKeys}
       onPointerDown={(event) => {
         event.preventDefault();
         inputType.current = 'touch';
@@ -1289,7 +1328,7 @@ export function RaceGame() {
                 {friendOnline
                   ? 'Invite up to three friends, then everyone ready up.'
                   : friend
-                    ? 'Your friend disconnected. Waiting for them to return.'
+                    ? 'Your rivals disconnected. Waiting for them to return.'
                     : room.visibility === 'public'
                       ? 'Your lobby is listed. Other climbers can join, or you can share an invite.'
                       : 'Invite a friend. See who reaches the top first.'}
@@ -1588,14 +1627,16 @@ export function RaceGame() {
             </button>
             <small>
               {me?.ready
-                ? 'Waiting for everyone to ready up.'
+                ? 'Waiting for everyone to connect and ready up.'
                 : profileDirty
                   ? 'Save your climber before getting ready.'
                   : settingsDirty && room.you === 'host'
                     ? 'Save your rules before getting ready.'
                     : !friendOnline
-                      ? 'Your friend needs to join before you can ready up.'
-                      : 'Everyone ready? The race starts automatically.'}
+                      ? 'A connected rival must join before you can ready up.'
+                      : disconnectedFriend
+                        ? 'Everyone must be connected and ready to start.'
+                        : 'Everyone ready? The race starts automatically.'}
             </small>
           </footer>
         </section>
@@ -1743,10 +1784,7 @@ export function RaceGame() {
                         !shoveReady ||
                         respawnFloor !== null
                       }
-                      onPointerDown={(event) => {
-                        event.preventDefault();
-                        void shove();
-                      }}
+                      onClick={() => void shove()}
                     >
                       <Hand size={22} />
                       <small>{shoveReady ? 'Shove' : 'Wait'}</small>
@@ -1771,7 +1809,9 @@ export function RaceGame() {
           <p className={styles.kicker}>
             {RACE_MODE_LABELS[settings.mode].toUpperCase()} · ROUND {room.round}
           </p>
-          <h1 id="race-result-heading">{resultTitle}</h1>
+          <h1 id="race-result-heading" ref={resultHeading} tabIndex={-1}>
+            {resultTitle}
+          </h1>
           <p>{resultText}</p>
           <div className={styles.results}>
             {room.players.map((player) => (
