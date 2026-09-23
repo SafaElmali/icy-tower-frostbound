@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore, setEnvironmentContext } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { TowerEngine, freshControls, type RankedMode, type RunReplay } from '../lib/tower-engine.ts';
+import { CURRENT_RULES_VERSION, TowerEngine, freshControls, type RankedMode, type RunReplay } from '../lib/tower-engine.ts';
 import { Leaderboard, verifySubmission, type LeaderboardEntry, type LeaderboardStore } from '../lib/leaderboard.ts';
 import handler, { submissionAnalyticsContext } from '../netlify/functions/leaderboard.ts';
 
@@ -35,7 +35,7 @@ void test('server verification reproduces real runs, including pauses and mixed 
 });
 
 void test('leaderboard verifies both legacy and new stage layouts beyond floor 50', () => {
-  for (const version of [1, 2, 3, 4, 5, 6, 7, 8] as const) {
+  for (const version of [1, 2, 3, 4, 5, 6, 7, 8, 9] as const) {
     const engine = completedRun(17, false, 53, version);
     assert.ok(engine.floor >= 53); assert.equal(engine.getReplay()!.version, version);
     const entry = verifySubmission({ name: 'Harold', replay: engine.getReplay() });
@@ -146,7 +146,7 @@ void test('a controlled wall jump and subsequent climb replay to the same verifi
     wasJump = jump; engine.drainEvents();
   }
   assert.equal(engine.status, 'over');
-  const replay = engine.getReplay()!; assert.equal(replay.version, 8);
+  const replay = engine.getReplay()!; assert.equal(replay.version, CURRENT_RULES_VERSION);
   const verified = verifySubmission({ name: 'Wall climber', replay });
   assert.equal(verified.score, engine.score); assert.equal(verified.floor, engine.floor);
   assert.equal(verified.duration, Math.round(engine.time * 1000));

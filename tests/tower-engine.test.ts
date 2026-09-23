@@ -88,7 +88,8 @@ void test('procedurally generated routes can be climbed using ordinary inputs in
       e.drainEvents();
     }
     assert.ok(e.floor>=105, `seed ${seed}: reached ${e.floor}, status ${e.status}, x ${e.x}, y ${e.y}`);
-    assert.ok(e.bestCombo>=10); assert.ok(e.score>=3500);
+    // One-floor hops end version 9 combos, so every floor scores its base points.
+    assert.ok(e.score>=e.floor*100);
     assert.ok(e.platforms.length<28,'world keeps a bounded set of nearby platforms');
   }
 });

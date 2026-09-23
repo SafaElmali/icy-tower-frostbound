@@ -1,15 +1,16 @@
 import { CURRENT_RULES_VERSION, type GameMode, type TowerEngine } from './tower-engine.ts';
 
 // Version 3 adds Party; version 4 adds pace/wall boosts; version 5 adds routes;
-// version 6 adds action hazards; version 7 adds 50-floor difficulty steps; version 8 increases hazard pressure.
+// version 6 adds action hazards; version 7 adds 50-floor difficulty steps; version 8 increases hazard pressure;
+// version 9 requires two-floor jumps to continue combos.
 // This version pins both the layout generator and the run rules. Reject unknown
 // versions rather than silently sending friends into a different tower.
-export type FriendChallenge = { version: 2 | 3 | 4 | 5 | 6 | 7 | 8; seed: number; mode: GameMode; floor: number; score: number };
+export type FriendChallenge = { version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9; seed: number; mode: GameMode; floor: number; score: number };
 
 export function decodeChallenge(value: string | null): FriendChallenge | null {
   if (!value || value.length > 100) return null;
   const parts = value.split('.');
-  if (parts.length !== 5 || !['2', '3', '4', '5', '6', '7', '8'].includes(parts[0]) || !['a', 'p', 't'].includes(parts[2]) || (parts[0] === '2' && parts[2] === 't')) return null;
+  if (parts.length !== 5 || !['2', '3', '4', '5', '6', '7', '8', '9'].includes(parts[0]) || !['a', 'p', 't'].includes(parts[2]) || (parts[0] === '2' && parts[2] === 't')) return null;
   if (![parts[1], parts[3], parts[4]].every(part => /^(0|[1-9]\d*)$/.test(part))) return null;
   const seed = Number(parts[1]), floor = Number(parts[3]), score = Number(parts[4]);
   if (!Number.isSafeInteger(seed) || seed > 0xffffffff || !Number.isSafeInteger(floor) || floor < 1 || !Number.isSafeInteger(score)) return null;

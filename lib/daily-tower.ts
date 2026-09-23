@@ -2,15 +2,15 @@ import type { TowerEngine } from './tower-engine.ts';
 
 // Daily rules are pinned independently of engine defaults. A future rules update
 // must keep decoding this version so archived links continue to play identically.
-export const DAILY_RULES_VERSION = 8;
+export const DAILY_RULES_VERSION = 9;
 export const DAILY_PROGRESS_STORAGE_KEY = 'frostbound-daily-progress-v1';
 export const MAX_DAILY_BESTS = 90;
-export type DailyTower = { date: string; version: 5 | 6 | 7 | 8; mode: 'arcade'; seed: number };
+export type DailyTower = { date: string; version: 5 | 6 | 7 | 8 | 9; mode: 'arcade'; seed: number };
 export type DailyBest = { floor: number; score: number };
 export type DailyProgress = { version: 1; bests: Record<string, DailyBest> };
 
 export function dailyForDate(date: string, version: number = DAILY_RULES_VERSION): DailyTower | null {
-  if ((version !== 5 && version !== 6 && version !== 7 && version !== 8) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  if ((version !== 5 && version !== 6 && version !== 7 && version !== 8 && version !== 9) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   const parsed = new Date(`${date}T00:00:00.000Z`);
   if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) return null;
   let seed = 2166136261;
@@ -26,7 +26,7 @@ export function dailyTowerToken(daily: DailyTower): string { return `${daily.ver
 
 export function decodeDailyTower(token: string | null): DailyTower | null {
   if (!token || token.length > 20) return null;
-  const match = /^([5678])\.(\d{4}-\d{2}-\d{2})\.a$/.exec(token);
+  const match = /^([5-9])\.(\d{4}-\d{2}-\d{2})\.a$/.exec(token);
   return match ? dailyForDate(match[2], Number(match[1])) : null;
 }
 

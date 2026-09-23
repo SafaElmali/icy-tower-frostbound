@@ -47,7 +47,7 @@ void test('shared seeds and retries reproduce platforms, moving ledges, gems, an
 });
 
 void test('invalid and unsupported challenge links are rejected without throwing', () => {
-  for (const value of [null, '', '1.42.a.87.100', '9.42.a.87.100', '2.42.t.87.100', '2.42.x.87.100', '2.42.a.0.100', '2.-1.a.87.100', '2.4294967296.a.87.100', '2.42.a.87.-1', '2.42.a.87.NaN', '2.42.a.87.Infinity', '2.42.a.87.1e3', '2.42.a.87.1.5', '2.42.a.9007199254740992.100', '2.42.a.87.9007199254740992', '2.42.a.87.100.extra', '2. 42.a.87.100', '2.042.a.87.100', 'x'.repeat(10000)]) {
+  for (const value of [null, '', '1.42.a.87.100', '10.42.a.87.100', '2.42.t.87.100', '2.42.x.87.100', '2.42.a.0.100', '2.-1.a.87.100', '2.4294967296.a.87.100', '2.42.a.87.-1', '2.42.a.87.NaN', '2.42.a.87.Infinity', '2.42.a.87.1e3', '2.42.a.87.1.5', '2.42.a.9007199254740992.100', '2.42.a.87.9007199254740992', '2.42.a.87.100.extra', '2. 42.a.87.100', '2.042.a.87.100', 'x'.repeat(10000)]) {
     assert.equal(decodeChallenge(value), null, String(value).slice(0, 100));
   }
   assert.deepEqual(decodeChallenge('2.0.a.1.0'), { version: 2, seed: 0, mode: 'arcade', floor: 1, score: 0 });
@@ -68,7 +68,7 @@ void test('sharing is limited to completed climbs and ordinary runs still select
 
 void test('a challenge switches rules as well as seed, and leaving it restores current routes', () => {
   const engine = new TowerEngine();
-  for (const version of [2, 3, 4, 5, 6, 7, 8] as const) {
+  for (const version of [2, 3, 4, 5, 6, 7, 8, 9] as const) {
     startChallengeRun(engine, { version, seed: 42, mode: 'arcade', floor: 20, score: 100 }, 'practice');
     assert.equal(engine.rulesVersion, version);
     assert.equal(engine.platforms.some(p => p.route === 'shortcut'), version >= 5);
@@ -76,5 +76,5 @@ void test('a challenge switches rules as well as seed, and leaving it restores c
     assert.equal(challengeFromRun(engine)?.version, version);
   }
   startChallengeRun(engine, null, 'arcade');
-  assert.equal(engine.rulesVersion, 8);
+  assert.equal(engine.rulesVersion, 9);
 });

@@ -6,7 +6,9 @@ import { bestGhost, readGhost, TowerGhost } from '../lib/tower-ghost.ts';
 
 function recordActionClimb(mode: RankedMode) {
   // These fixtures reach encounters in both modes while taking real hazard hits.
-  const engine = new TowerEngine(mode === 'party' ? 723 : 17); engine.start(mode);
+  // They climb one floor per jump, so they are pinned to the version 8 rules that
+  // chained those hops; recorded version 8 runs must keep replaying identically.
+  const engine = new TowerEngine(mode === 'party' ? 723 : 17, true, 8); engine.start(mode);
   let target = engine.platforms[1], wasJump = false;
   const events = new Set<string>();
   const checkpoints: { time: number; x: number; y: number; score: number; action: TowerEngine['action'] }[] = [];

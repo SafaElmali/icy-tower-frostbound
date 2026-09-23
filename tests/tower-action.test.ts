@@ -167,8 +167,9 @@ void test('bat stomps bounce and award points while side contact causes a protec
 
 void test('frenzy needs earned charge, boosts jumps, leaves collectible crystals, and cannot retrigger from a parked combo', () => {
   const engine = new TowerEngine(); engine.start('practice');
-  for (let floor = 1; floor <= 9; floor++) land(engine, floor);
-  assert.equal(engine.action.frenzyTime, 0); assert.ok(Math.abs(engine.action.frenzyCharge - .9) < 1e-8);
+  // Version 9 combos continue on two-floor jumps.
+  for (let floor = 2; floor <= 8; floor += 2) land(engine, floor);
+  assert.equal(engine.action.frenzyTime, 0); assert.ok(Math.abs(engine.action.frenzyCharge - .8) < 1e-8);
   land(engine, 10);
   assert.equal(engine.action.frenzyTime, FRENZY_DURATION); assert.equal(engine.action.frenzies, 1);
   assert.equal(engine.action.frenzyCharge, 0);
@@ -181,7 +182,7 @@ void test('frenzy needs earned charge, boosts jumps, leaves collectible crystals
   stand(engine, 10); step(engine, 720);
   assert.equal(engine.action.frenzyTime, 0); assert.equal(engine.action.frenzies, 1);
   assert.equal(engine.action.frenzyCharge, 0);
-  for (let floor = 11; floor <= 20; floor++) land(engine, floor);
+  for (let floor = 12; floor <= 20; floor += 2) land(engine, floor);
   assert.equal(engine.action.frenzies, 2); assert.ok(engine.action.frenzyTime > 5.9);
 });
 

@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TowerEngine, freshControls } from '../lib/tower-engine.ts';
+import { CURRENT_RULES_VERSION, TowerEngine, freshControls, type RunReplay } from '../lib/tower-engine.ts';
 import { bestGhost, readGhost, startGhostRun, TowerGhost, type GhostRecord } from '../lib/tower-ghost.ts';
 
-function recordClimb(version: 2 | 3 | 4 | 5 | 6 | 7 | 8 = 8) {
+function recordClimb(version: Exclude<RunReplay['version'], 1> = CURRENT_RULES_VERSION) {
   const engine = new TowerEngine(17, true, version); engine.start('arcade');
   const checkpoints: { time: number; x: number; y: number; score: number; floor: number }[] = [];
   let target = engine.platforms[1], wasJump = false;
@@ -22,7 +22,7 @@ function recordClimb(version: 2 | 3 | 4 | 5 | 6 | 7 | 8 = 8) {
 }
 
 void test('ghost reproduces every position and score across mixed frame rates and recorded pauses', () => {
-  for (const version of [2, 3, 4, 5, 6, 7, 8] as const) {
+  for (const version of [2, 3, 4, 5, 6, 7, 8, 9] as const) {
   const { record, checkpoints } = recordClimb(version);
   assert.deepEqual(readGhost(JSON.stringify(record)), record);
   const ghost = new TowerGhost(record);
@@ -97,20 +97,20 @@ void test('starting a rematch reuses the ghost tower and other modes start witho
   assert.deepEqual(player.platforms, ghost.engine.platforms);
   for (const mode of ['party', 'practice'] as const) {
     assert.equal(startGhostRun(player, record, mode), null);
-    assert.equal(player.mode, mode); assert.equal(player.time, 0); assert.equal(player.rulesVersion, 8);
+    assert.equal(player.mode, mode); assert.equal(player.time, 0); assert.equal(player.rulesVersion, CURRENT_RULES_VERSION);
   }
   assert.equal(startGhostRun(player, null, 'arcade'), null);
   assert.equal(player.mode, 'arcade');
 });
 
 void test('old ghosts cannot pin new runs to older rules and are replaced by a current recording', () => {
-  const current = recordClimb(8).engine;
-  for (const version of [2, 3, 4, 5, 6, 7] as const) {
+  const current = recordClimb().engine;
+  for (const version of [2, 3, 4, 5, 6, 7, 8] as const) {
     const legacy = recordClimb(version).record;
     const player = new TowerEngine(99, true, version);
     assert.equal(startGhostRun(player, legacy, 'arcade'), null);
-    assert.equal(player.version, 8);
-    assert.equal(bestGhost({ ...legacy, floor: 950 }, current)?.replay.version, 8);
+    assert.equal(player.version, CURRENT_RULES_VERSION);
+    assert.equal(bestGhost({ ...legacy, floor: 950 }, current)?.replay.version, CURRENT_RULES_VERSION);
   }
 });
 
@@ -127,7 +127,7 @@ void test('an explicit retry seed repeats the opening and resets the run without
       assert.equal(player.time, 0);
       assert.equal(player.x, 0);
       assert.equal(player.floor, 0);
-      assert.equal(player.rulesVersion, 8);
+      assert.equal(player.rulesVersion, CURRENT_RULES_VERSION);
       assert.deepEqual(player.platforms, opening);
     }
   }

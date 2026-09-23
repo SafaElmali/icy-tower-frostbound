@@ -21,7 +21,7 @@ void test('an uninterrupted climb completes floor 30 in every mode and stays com
     const engine = new TowerEngine(); engine.start(mode);
     tick(engine, 600); // Waiting before the first landing cannot break a nonexistent combo.
     assert.equal(challenge(engine, 'combo').status, 'active');
-    for (let floor = 1; floor <= 30; floor++) land(engine, floor);
+    for (let floor = 2; floor <= 30; floor += 2) land(engine, floor);
     assert.equal(challenge(engine, 'combo').progress, 30);
     assert.equal(challenge(engine, 'combo').status, 'complete');
     tick(engine, 480);
@@ -32,12 +32,12 @@ void test('an uninterrupted climb completes floor 30 in every mode and stays com
 
 void test('broken combo locks challenge progress until a new run, even after a later long chain', () => {
   const engine = new TowerEngine(); engine.start('practice');
-  land(engine, 1); tick(engine, 480);
+  land(engine, 2); tick(engine, 480);
   assert.equal(challenge(engine, 'combo').status, 'failed');
-  for (let floor = 2; floor <= 35; floor++) land(engine, floor);
-  assert.equal(engine.floor, 35);
+  for (let floor = 4; floor <= 36; floor += 2) land(engine, floor);
+  assert.equal(engine.floor, 36);
   assert.equal(challenge(engine, 'combo').status, 'failed');
-  assert.equal(challenge(engine, 'combo').progress, 1);
+  assert.equal(challenge(engine, 'combo').progress, 2);
   engine.start();
   assert.equal(challenge(engine, 'combo').status, 'active');
   assert.equal(challenge(engine, 'combo').progress, 0);
@@ -92,7 +92,7 @@ void test('wall challenge counts fast airborne rebounds, excludes ground impacts
 
 void test('pause freezes challenges; game over preserves results; retry and menu clear progress', () => {
   const engine = new TowerEngine(); engine.start('practice');
-  land(engine, 1);
+  land(engine, 2);
   engine.gems = 10;
   engine.togglePause();
   const paused = engine.snapshot().challenges;
@@ -114,4 +114,15 @@ void test('pause freezes challenges; game over preserves results; retry and menu
     assert.equal(engine.wallJumps, 0);
     assert.ok(engine.snapshot().challenges.every(item => item.progress === 0 && item.status === 'active'));
   }
+});
+
+void test('version 9 one-floor hops fail the unbroken ascent, while legacy chains accept them', () => {
+  const current = new TowerEngine(); current.start('practice');
+  land(current, 1);
+  assert.equal(current.combo, 0);
+  assert.equal(challenge(current, 'combo').status, 'failed');
+  const legacy = new TowerEngine(73091, true, 8); legacy.start('practice');
+  for (let floor = 1; floor <= 30; floor++) land(legacy, floor);
+  assert.equal(legacy.combo, 30);
+  assert.equal(challenge(legacy, 'combo').status, 'complete');
 });

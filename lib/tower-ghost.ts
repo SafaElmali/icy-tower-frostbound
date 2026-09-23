@@ -1,5 +1,5 @@
 import { ClimberMotion } from './climber-motion.ts';
-import { CURRENT_RULES_VERSION, MAX_REPLAY_FRAMES, MAX_REPLAY_SEGMENTS, TowerEngine, type RunReplay, type GameMode } from './tower-engine.ts';
+import { CURRENT_RULES_VERSION, MAX_REPLAY_FRAMES, MAX_REPLAY_SEGMENTS, TowerEngine, isRulesVersion, type RunReplay, type GameMode } from './tower-engine.ts';
 
 export const GHOST_STORAGE_KEY = 'frostbound-ghost-v1';
 export type GhostRecord = { floor: number; score: number; time: number; replay: RunReplay };
@@ -7,7 +7,7 @@ export type GhostRecord = { floor: number; score: number; time: number; replay: 
 /** Highest completed arcade climb wins; score, then duration, break floor ties. */
 export function bestGhost(current: GhostRecord | null, engine: TowerEngine): GhostRecord | null {
   const replay = engine.getReplay();
-  if (!replay || engine.mode !== 'arcade' || (replay.version !== 2 && replay.version !== 3 && replay.version !== 4 && replay.version !== 5 && replay.version !== 6 && replay.version !== 7 && replay.version !== 8)) return current;
+  if (!replay || engine.mode !== 'arcade' || !isRulesVersion(replay.version) || replay.version === 1) return current;
   if (current && current.replay.version === replay.version && (engine.floor < current.floor || (engine.floor === current.floor &&
     (engine.score < current.score || (engine.score === current.score && engine.time >= current.time))))) return current;
   return { floor: engine.floor, score: engine.score, time: engine.time, replay };
@@ -22,7 +22,7 @@ export function readGhost(raw: string | null): GhostRecord | null {
       !Number.isSafeInteger(record.score) || record.score < 0 || !Number.isFinite(record.time) ||
       record.time <= 0 || record.time > MAX_REPLAY_FRAMES / 120 + .001) return null;
     const replay = record.replay;
-    if (!replay || (replay.version !== 2 && replay.version !== 3 && replay.version !== 4 && replay.version !== 5 && replay.version !== 6 && replay.version !== 7 && replay.version !== 8) || (replay.version >= 3 && replay.mode !== 'arcade') || !Number.isInteger(replay.seed) || replay.seed < 0 ||
+    if (!replay || !isRulesVersion(replay.version) || replay.version === 1 || (replay.version >= 3 && replay.mode !== 'arcade') || !Number.isInteger(replay.seed) || replay.seed < 0 ||
       replay.seed > 0xffffffff || !Array.isArray(replay.moves) || !replay.moves.length ||
       replay.moves.length > MAX_REPLAY_SEGMENTS) return null;
     let total = 0;

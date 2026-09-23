@@ -12,18 +12,24 @@ export type QuickChallenge = {
   progress: number; target: number; status: 'active' | 'complete' | 'failed' | 'missed';
 };
 export type Platform = { floor?: number; route?: 'approach' | 'safe' | 'shortcut' | 'merge'; id: number; x: number; y: number; width: number; gem: boolean; collected: boolean; moving: boolean; spring: boolean; origin: number; phase: number; crumble?: CrumbleState };
-export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over' | 'icicle-warning' | 'bat-warning' | 'crumble' | 'collapse' | 'hurt' | 'stomp' | 'dodge' | 'frenzy' | 'frenzy-end' | 'encounter'; x: number; y: number; value?: number; spinDirection?: number };
+export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over' | 'icicle-warning' | 'bat-warning' | 'crumble' | 'collapse' | 'hurt' | 'stomp' | 'dodge' | 'frenzy' | 'frenzy-end' | 'encounter' | 'combo-short'; x: number; y: number; value?: number; spinDirection?: number };
 export type FailureEvidence = { kind: 'left-ledge'; floor: number } | { kind: 'frost-on-ledge' | 'fell' | 'frost' };
 export const FLOOR_HEIGHT = 2.35;
 export const WALL = 6.4;
 export const STAGE_WIDTH = 13.6;
 export const isStageFloor = (id: number) => id > 0 && id % 50 === 0;
-export const CURRENT_RULES_VERSION = 8;
+export const CURRENT_RULES_VERSION = 9;
+/** Version 9 combos continue only on jumps that climb at least this many floors. */
+export const COMBO_MIN_JUMP = 2;
+export const COMBO_MULTIPLIER_CAP = 10;
 export const PACE_INTERVAL = 30;
 export const platformFloor = (platform: Platform) => platform.floor ?? platform.id;
 export const MAX_REPLAY_FRAMES = 216000;
 export const MAX_REPLAY_SEGMENTS = 12000;
-export type RunReplay = { seed: number; moves: [number, number][] } & ({ version: 1 | 2; mode?: never } | { version: 3 | 4 | 5 | 6 | 7 | 8; mode: RankedMode });
+export type RunReplay = { seed: number; moves: [number, number][] } & ({ version: 1 | 2; mode?: never } | { version: 3 | 4 | 5 | 6 | 7 | 8 | 9; mode: RankedMode });
+/** Every rules version this build can replay, including legacy leaderboard recordings. */
+export const isRulesVersion = (value: unknown): value is RunReplay['version'] =>
+  Number.isInteger(value) && (value as number) >= 1 && (value as number) <= CURRENT_RULES_VERSION;
 export const replayMode = (replay: RunReplay): RankedMode => replay.mode ?? 'arcade';
 export const freshControls = (): Controls => ({ left: false, right: false, jump: false });
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -64,6 +70,8 @@ export class TowerEngine {
   private jumpWasDown = false;
   private accumulator = 0;
   private lastFloor = 0;
+  /** Floor of the most recent landing; version 9 measures combo jumps from it. */
+  private takeoffFloor = 0;
   private scrollStartedAt: number | null = null;
   private wallControlTime = 0;
   private lastWallJumpSide = 0;
@@ -134,7 +142,7 @@ export class TowerEngine {
     if (mode === 'party' && this.rulesVersion < 3) throw new Error('Party mode requires current replay rules.');
     this.replay = []; this.replayFrames = 0;
     this.seed = seed; this.mode = mode; this.status = 'playing';
-    this.x = this.y = this.vx = this.vy = this.time = this.maxY = this.floor = this.score = this.gems = this.combo = this.bestCombo = this.comboTime = this.lastFloor = 0;
+    this.x = this.y = this.vx = this.vy = this.time = this.maxY = this.floor = this.score = this.gems = this.combo = this.bestCombo = this.comboTime = this.lastFloor = this.takeoffFloor = 0;
     this.cameraY = 5.2; this.stormY = -8; this.facing = 1; this.grounded = true; this.standingId = 0;
     this.wallJumps = this.comboChallengeFloor = 0; this.comboChallengeBroken = false;
     this.failureEvidence = null; this.walkedOff = null;
@@ -190,6 +198,7 @@ export class TowerEngine {
     }
     this.status = 'playing';
     this.x = checkpoint.x;
+    this.takeoffFloor = platformFloor(checkpoint);
     this.settleRace(checkpoint);
     this.cameraY = Math.max(5.2, checkpoint.y + 2.2);
     this.stormY = checkpoint.y - 8;
@@ -318,15 +327,27 @@ export class TowerEngine {
           this.lastWallJumpSide = 0; this.wallControlTime = 0;
           this.emit('land');
           const landedFloor = platformFloor(landing);
+          const jumpFloors = landedFloor - this.takeoffFloor;
+          this.takeoffFloor = landedFloor;
           if (landedFloor > this.lastFloor) {
             const climbed = landedFloor - this.lastFloor;
-            this.combo = this.comboTime > 0 ? this.combo + climbed : climbed;
-            this.comboTime = 3.8;
-            this.bestCombo = Math.max(this.bestCombo, this.combo);
-            this.score += climbed * 100 * Math.max(1, Math.floor(this.combo / 5) + 1);
-            if (this.combo >= 3) this.emit('combo', this.combo);
+            if (this.rulesVersion >= 9 && jumpFloors < COMBO_MIN_JUMP) {
+              // A one-floor hop still earns its floors, but ends the chain and
+              // the unbroken-ascent challenge, even before a chain has started.
+              if (this.comboChallengeFloor < 30) this.comboChallengeBroken = true;
+              if (this.combo > 0) this.emit('combo-short', this.combo);
+              this.combo = this.comboTime = this.action.frenzyCharge = 0;
+              this.score += climbed * 100;
+            } else {
+              this.combo = this.comboTime > 0 ? this.combo + climbed : climbed;
+              this.comboTime = 3.8;
+              this.bestCombo = Math.max(this.bestCombo, this.combo);
+              const multiplier = Math.max(1, Math.floor(this.combo / 5) + 1);
+              this.score += climbed * 100 * (this.rulesVersion >= 9 ? Math.min(COMBO_MULTIPLIER_CAP, multiplier) : multiplier);
+              if (this.combo >= 3) this.emit('combo', this.combo);
+              if (this.rulesVersion >= 6) this.chargeFrenzy(climbed);
+            }
             this.lastFloor = landedFloor;
-            if (this.rulesVersion >= 6) this.chargeFrenzy(climbed);
           }
           const previousTier = this.difficultyTier(this.floor);
           this.floor = Math.max(this.floor, landedFloor);
@@ -557,7 +578,7 @@ export class TowerEngine {
       status: progress >= target ? 'complete' : failed ? 'failed' : this.status === 'over' ? 'missed' : 'active',
     });
     const challenges = [
-      challenge('combo', 'Unbroken ascent', 'Reach floor 30 without breaking your combo. Keep the chain alive from your first higher-floor landing.', this.comboChallengeFloor, 30, this.comboChallengeBroken),
+      challenge('combo', 'Unbroken ascent', this.rulesVersion >= 9 ? 'Reach floor 30 without breaking your combo. Every landing must climb at least two floors.' : 'Reach floor 30 without breaking your combo. Keep the chain alive from your first higher-floor landing.', this.comboChallengeFloor, 30, this.comboChallengeBroken),
       challenge('crystals', 'Crystal collector', 'Collect 10 crystals in one run.', this.gems, 10),
       challenge('walls', 'Wall jumper', 'Perform 5 wall jumps in one run. Hit a wall at speed or tap jump beside it while airborne.', this.wallJumps, 5),
     ];

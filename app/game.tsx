@@ -278,6 +278,8 @@ export default function Home() {
     undefined,
   );
   const sectionShown = useRef(getTowerSection(0).id);
+  const comboHints = useRef(0);
+  const sectionTitleUntil = useRef(0);
   function showCallout(data: Omit<HudCalloutData, 'key'>, seconds: number) {
     clearTimeout(calloutTimer.current);
     setCallout({ ...data, key: performance.now() });
@@ -451,6 +453,7 @@ export default function Home() {
     setFirstJump(null);
     comboFeedback.current.reset();
     sectionShown.current = getTowerSection(0).id;
+    comboHints.current = 0;
     clearTimeout(calloutTimer.current);
     setCallout(null);
     guidanceCueId.current = null;
@@ -1040,6 +1043,7 @@ export default function Home() {
                 const section = getTowerSection(e.floor);
                 if (section.id !== sectionShown.current) {
                   sectionShown.current = section.id;
+                  sectionTitleUntil.current = performance.now() + 2800;
                   showCallout(
                     {
                       kind: 'section',
@@ -1051,6 +1055,27 @@ export default function Home() {
                     2.8,
                   );
                 }
+              }
+              const shortHop = events.find(
+                (event) => event.type === 'combo-short',
+              );
+              // Teach the two-floor rule a few times per run, never over a section title.
+              if (
+                shortHop &&
+                !aiRun.current &&
+                (shortHop.value ?? 0) >= 3 &&
+                comboHints.current < 3 &&
+                performance.now() >= sectionTitleUntil.current
+              ) {
+                comboHints.current++;
+                showCallout(
+                  {
+                    kind: 'hint',
+                    eyebrow: `${shortHop.value}× combo ended`,
+                    title: 'Jump 2+ floors to keep a combo',
+                  },
+                  2.2,
+                );
               }
               for (const event of events) {
                 w.effect(event, e.time);

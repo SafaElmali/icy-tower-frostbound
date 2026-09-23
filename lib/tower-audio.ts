@@ -286,6 +286,10 @@ export class TowerAudio {
       } else if (kind === 'stomp') {
         note(146.83, 587.33, 0.2, 0.07, 0, 'triangle');
         note(880, 1174.66, 0.3, 0.06, 0.07);
+      } else if (kind === 'combo-short') {
+        // A gentle falling pair: the chain ended, but nothing went wrong.
+        note(659.25, 587.33, 0.14, 0.04);
+        note(523.25, 392, 0.22, 0.03, 0.09);
       } else if (kind === 'dodge') {
         note(1174.66, 1568, 0.16, 0.035);
       } else if (kind === 'frenzy') {
