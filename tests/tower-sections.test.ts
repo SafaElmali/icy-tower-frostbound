@@ -16,3 +16,18 @@ void test('sections have distinct backgrounds and stable names for on-screen mil
   assert.equal(TOWER_SECTIONS[3].auroraStrength, 1);
   assert.equal(TOWER_SECTIONS.at(-1)!.auroraStrength, 1);
 });
+
+void test('every section has its own window sky and ambient particles', () => {
+  for (const section of TOWER_SECTIONS) {
+    for (const value of Object.values(section.sky)) assert.ok(value >= 0 && value <= 1);
+    const { size, opacity, fall, density } = section.particles;
+    assert.ok(size > 0 && size < .12 && opacity > 0 && opacity <= 1 && fall > 0 && density > 0 && density <= 1);
+  }
+  assert.equal(new Set(TOWER_SECTIONS.map(section => section.particles.color)).size, TOWER_SECTIONS.length);
+  assert.deepEqual(TOWER_SECTIONS.filter(section => section.sky.storm > .5).map(section => section.id), ['stormcrown'], 'Lightning belongs to the Stormcrown only');
+  const byId = Object.fromEntries(TOWER_SECTIONS.map(section => [section.id, section]));
+  assert.equal(byId['starfall-summit'].sky.stars, 1);
+  assert.equal(byId['crystal-spire'].sky.crystal, 1);
+  assert.ok(byId.stormcrown.particles.fall > Math.max(...TOWER_SECTIONS.filter(section => section.id !== 'stormcrown').map(section => section.particles.fall)), 'The storm has the heaviest snowfall');
+  assert.ok(Math.abs(byId.stormcrown.particles.wind) > 1, 'Storm snow is wind-driven');
+});

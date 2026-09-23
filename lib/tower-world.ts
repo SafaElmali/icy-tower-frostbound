@@ -14,6 +14,7 @@ import { ClimberMotion } from './climber-motion';
 import { ComboStarTrail } from './combo-star-trail';
 import { DEFAULT_OUTFIT, cosmeticFor, normalizeOutfit, outfitKey, type Outfit } from './outfits';
 import { TowerInterior } from './tower-interior';
+import { SectionParticles } from './section-particles';
 import { PersonalBestMarker } from './personal-best-marker';
 import { LandingGuideWorld, type LandingGuideTarget } from './landing-guide-world';
 import { getTowerSection } from './tower-sections';
@@ -58,6 +59,7 @@ export class TowerWorld {
   private actionWorld = new TowerActionWorld();
   private lastEngineTime = 0;
   private interior: TowerInterior;
+  private particles = new SectionParticles();
   private bestMarker = new PersonalBestMarker();
   private landingGuide = new LandingGuideWorld();
   private sectionColor = new THREE.Color();
@@ -120,7 +122,7 @@ export class TowerWorld {
     const shadowTexture = this.radialTexture();
     this.groundShadow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, .42), new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, opacity: .48, depthWrite: false, color: 0x071320 }));
     this.groundShadow.rotation.x = -Math.PI / 2; this.root.add(this.groundShadow);
-    const count = 800;
+    const count = 1000;
     this.snowPositions = new Float32Array(count * 3); this.snowSeeds = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) { this.snowSeeds[i * 3] = Math.random() * 38 - 19; this.snowSeeds[i * 3 + 1] = Math.random() * 34 - 17; this.snowSeeds[i * 3 + 2] = Math.random() * 16 - 7; }
     const snowGeo = new THREE.BufferGeometry(); snowGeo.setAttribute('position', new THREE.BufferAttribute(this.snowPositions, 3));
@@ -354,7 +356,8 @@ export class TowerWorld {
     this.scene.fog!.color.lerp(this.sectionColor.setHex(section.palette.fog), blend);
     this.key.color.lerp(this.sectionColor.setHex(section.palette.keyLight), blend);
     this.rim.color.lerp(this.sectionColor.setHex(section.palette.rimLight), blend);
-    this.interior.update(this.cameraY, menu ? t : e.time, this.high, section, this.reducedMotion ? 10 : dt);
+    this.interior.update(this.cameraY, menu ? t : e.time, this.high, section, this.reducedMotion ? 10 : dt, this.reducedMotion);
+    this.rim.intensity = 3.5 + this.interior.lightning * 3;
     this.bestMarker.update(e, this.reducedMotion);
     this.landingGuide.update(e.status === 'playing' ? landingTarget : null, e.time, this.reducedMotion);
     const keep = new Set<number>();
@@ -427,12 +430,7 @@ export class TowerWorld {
     const below = e.platforms.filter(p => !p.crumble?.broken && p.y <= e.y + .02 && Math.abs(e.x - p.x) < p.width / 2).sort((a, b) => b.y - a.y)[0];
     this.groundShadow.visible = !!below;
     if (below) { this.groundShadow.position.set(e.x, below.y + .008, 0); const scale = 1 + Math.min(3, e.y - below.y) * .25; this.groundShadow.scale.setScalar(scale); (this.groundShadow.material as THREE.MeshBasicMaterial).opacity = .48 / scale; }
-    for (let i = 0; i < this.snowSeeds.length / 3; i++) {
-      this.snowPositions[i * 3] = this.snowSeeds[i * 3] + Math.sin(t * .24 + i) * .65;
-      this.snowPositions[i * 3 + 1] = ((this.snowSeeds[i * 3 + 1] - t * (.17 + (i % 7) * .06)) % 34 + 34) % 34 - 17 + this.cameraY;
-      this.snowPositions[i * 3 + 2] = this.snowSeeds[i * 3 + 2];
-    }
-    this.snow.geometry.attributes.position.needsUpdate = true;
+    this.particles.update(section, dt, this.reducedMotion, this.high); this.particles.apply(this.snow, this.snowSeeds, this.cameraY, t);
     for (let i = this.flecks.length - 1; i >= 0; i--) {
       const f = this.flecks[i]; f.life -= simulationDt;
       if (f.life <= 0) { this.root.remove(f.mesh); this.flecks.splice(i, 1); continue; }
