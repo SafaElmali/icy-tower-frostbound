@@ -362,7 +362,7 @@ export class TowerWorld {
     this.key.color.lerp(this.sectionColor.setHex(section.palette.keyLight), blend);
     this.rim.color.lerp(this.sectionColor.setHex(section.palette.rimLight), blend);
     this.interior.update(this.cameraY, menu ? t : e.time, this.high, section, this.reducedMotion ? 10 : dt, this.reducedMotion);
-    this.rim.intensity = 3.5 + this.interior.lightning * 5;
+    this.rim.intensity = 3.5 + this.interior.lightning * 3;
     this.bestMarker.update(e, this.reducedMotion);
     this.landingGuide.update(e.status === 'playing' ? landingTarget : null, e.time, this.reducedMotion);
     const keep = new Set<number>();

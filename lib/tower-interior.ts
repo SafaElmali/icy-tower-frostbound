@@ -20,7 +20,7 @@ export class TowerInterior {
   private bayDecor: { index: number; kinds: Map<string, DecorInstance>; active: DecorInstance | null }[] = [];
   private flashMaterials: THREE.MeshStandardMaterial[];
   private nextStrike = -1;
-  private strikeAge = 9;
+  private strikeAt = -Infinity;
   private flash = 0;
 
   constructor(stoneTexture: THREE.Texture) {
@@ -70,24 +70,28 @@ export class TowerInterior {
             color+=tint*rays*smoothstep(.12,.6,h)*aurora*.4;
           }
           if(crystal>.01){
-            vec2 c=vec2(lx*1.1+ly*.45,ly*.9-lx*.35); vec2 fc=fract(c)-.5; float facet=abs(fc.x)+abs(fc.y); float shade=hash(floor(c)+cell*7.);
+            vec2 c=vec2(lx*.75+ly*.28+sin(ly*.9)*.2,ly*.5-lx*.22); vec2 fc=fract(c)-.5; float facet=abs(fc.x)+abs(fc.y); float shade=hash(floor(c)+cell*7.);
             vec3 prism=.5+.5*cos(6.2832*(vec3(0.,.33,.67)+shade*.6+h*.5+time*.03));
-            color=mix(color,highColor*(.45+shade*.75)+prism*.13,crystal*.62);
-            color+=highColor*smoothstep(.44,.5,facet)*crystal*.4;
-            color+=vec3(1.,.9,1.)*pow(max(0.,sin(shade*40.+time*1.1)),30.)*(1.-smoothstep(0.,.35,facet))*crystal*.45;
+            color=mix(color,color*.55+highColor*(.2+shade*.45)+prism*.05,crystal*.6);
+            color+=highColor*smoothstep(.45,.5,facet)*crystal*.22;
+            color+=vec3(1.,.9,1.)*pow(max(0.,sin(shade*40.+time*1.1)),40.)*(1.-smoothstep(0.,.3,facet))*crystal*.5;
           }
           if(frost>.01){
-            float edge=max(smoothstep(1.2,2.25,abs(lx)),smoothstep(2.8,.4,ly));
-            float fern=noise(vec2(lx,ly)*5.)*.6+noise(vec2(lx*13.,ly*9.))*.4;
-            color=mix(color,vec3(.5,.66,.75)+highColor*.25,frost*smoothstep(.5,.64,fern)*edge*.75);
+            float edge=max(smoothstep(1.4,2.25,abs(lx)),smoothstep(2.4,.4,ly));
+            vec2 fp=vec2(lx,ly);
+            float fern=smoothstep(.88,.97,1.-abs(noise(fp*2.7)*2.-1.))*.8+smoothstep(.9,.98,1.-abs(noise(fp*6.9+5.)*2.-1.))*.5;
+            color=mix(color,color+vec3(.03,.045,.06),frost*edge*.6);
+            color=mix(color,vec3(.22,.34,.42)+highColor*.2,frost*min(1.,fern)*edge*.45);
           }
           if(storm>.01){
             vec2 q=vec2(sky.x*.3+time*.06,sky.y*.3-time*.015);
             float n=noise(q)*.55+noise(q*2.2+3.1)*.3+noise(q*5.3+7.)*.15;
-            color=mix(color,mix(vec3(.015,.02,.03),vec3(.16,.19,.25),smoothstep(.25,.85,n))+highColor*.12*n,storm*.88);
-            float bx=(hash(vec2(bolt,cell))-.5)*2.4+sin(ly*2.3+bolt*7.)*.35+sin(ly*6.1+bolt*3.)*.14;
+            color=mix(color,mix(vec3(.002,.003,.006),vec3(.07,.085,.12),smoothstep(.35,.95,n))+highColor*.06*n*n,storm*.92);
+            float s1=ly*1.4, s2=ly*4.1;
+            float bx=(hash(vec2(bolt,cell))-.5)*2.4+mix(hash(vec2(floor(s1),bolt+cell)),hash(vec2(floor(s1)+1.,bolt+cell)),fract(s1))*1.1
+              +mix(hash(vec2(floor(s2),bolt-cell)),hash(vec2(floor(s2)+1.,bolt-cell)),fract(s2))*.3-.7;
             float strike=step(hash(vec2(cell,bolt)),.55)*(1.-smoothstep(.02,.1,abs(lx-bx)))*step(hash(vec2(bolt,cell+2.))*5.,ly);
-            color+=(vec3(.45,.6,.9)*n*.9+vec3(.85,.92,1.)*strike*1.6)*flash*storm;
+            color+=(vec3(.3,.4,.62)*n*.8+vec3(.85,.92,1.)*strike*1.6)*flash*storm;
           }
           gl_FragColor=vec4(color,1.);
         }`,
@@ -245,18 +249,17 @@ export class TowerInterior {
     this.lamps.forEach((lamp, i) => { lamp.position.y = center * BAY_HEIGHT + 6.65; lamp.intensity = (high ? 13 : 8) + Math.sin(time * 5 + i) * 1.2 + Math.sin(time * 11) * .5; });
     this.shafts.forEach(shaft => { shaft.visible = high; });
     // Lightning: a rare double strike, never more than two flashes a second, and none at all under reduced motion.
-    const step = Math.min(.1, Math.max(0, Number.isFinite(dt) ? dt : 0));
-    if (reducedMotion || sky.storm.value < .5 || !Number.isFinite(time)) { this.nextStrike = -1; this.strikeAge = 9; }
+    if (reducedMotion || sky.storm.value < .5 || !Number.isFinite(time)) { this.nextStrike = -1; this.strikeAt = -Infinity; }
     else {
-      if (this.nextStrike < 0 || this.nextStrike - time > 12) this.nextStrike = time + 1.5 + Math.random() * 2;
-      if (time >= this.nextStrike) { this.strikeAge = 0; this.nextStrike = time + 4 + Math.random() * 5; sky.bolt.value = Math.floor(Math.random() * 97); }
-      else this.strikeAge += step;
+      if (this.nextStrike < 0 || this.nextStrike - time > 12 || time < this.strikeAt) { this.nextStrike = time + 1.5 + Math.random() * 2; this.strikeAt = -Infinity; }
+      if (time >= this.nextStrike) { this.strikeAt = time; this.nextStrike = time + 4 + Math.random() * 5; sky.bolt.value = Math.floor(Math.random() * 97); }
     }
-    const age = this.strikeAge;
+    // Timed from the clock rather than frame steps so a slow frame rate can't stretch a flash.
+    const age = time - this.strikeAt;
     this.flash = age > 1.2 ? 0 : Math.min(1, Math.exp(-age * 14) + (age > .22 ? .65 * Math.exp(-(age - .22) * 8) : 0)) * sky.storm.value;
     sky.flash.value = this.flash;
     sky.meteors.value = reducedMotion ? 0 : 1;
-    for (const material of this.flashMaterials) material.emissive.setRGB(.2, .28, .42).multiplyScalar(this.flash);
+    for (const material of this.flashMaterials) material.emissive.setRGB(.1, .14, .22).multiplyScalar(this.flash);
     this.decor.animate(time, this.flash, reducedMotion);
     const t = this.decor.time.value;
     for (const { active } of this.bayDecor) {

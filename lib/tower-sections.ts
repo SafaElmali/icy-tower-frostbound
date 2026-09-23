@@ -57,7 +57,7 @@ export const TOWER_SECTIONS: readonly TowerSection[] = [
       ice: 0x7ac0b7, flame: 0x83f2c4, windowLow: 0x192148, windowHigh: 0x277762, shaft: 0x62cfa6,
     },
     auroraStrength: 1,
-    sky: { storm: 0, stars: .45, crystal: 0, frost: .2 },
+    sky: { storm: 0, stars: .45, crystal: 0, frost: 0 },
     particles: { color: 0xb8ffe4, size: .06, opacity: .65, fall: .6, wind: .15, density: .65 },
   },
   {
