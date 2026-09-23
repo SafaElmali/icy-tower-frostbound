@@ -1,15 +1,28 @@
+/*
+ * Title screen: a left rail over the live cathedral. In landscape the renderer
+ * shifts the tower right for the menu, so the rail leaves Harold's stage clear.
+ * Portrait stacks the logo on top, keeps a band open for Harold, and docks the
+ * destinations at the bottom.
+ */
 .shell {
-  --home-ink: #eef8f3;
-  --home-muted: #b4c9ce;
-  --home-accent: #ffb389;
-  --home-line: #bdd9df2e;
+  --home-ink: #eef8f6;
+  --home-muted: #b6cdd2;
+  --home-ice: #cff4f6;
+  --home-melt: #74d3e2;
+  --home-deep: #174757;
+  --home-lantern: #ffbe73;
+  --home-night: #04111a;
+  --home-line: #a6dbe32e;
+  --home-rail: clamp(360px, 46vw, 620px);
   position: absolute;
   inset: 0;
   z-index: 2;
   display: grid;
-  grid-template-rows: auto minmax(360px, 1fr) auto auto;
-  padding-inline: max(32px, env(safe-area-inset-left))
-    max(32px, env(safe-area-inset-right));
+  grid-template-columns: minmax(0, var(--home-rail)) minmax(0, 1fr);
+  grid-template-rows: auto minmax(min-content, 1fr) auto auto;
+  column-gap: 32px;
+  padding-inline: max(56px, env(safe-area-inset-left))
+    max(40px, env(safe-area-inset-right));
   color: var(--home-ink);
   overflow-y: auto;
   overflow-x: hidden;
@@ -23,22 +36,25 @@
   pointer-events: none;
   background:
     linear-gradient(
-      180deg,
-      #05151eef 0%,
-      #05151e99 24%,
-      #05151e45 55%,
-      #05151ee8 80%,
-      #05151e 100%
+      90deg,
+      #04111af2 0%,
+      #04111ad6 24%,
+      #04111a8c 40%,
+      #04111a1f 54%,
+      #04111a00 64%
     ),
     linear-gradient(
-      90deg,
-      #07192144,
-      transparent 25%,
-      transparent 75%,
-      #07192144
+      180deg,
+      #04111ab3 0%,
+      #04111a00 15%,
+      #04111a00 78%,
+      #04111acc 100%
     );
 }
+
+/* Header */
 .header {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -49,22 +65,28 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-shrink: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 650;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.01em;
+  color: var(--home-ice);
 }
 .brand svg {
-  width: 28px;
-  height: 28px;
-  color: #c4e6ea;
+  width: 26px;
+  height: 26px;
+  color: var(--home-melt);
   stroke-width: 1.6;
 }
 .utilities {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--home-line);
+  border-radius: 999px;
+  background: #061722cc;
+  box-shadow: inset 0 1px 0 #cff4f614;
 }
 .utilities button {
   position: relative;
@@ -74,20 +96,21 @@
   gap: 8px;
   min-width: 44px;
   min-height: 44px;
-  padding: 10px;
+  padding: 10px 14px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 999px;
   color: var(--home-muted);
   background: transparent;
   font: inherit;
   font-size: 13px;
+  font-weight: 500;
   transition:
     color 150ms,
     background-color 150ms;
 }
 .utilities button:hover {
   color: var(--home-ink);
-  background: #c6dfe014;
+  background: #cff4f61a;
 }
 .utilities svg {
   width: 18px;
@@ -97,106 +120,253 @@
 .utilityDivider {
   height: 20px;
   width: 1px;
-  margin-inline: 6px;
+  margin-inline: 4px;
   background: var(--home-line);
 }
 .new {
   position: absolute;
-  right: 5px;
-  top: 5px;
-  width: 6px;
-  height: 6px;
+  right: 8px;
+  top: 8px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--home-accent);
+  background: var(--home-lantern);
+  box-shadow: 0 0 0 2px #061722;
 }
+
+/* Hero */
 .hero {
+  grid-column: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   min-width: 0;
-  padding: 24px 0 64px;
-  text-align: center;
-  animation: reveal 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  padding: 16px 0 28px;
+  text-align: left;
 }
-.title h1 {
-  margin: 0;
-  padding-inline: 8px;
+.title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+  animation: frostIn 900ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.wordmark {
+  position: relative;
+  margin: 0 0 0 -0.04em;
   font:
-    italic 800 clamp(64px, 9.5vw, 96px)/0.98 'Frostbound Display',
+    italic 800 clamp(72px, 9vw, 132px) / 0.86 'Frostbound Display',
     sans-serif;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.005em;
   text-transform: uppercase;
-  color: var(--home-ink);
-  text-shadow: 0 5px 20px #00101bbb;
+  white-space: nowrap;
+  /* The global h1 rule adds a soft text-shadow that would bleed through the clipped fill. */
+  text-shadow: none;
+}
+.ice,
+.glint {
+  display: block;
+  /* Room for the italic overhang so the clipped fill never cuts the last glyph. */
+  padding: 0.04em 0.12em 0.02em 0.04em;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ice {
+  background-image: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #effdff 30%,
+    #bdeef5 47%,
+    #e4fbfd 49%,
+    #9bdce9 70%,
+    #4f9fb6 100%
+  );
+}
+/* The extrusion lives on a wrapper: a filter on the clipped element breaks the clip in Chromium. */
+.iceDepth {
+  display: block;
+  filter: drop-shadow(0 1px 0 #6db3c5) drop-shadow(0 1px 0 #4d91a6)
+    drop-shadow(0 1px 0 #36758a) drop-shadow(0 1px 0 #245a6c)
+    drop-shadow(0 2px 0 #143b4a) drop-shadow(0 14px 18px #000000a6);
+}
+.glint {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    105deg,
+    transparent 42%,
+    #ffffff00 44%,
+    #ffffffd9 49.5%,
+    #ffffff 50%,
+    #ffffffd9 50.5%,
+    #ffffff00 56%,
+    transparent 58%
+  );
+  background-repeat: no-repeat;
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  pointer-events: none;
+  animation: glint 8s 1.2s ease-in-out infinite;
+}
+.icicles {
+  display: block;
+  width: 88%;
+  height: clamp(12px, 1.4vw, 20px);
+  margin: -0.14em 0 0 4%;
+  fill: #bfeef5;
+  opacity: 0.9;
+  filter: drop-shadow(0 2px 3px #00000080);
 }
 .title p {
-  margin: 20px 0 0;
+  margin: 18px 0 0;
   color: var(--home-muted);
-  font-size: 16px;
-  letter-spacing: 0.02em;
+  font-size: 17px;
+  font-weight: 450;
   line-height: 1.5;
+  text-shadow: 0 1px 12px #04111a;
 }
 .title p > span {
-  color: var(--home-accent);
+  color: var(--home-ink);
 }
+
+/* Launch: an ice slab you press into. */
 .launch {
-  width: min(360px, 100%);
-  margin-top: 38px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 14px;
+  width: min(440px, 100%);
+  margin-top: 34px;
+  animation: riseIn 700ms 180ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 .play {
+  position: relative;
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 16px;
   width: 100%;
-  min-height: 70px;
-  padding: 16px 24px;
-  border: 2px solid #f0ffff;
-  border-radius: 8px;
-  background: #d8f2f0;
+  min-height: 76px;
+  padding: 12px 24px 12px 14px;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(
+    180deg,
+    #f6feff 0%,
+    #daf5f8 46%,
+    #bfe9ef 54%,
+    #cdf1f4 100%
+  );
   box-shadow:
-    inset 0 2px 0 #fff,
-    inset 0 -4px 0 #98cbd1,
-    0 8px 30px #020e1880;
-  color: #123c48;
+    inset 0 0 0 1px #ffffffb3,
+    inset 0 2px 0 #ffffff,
+    inset 0 -2px 0 #9bd3dc,
+    0 6px 0 #4b93a6,
+    0 7px 0 #173f4d,
+    0 20px 40px #01080fb3;
+  color: #0e3442;
   font-family: inherit;
-  font-size: 20px;
-  font-weight: 650;
   text-align: left;
   transition:
-    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 180ms;
+    transform 140ms cubic-bezier(0.2, 0.9, 0.3, 1.2),
+    box-shadow 140ms ease-out;
 }
-.play > span {
-  flex: 1;
+.play::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+      105deg,
+      transparent 38%,
+      #ffffffcc 50%,
+      transparent 62%
+    )
+    no-repeat;
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  opacity: 0;
 }
-.play > svg {
+.playIcon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #2f7a8d, #0e3442 72%);
+  box-shadow:
+    inset 0 1px 0 #ffffff40,
+    0 2px 0 #ffffffcc,
+    0 0 0 3px #a8dde680;
+  color: #e9fdff;
+}
+.playIcon svg {
   width: 20px;
   height: 20px;
+  margin-left: 3px;
 }
-.play > svg:last-child {
-  width: 22px;
-  height: 22px;
+.playLabel {
+  flex: 1;
+  min-width: 0;
+  font:
+    italic 800 32px / 1 'Frostbound Display',
+    sans-serif;
+  letter-spacing: 0.005em;
+}
+.playArrow {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.4;
+  transition: transform 160ms ease-out;
 }
 .play:hover:not(:disabled) {
-  transform: translateY(-3px);
-  background: #effff8;
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 1px #ffffffb3,
+    inset 0 2px 0 #ffffff,
+    inset 0 -2px 0 #9bd3dc,
+    0 8px 0 #4b93a6,
+    0 9px 0 #173f4d,
+    0 24px 44px #01080fb3,
+    0 0 36px #9fe9f24d;
+}
+.play:hover:not(:disabled)::after {
+  animation: sheen 900ms ease-out;
+}
+.play:hover:not(:disabled) .playArrow {
+  transform: translateX(4px);
 }
 .play:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: translateY(5px);
+  box-shadow:
+    inset 0 0 0 1px #ffffffb3,
+    inset 0 2px 0 #ffffff,
+    inset 0 -2px 0 #9bd3dc,
+    0 1px 0 #4b93a6,
+    0 2px 0 #173f4d,
+    0 8px 18px #01080fb3;
 }
 .play:disabled {
-  opacity: 0.6;
   cursor: wait;
+  filter: saturate(0.4) brightness(0.8);
 }
 .mode {
+  grid-column: 1 / -1;
   display: flex;
-  justify-content: center;
   align-items: center;
   min-height: 48px;
-  margin-top: 8px;
+  margin-top: 18px;
   color: var(--home-ink);
   font-size: 13px;
+}
+.mode > span {
+  padding-inline: 4px;
+  color: var(--home-muted);
 }
 .mode button {
   display: inline-flex;
@@ -204,51 +374,69 @@
   justify-content: center;
   gap: 8px;
   min-height: 44px;
-  padding: 8px 14px;
-  border: 0;
-  border-radius: 6px;
+  padding: 8px 14px 8px 16px;
+  border: 1px solid var(--home-line);
+  border-radius: 999px;
   color: var(--home-ink);
-  background: #061720b3;
+  background: #061722d9;
   font: inherit;
+  font-weight: 500;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
 }
 .mode button:hover {
-  background: #183743;
+  border-color: #bfeef566;
+  background: #10303c;
 }
 .modeDetail {
   color: var(--home-muted);
+  font-weight: 400;
 }
 .modeDot {
-  width: 5px;
-  height: 5px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--home-accent);
+  background: var(--home-lantern);
+  box-shadow: 0 0 8px #ffbe7399;
 }
 .hint {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   margin: 12px 0 0;
   font-size: 12px;
   line-height: 1.5;
   color: var(--home-muted);
 }
 .hint kbd {
+  display: inline-block;
+  min-width: 24px;
+  padding: 1px 7px;
+  border: 1px solid #a6dbe34d;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #0b2430e6;
+  color: var(--home-ink);
   font: inherit;
-  color: #deecee;
+  font-weight: 600;
+  text-align: center;
 }
 .hint > span {
-  margin-inline: 5px;
-  color: #a5c2ca;
+  margin-inline: 2px;
+  color: #7f9ea7;
 }
 .context {
-  width: min(420px, 100%);
-  margin-top: 22px;
+  width: min(440px, 100%);
+  margin-top: 24px;
   padding: 16px 20px;
   border: 1px solid var(--home-line);
-  border-radius: 6px;
-  background: #0a202bea;
+  border-left: 3px solid var(--home-lantern);
+  border-radius: 10px;
+  background: #081d27f0;
+  box-shadow: inset 0 1px 0 #cff4f614;
   text-align: left;
 }
 .context :global(.friend-invite) {
@@ -267,51 +455,76 @@
   font-size: 13px;
 }
 .hero:has(.context) {
-  padding-block: 16px 30px;
+  padding-block: 8px 24px;
 }
 .hero:has(.context) .launch {
   margin-top: 20px;
 }
+.hero:has(.context) .wordmark {
+  font-size: clamp(64px, 7vw, 104px);
+}
 
+/* Destinations: three ice slabs. */
 .activities {
+  grid-column: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  width: min(1120px, 100%);
-  margin-inline: auto;
-  border-top: 1px solid var(--home-line);
-  border-bottom: 1px solid var(--home-line);
-  background: #071a23e6;
+  gap: 12px;
+  width: 100%;
+  animation: riseIn 700ms 300ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 .activities > :is(a, button) {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 18px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
   min-width: 0;
-  min-height: 110px;
-  padding: 24px;
-  border: 0;
-  border-radius: 0;
+  min-height: 136px;
+  padding: 16px;
+  border: 1px solid var(--home-line);
+  border-radius: 10px;
   color: var(--home-ink);
-  background: transparent;
+  background: linear-gradient(180deg, #0d2834f2, #06161ff7);
+  box-shadow:
+    inset 0 1px 0 #cff4f61f,
+    0 12px 28px #00000066;
   text-align: left;
   text-decoration: none;
-  transition: background-color 180ms;
-}
-.activities > :is(a, button) + :is(a, button) {
-  border-left: 1px solid var(--home-line);
+  transition:
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 180ms,
+    background-color 180ms;
 }
 .activities > :is(a, button):hover {
-  background: #bedde00c;
+  transform: translateY(-3px);
+  border-color: #bfeef566;
+}
+.activityBadge {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(160deg, #3d8ca0, #123846);
+  color: #dff8fb;
+  transition: background-color 180ms;
+}
+.multiplayer .activityBadge {
+  background: linear-gradient(160deg, #ffcf94, #c7743a);
+  color: #2a1606;
+}
+.activities > :is(a, button):hover .activityBadge {
+  background: linear-gradient(160deg, #5fb6c9, #1b4e5f);
+}
+.multiplayer:hover .activityBadge {
+  background: linear-gradient(160deg, #ffdcae, #d9864a);
 }
 .activityIcon {
-  width: 25px;
-  height: 25px;
-  flex-shrink: 0;
-  stroke-width: 1.5;
-  color: #b4d0d8;
-}
-.multiplayer .activityIcon {
-  color: var(--home-accent);
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.8;
 }
 .activityCopy {
   flex: 1;
@@ -321,27 +534,31 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  font-size: 17px;
+  gap: 4px 8px;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.activityCopy strong > small {
+  padding: 1px 6px;
+  border: 1px solid #ffbe7366;
+  border-radius: 4px;
+  color: var(--home-lantern);
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
 }
-.activityCopy strong > small {
-  padding: 1px 5px;
-  border: 1px solid #ffb38944;
-  border-radius: 3px;
-  color: var(--home-accent);
-  font-size: 11px;
-  font-weight: 500;
-}
 .activityCopy > span {
   display: block;
-  margin-top: 5px;
+  margin-top: 4px;
   font-size: 12px;
   color: var(--home-muted);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 .activityArrow {
+  position: absolute;
+  top: 16px;
+  right: 14px;
   flex-shrink: 0;
   width: 18px;
   height: 18px;
@@ -352,28 +569,33 @@
 }
 .activities > :is(a, button):is(:hover, :focus-visible) .activityArrow {
   transform: translate(2px, -2px);
-  color: var(--home-accent);
+  color: var(--home-lantern);
 }
+
+/* Footer: record and next milestone */
 .footer {
+  grid-column: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  width: min(1120px, 100%);
-  margin-inline: auto;
-  padding: 24px 0 max(26px, env(safe-area-inset-bottom));
+  gap: 20px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 14px 0 max(24px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--home-line);
 }
 .record {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
 }
 .record > svg {
-  width: 20px;
-  height: 20px;
-  color: var(--home-accent);
-  stroke-width: 1.5;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  color: var(--home-lantern);
+  stroke-width: 1.6;
 }
 .record small,
 .milestoneCopy small {
@@ -385,293 +607,476 @@
 .record strong,
 .milestoneCopy strong {
   display: block;
-  margin-top: 5px;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1.4;
+  margin-top: 3px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 .record strong > span {
   color: var(--home-muted);
-  font-size: 12px;
-  font-weight: 400;
+  font-size: 13px;
+  font-weight: 450;
 }
 .milestone {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 18px;
   min-width: 0;
   min-height: 54px;
-  padding: 4px 0 4px 12px;
+  padding: 4px 4px 4px 12px;
   border: 0;
-  border-radius: 3px;
+  border-radius: 8px;
   background: transparent;
   color: var(--home-ink);
   text-align: left;
 }
 .milestone:hover strong {
-  color: var(--home-accent);
+  color: var(--home-lantern);
 }
 .milestoneProgress {
-  width: 70px;
+  width: 76px;
   color: var(--home-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .milestoneProgress progress {
   display: block;
   width: 100%;
-  height: 3px;
-  margin-top: 8px;
+  height: 6px;
+  margin-top: 6px;
   appearance: none;
   border: 0;
-  background: #35505b;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #1d3a46;
 }
 .milestoneProgress progress::-webkit-progress-bar {
-  background: #35505b;
+  background: #1d3a46;
 }
 .milestoneProgress progress::-webkit-progress-value {
-  background: var(--home-accent);
+  background: linear-gradient(90deg, #f0a458, var(--home-lantern));
 }
 .milestoneProgress progress::-moz-progress-bar {
-  background: var(--home-accent);
+  background: linear-gradient(90deg, #f0a458, var(--home-lantern));
 }
+
+/* Focus: a warm lantern ring reads against both ice and night. */
 .shell :is(button, a):focus-visible {
-  outline: 2px solid var(--home-accent);
+  outline: 3px solid var(--home-lantern);
   outline-offset: 4px;
 }
-@keyframes reveal {
+.utilities button:focus-visible {
+  outline-offset: 1px;
+}
+.play:focus-visible {
+  outline-offset: 6px;
+}
+
+@keyframes frostIn {
   from {
-    opacity: 0.65;
-    transform: translateY(12px);
-    filter: blur(3px);
+    opacity: 0;
+    transform: translateY(-14px) scale(1.03);
+    filter: blur(6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes glint {
+  0% {
+    background-position: 100% 0;
+  }
+  16%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+@keyframes sheen {
+  from {
+    opacity: 1;
+    background-position: 100% 0;
+  }
+  to {
+    opacity: 1;
+    background-position: 0% 0;
   }
 }
 
+/* Narrow landscape and tablets: the rail takes more width. */
 @media (max-width: 1000px) {
   .shell {
-    padding-inline: 24px;
+    grid-template-columns: minmax(0, 54vw) minmax(0, 1fr);
+    padding-inline: max(28px, env(safe-area-inset-left))
+      max(24px, env(safe-area-inset-right));
+  }
+  .activities {
+    gap: 8px;
   }
   .activities > :is(a, button) {
-    padding: 20px 16px;
-    gap: 12px;
+    min-height: 120px;
+    padding: 14px 12px;
   }
   .activityCopy strong {
-    font-size: 16px;
-  }
-  .activityIcon {
-    width: 22px;
-    height: 22px;
+    font-size: 15px;
   }
   .activityArrow {
     display: none;
   }
 }
-@media (max-width: 700px) {
+
+/* Portrait: logo on top, a clear stage for Harold, destinations docked below. */
+@media (max-width: 700px), (orientation: portrait) {
   .shell {
-    grid-template-rows: auto minmax(330px, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(min-content, 1fr) auto;
+    column-gap: 0;
     padding-inline: max(20px, env(safe-area-inset-left))
       max(20px, env(safe-area-inset-right));
+  }
+  .backdrop {
+    background: linear-gradient(
+      180deg,
+      #04111af0 0%,
+      #04111ac7 28%,
+      #04111a59 42%,
+      #04111a00 52%,
+      #04111a00 68%,
+      #04111acc 80%,
+      #04111af2 100%
+    );
   }
   .header {
     min-height: 72px;
     gap: 8px;
-    padding-block: max(12px, env(safe-area-inset-top)) 12px;
+    padding-block: max(12px, env(safe-area-inset-top)) 8px;
   }
   .brand {
     font-size: 15px;
     gap: 8px;
   }
   .brand svg {
-    width: 23px;
-    height: 23px;
+    width: 22px;
+    height: 22px;
   }
   .utilities {
     gap: 0;
+    padding: 2px;
   }
   .utilities button {
-    min-width: 40px;
-    padding-inline: 8px;
+    min-width: 44px;
+    padding-inline: 10px;
   }
   .utilities button > span,
   .utilityDivider {
     display: none;
   }
   .hero {
-    padding-block: 26px 42px;
+    align-items: center;
+    padding-block: 18px 0;
+    text-align: center;
   }
-  .title h1 {
-    font-size: clamp(52px, 15vw, 88px);
+  .title {
+    align-items: center;
+  }
+  .wordmark {
+    margin: 0;
+    font-size: clamp(56px, 17vw, 96px);
+  }
+  .icicles {
+    margin-inline: auto;
   }
   .title p {
-    font-size: 14px;
-    margin-top: 16px;
+    margin-top: 12px;
+    font-size: 15px;
   }
   .launch {
-    margin-top: 28px;
-    width: min(330px, 100%);
+    width: min(360px, 100%);
+    margin-top: 24px;
+    justify-items: center;
   }
   .play {
-    min-height: 64px;
-    font-size: 18px;
-    padding-inline: 20px;
+    min-height: 68px;
+    padding: 10px 20px 10px 10px;
+  }
+  .playIcon {
+    width: 46px;
+    height: 46px;
+  }
+  .playLabel {
+    font-size: 28px;
+  }
+  .mode {
+    grid-column: 1 / -1;
+    justify-content: center;
+    margin-top: 16px;
   }
   .hint {
-    font-size: 11px;
-    gap: 4px;
+    grid-column: 1 / -1;
+    justify-content: center;
+    margin-top: 8px;
   }
-  .hint > span {
-    margin-inline: 3px;
+  .hero:has(.context) .wordmark {
+    font-size: clamp(48px, 14vw, 80px);
+  }
+  .context {
+    margin-top: 16px;
   }
   .activities {
+    grid-row: 3;
+    align-self: end;
     grid-template-columns: 1fr;
+    gap: 6px;
+    padding-top: 32px;
   }
   .activities > :is(a, button) {
-    min-height: 70px;
-    padding: 14px 8px;
-    gap: 16px;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    min-height: 56px;
+    padding: 8px 14px 8px 10px;
   }
-  .activities > :is(a, button) + :is(a, button) {
-    border-left: 0;
-    border-top: 1px solid var(--home-line);
+  .activityBadge {
+    width: 38px;
+    height: 38px;
+  }
+  .activityIcon {
+    width: 19px;
+    height: 19px;
   }
   .activityCopy strong {
     font-size: 16px;
   }
   .activityCopy > span {
-    margin-top: 2px;
+    margin-top: 1px;
   }
   .activityArrow {
+    position: static;
     display: block;
   }
   .footer {
-    gap: 16px;
-    padding-block: 20px max(20px, env(safe-area-inset-bottom));
+    grid-row: 4;
+    gap: 12px;
+    margin-top: 8px;
+    padding-block: 6px max(10px, env(safe-area-inset-bottom));
+  }
+  .milestone {
+    min-height: 48px;
   }
   .record {
     gap: 10px;
   }
   .record > svg {
-    display: none;
-  }
-  .record small,
-  .milestoneCopy small {
-    font-size: 11px;
+    width: 20px;
+    height: 20px;
   }
   .record strong,
   .milestoneCopy strong {
-    font-size: 12px;
+    font-size: 14px;
   }
   .record strong > span,
   .milestoneProgress {
     display: none;
   }
   .milestone {
-    gap: 10px;
+    gap: 8px;
     padding-left: 0;
+    text-align: right;
   }
 }
 @media (max-width: 370px) {
   .shell {
-    padding-inline: 16px;
+    padding-inline: max(16px, env(safe-area-inset-left))
+      max(16px, env(safe-area-inset-right));
   }
   .brand {
-    font-size: 0;
-    gap: 0;
-  }
-  .utilities button {
-    min-width: 44px;
-  }
-  .title p {
-    font-size: 13px;
-  }
-}
-@media (max-height: 600px) and (min-width: 701px) {
-  .shell {
-    grid-template-rows: auto minmax(235px, 1fr) auto auto;
+    display: none;
   }
   .header {
-    min-height: 60px;
-    padding-block: 8px;
+    justify-content: center;
   }
-  .hero {
-    padding-block: 8px 20px;
-  }
-  .title h1 {
-    font-size: 64px;
+  .wordmark {
+    font-size: 56px;
   }
   .title p {
-    margin-top: 8px;
+    font-size: 14px;
+  }
+  .play {
+    min-height: 62px;
+  }
+  .playIcon {
+    width: 40px;
+    height: 40px;
+  }
+  .playLabel {
+    font-size: 26px;
+  }
+  .record > svg {
+    display: none;
+  }
+}
+
+/* Short landscape phones: everything stays in the rail, trimmed to fit. */
+@media (max-height: 600px) and (min-width: 701px) and (orientation: landscape) {
+  .shell {
+    grid-template-columns: minmax(0, 52vw) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    align-content: start;
+  }
+  .header {
+    min-height: 56px;
+    padding-block: max(4px, env(safe-area-inset-top)) 2px;
+  }
+  .utilities {
+    padding: 2px;
+  }
+  .hero {
+    padding-block: 0 10px;
+  }
+  .wordmark {
+    font-size: 56px;
+  }
+  .title p {
+    margin-top: 4px;
     font-size: 13px;
   }
   .launch {
-    margin-top: 16px;
+    margin-top: 12px;
   }
   .play {
-    min-height: 54px;
-    padding-block: 10px;
+    min-height: 56px;
+    padding-block: 6px;
+  }
+  .playIcon {
+    width: 40px;
+    height: 40px;
+  }
+  .playLabel {
+    font-size: 26px;
   }
   .mode {
-    margin-top: 0;
+    margin-top: 8px;
     min-height: 44px;
   }
   .hint {
     display: none;
   }
+  .activities {
+    gap: 8px;
+  }
   .activities > :is(a, button) {
-    min-height: 68px;
-    padding-block: 12px;
+    justify-content: center;
+    min-height: 48px;
+    padding: 6px 8px;
+  }
+  .activityBadge,
+  .icicles {
+    display: none;
+  }
+  .activityCopy {
+    flex: 0 1 auto;
+  }
+  .activityCopy strong {
+    flex-wrap: nowrap;
+    gap: 6px;
+    font-size: 14px;
+    white-space: nowrap;
   }
   .activityCopy > span {
     display: none;
   }
   .footer {
-    padding-block: 8px;
+    margin-top: 6px;
+    padding-block: 2px max(4px, env(safe-area-inset-bottom));
+  }
+  .record > svg {
+    display: none;
+  }
+  .record strong > span,
+  .milestoneProgress {
+    display: none;
   }
   .milestone {
     min-height: 44px;
   }
-  .hero:has(.context) {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 24px;
+  .hero:has(.context) .wordmark {
+    font-size: 48px;
+  }
+  .hero:has(.context) .title p {
+    display: none;
   }
   .hero:has(.context) .context {
-    grid-column: 1;
-    margin-top: 12px;
+    margin-top: 8px;
+    padding: 10px 14px;
   }
   .hero:has(.context) .launch {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    margin: 0;
+    margin-top: 12px;
   }
 }
+
+/* Motion off: OS preference and the in-game Reduce motion setting. */
 @media (prefers-reduced-motion: reduce) {
-  .hero {
+  .title,
+  .launch,
+  .activities,
+  .glint,
+  .play::after,
+  .play:hover:not(:disabled)::after {
     animation: none;
   }
+  .glint {
+    display: none;
+  }
   .play,
+  .playArrow,
+  .activities > :is(a, button),
   .activityArrow {
     transition: none;
   }
   .play:hover:not(:disabled),
-  .play:active:not(:disabled) {
+  .play:active:not(:disabled),
+  .play:hover:not(:disabled) .playArrow,
+  .activities > :is(a, button):hover,
+  .activities > :is(a, button):is(:hover, :focus-visible) .activityArrow {
     transform: none;
   }
 }
-:global(.reduce-motion) .hero {
+:global(.reduce-motion) .title,
+:global(.reduce-motion) .launch,
+:global(.reduce-motion) .activities,
+:global(.reduce-motion) .play::after,
+:global(.reduce-motion) .play:hover:not(:disabled)::after {
+  animation: none;
+}
+:global(.reduce-motion) .glint {
+  display: none;
   animation: none;
 }
 :global(.reduce-motion) .play,
+:global(.reduce-motion) .playArrow,
+:global(.reduce-motion) .activities > :is(a, button),
 :global(.reduce-motion) .activityArrow {
   transition: none;
 }
 :global(.reduce-motion) .play:hover:not(:disabled),
-:global(.reduce-motion) .play:active:not(:disabled) {
+:global(.reduce-motion) .play:active:not(:disabled),
+:global(.reduce-motion) .play:hover:not(:disabled) .playArrow,
+:global(.reduce-motion) .activities > :is(a, button):hover,
+:global(.reduce-motion)
+  .activities
+  > :is(a, button):is(:hover, :focus-visible)
+  .activityArrow {
   transform: none;
 }

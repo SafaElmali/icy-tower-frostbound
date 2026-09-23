@@ -113,7 +113,22 @@ export function TitleMenu(props: Props) {
 
       <section className={styles.hero} aria-label="Frostbound main menu">
         <div className={styles.title}>
-          <h1>Frostbound</h1>
+          <h1 className={styles.wordmark}>
+            <span className={styles.iceDepth}>
+              <span className={styles.ice}>Frostbound</span>
+            </span>
+            <span className={styles.glint} aria-hidden="true">
+              Frostbound
+            </span>
+          </h1>
+          <svg
+            className={styles.icicles}
+            viewBox="0 0 240 18"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <path d="M0 0H240V2H239L237 13L235 2H224L221.5 17L219 2H218L216 8L214 2H208L205 10L202 2H197L194 10L191 2H175L173.5 11L172 2H169L167 15L165 2H160L158.5 15L157 2H156L154 11L152 2H151L148 17L145 2H140L138 15L136 2H133L130 13L127 2H126L124 11L122 2H119L117.5 13L116 2H115L113 15L111 2H106L104 7L102 2H94L92 11L90 2H85L82 8L79 2H78L76.5 13L75 2H72L69 13L66 2H65L62 17L59 2H56L53.5 8L51 2H48L46.5 13L45 2H43L40 13L37 2H36L33 7L30 2H29L27 7L25 2H24L22.5 7L21 2H19L16 7L13 2H10L8.5 17L7 2H6L4 8L2 2H0Z" />
+          </svg>
           <p>
             One more floor. <span>One more try.</span>
           </p>
@@ -128,15 +143,17 @@ export function TitleMenu(props: Props) {
             disabled={!props.ready || props.failed}
             onClick={props.onPlay}
           >
-            <Play aria-hidden="true" fill="currentColor" />
-            <span aria-live="polite">
+            <span className={styles.playIcon} aria-hidden="true">
+              <Play fill="currentColor" />
+            </span>
+            <span className={styles.playLabel} aria-live="polite">
               {props.failed
                 ? 'Tower unavailable'
                 : props.ready
                   ? props.playLabel
                   : 'Entering the tower…'}
             </span>
-            <ArrowRight aria-hidden="true" />
+            <ArrowRight className={styles.playArrow} aria-hidden="true" />
           </button>
           <div className={styles.mode}>
             {props.invited ? (
@@ -172,7 +189,9 @@ export function TitleMenu(props: Props) {
         {/* Full navigation is required for the static export. */}
         {/* oxlint-disable-next-line next/no-html-link-for-pages */}
         <a href="/race" className={styles.multiplayer}>
-          <Users className={styles.activityIcon} aria-hidden="true" />
+          <span className={styles.activityBadge} aria-hidden="true">
+            <Users className={styles.activityIcon} />
+          </span>
           <span className={styles.activityCopy}>
             <strong>
               Multiplayer <small>2–4</small>
@@ -182,7 +201,9 @@ export function TitleMenu(props: Props) {
           <ArrowUpRight className={styles.activityArrow} aria-hidden="true" />
         </a>
         <button onClick={props.onDaily} aria-haspopup="dialog">
-          <CalendarDays className={styles.activityIcon} aria-hidden="true" />
+          <span className={styles.activityBadge} aria-hidden="true">
+            <CalendarDays className={styles.activityIcon} />
+          </span>
           <span className={styles.activityCopy}>
             <strong>Daily tower</strong>
             <span>New day. Same tower for everyone.</span>
@@ -190,7 +211,9 @@ export function TitleMenu(props: Props) {
           <ArrowUpRight className={styles.activityArrow} aria-hidden="true" />
         </button>
         <button onClick={props.onProgress} aria-haspopup="dialog">
-          <Mountain className={styles.activityIcon} aria-hidden="true" />
+          <span className={styles.activityBadge} aria-hidden="true">
+            <Mountain className={styles.activityIcon} />
+          </span>
           <span className={styles.activityCopy}>
             <strong>Your ascent</strong>
             <span>Small steps. New milestones.</span>
