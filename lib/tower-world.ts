@@ -298,7 +298,7 @@ export class TowerWorld {
     ledge.plaque?.material.map?.dispose(); ledge.plaque?.material.dispose();
     this.ledges.delete(ledge.id);
   }
-  setQuality(high: boolean) { if (high !== this.high) { this.high = high; this.setOutfit(this.outfit); } this.renderer.shadowMap.enabled = high; this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 1.65 : 1)); this.resize(); }
+  setQuality(high: boolean) { if (high !== this.high) { this.high = high; this.setOutfit(this.outfit); } this.actionWorld.setQuality(high); this.renderer.shadowMap.enabled = high; this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 1.65 : 1)); this.resize(); }
   setPersonalBest(floor: number) { this.bestMarker.setFloor(floor); }
   setReducedMotion(reduced: boolean) {
     this.reducedMotion = reduced;
@@ -319,6 +319,7 @@ export class TowerWorld {
   }
   effect(e: GameEvent, time: number) {
     this.motion.event(e, time);
+    this.actionWorld.effect(e, time);
     if (e.type === 'over' && !this.reducedMotion) this.shake = .24;
     if (e.type === 'wall' && !this.reducedMotion) this.shake = .055;
     if (e.type === 'hurt' && !this.reducedMotion) this.shake = .11;

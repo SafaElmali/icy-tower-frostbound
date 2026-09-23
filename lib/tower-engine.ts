@@ -1,5 +1,5 @@
 import { RaceHazards } from './race-hazards.ts';
-import { CRUMBLE_DELAY, FRENZY_COMBO_TARGET, FRENZY_DURATION, ICICLE_WARNING_TIME, freshTowerAction, type CrumbleState, type TowerActionState } from './tower-action.ts';
+import { CRUMBLE_DELAY, FRENZY_COMBO_TARGET, FRENZY_DURATION, ICICLE_WARNING_TIME, WRAITH_DASH_SPEED, WRAITH_DASH_TIME, WRAITH_DRIFT_TIME, WRAITH_FADE_TIME, WRAITH_FLOOR, WRAITH_TELL_TIME, freshTowerAction, type CrumbleState, type TowerActionState } from './tower-action.ts';
 
 export type GameStatus = 'ready' | 'playing' | 'paused' | 'over';
 export type GameMode = 'arcade' | 'party' | 'practice';
@@ -12,7 +12,7 @@ export type QuickChallenge = {
   progress: number; target: number; status: 'active' | 'complete' | 'failed' | 'missed';
 };
 export type Platform = { floor?: number; route?: 'approach' | 'safe' | 'shortcut' | 'merge'; id: number; x: number; y: number; width: number; gem: boolean; collected: boolean; moving: boolean; spring: boolean; origin: number; phase: number; crumble?: CrumbleState };
-export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over' | 'icicle-warning' | 'bat-warning' | 'crumble' | 'collapse' | 'hurt' | 'stomp' | 'dodge' | 'frenzy' | 'frenzy-end' | 'encounter' | 'combo-short'; x: number; y: number; value?: number; spinDirection?: number };
+export type GameEvent = { type: 'jump' | 'land' | 'gem' | 'combo' | 'wall' | 'over' | 'icicle-warning' | 'bat-warning' | 'crumble' | 'collapse' | 'hurt' | 'stomp' | 'dodge' | 'frenzy' | 'frenzy-end' | 'encounter' | 'combo-short' | 'icicle-shatter' | 'wraith' | 'wraith-tell' | 'wraith-dash'; x: number; y: number; value?: number; spinDirection?: number };
 export type FailureEvidence = { kind: 'left-ledge'; floor: number } | { kind: 'frost-on-ledge' | 'fell' | 'frost' };
 export const FLOOR_HEIGHT = 2.35;
 export const WALL = 6.4;
@@ -33,6 +33,14 @@ export const isRulesVersion = (value: unknown): value is RunReplay['version'] =>
 export const replayMode = (replay: RunReplay): RankedMode => replay.mode ?? 'arcade';
 export const freshControls = (): Controls => ({ left: false, right: false, jump: false });
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+const WRAITH_START_DELAY = 1.5;
+/** Hover offset beside and above the climber before a wraith locks its dash. */
+const WRAITH_HOVER_X = 2.8, WRAITH_HOVER_Y = 2.6;
+/** Spawn-side choice that never consumes the platform-generation random stream. */
+const actorHash = (seed: number, id: number) => {
+  const value = Math.imul(seed ^ Math.imul(id + 1, 0x9e3779b1), 0x85ebca6b);
+  return (value ^ (value >>> 13)) >>> 0;
+};
 
 /** Fixed-step arcade simulation. Rendering and input devices share this contract. */
 export class TowerEngine {
@@ -55,6 +63,8 @@ export class TowerEngine {
   private nextActionId = 1;
   private icicleCooldown = 1.4;
   private batCooldown = 2;
+  /** Version 9 frost wraiths; counts down only while none is present. */
+  private wraithCooldown = WRAITH_START_DELAY;
   private crystalCooldown = 0;
   private nextEncounterFloor = 30;
   private encounterCount = 0;
@@ -150,7 +160,7 @@ export class TowerEngine {
     this.doubleJumpTime = 0; this.doubleJumpUsed = false;
     this.wallControlTime = 0; this.lastWallJumpSide = 0;
     this.action = freshTowerAction(); this.nextActionId = 1;
-    this.icicleCooldown = 1.4; this.batCooldown = 2; this.crystalCooldown = 0;
+    this.icicleCooldown = 1.4; this.batCooldown = 2; this.crystalCooldown = 0; this.wraithCooldown = WRAITH_START_DELAY;
     this.nextEncounterFloor = 30; this.encounterCount = 0; this.breatherTime = 0;
     this.introduced.clear(); this.encounterCrumbles.clear();
     this.resetWorld();
@@ -418,7 +428,7 @@ export class TowerEngine {
   }
   private endEncounter() {
     this.action.encounter = null; this.breatherTime = this.rulesVersion >= 8 ? 6 : 12;
-    this.action.icicles = []; this.action.bats = [];
+    this.action.icicles = []; this.action.bats = []; this.action.wraiths = [];
     for (const p of this.platforms) {
       if (this.encounterCrumbles.has(p.id) && p.crumble?.remaining === null) delete p.crumble;
     }
@@ -456,7 +466,7 @@ export class TowerEngine {
       const kind = this.encounterCount++ % 2 === 0 ? 'ice-shower' : 'crumble-rush';
       action.encounter = { kind, timeLeft: 6, duration: 6 };
       this.nextEncounterFloor = this.floor + 24;
-      action.icicles = []; action.bats = [];
+      action.icicles = []; action.bats = []; action.wraiths = [];
       this.icicleCooldown = .65;
       this.notice(kind === 'ice-shower' ? 'ICE SHOWER' : 'CRUMBLE RUSH', kind === 'ice-shower' ? (intense ? 'Falling ice ahead. Keep moving!' : 'Watch each marked lane. There is always room to dodge.') : 'Cracked stairs ahead. Land, then leap again!', 4);
       this.emit('encounter', kind === 'ice-shower' ? 1 : 2);
@@ -471,7 +481,7 @@ export class TowerEngine {
         p.crumble = { remaining: null, broken: false }; this.encounterCrumbles.add(p.id);
       }
     }
-    if (inRest) { action.icicles = []; action.bats = []; }
+    if (inRest) { action.icicles = []; action.bats = []; action.wraiths = []; }
     const standing = this.grounded ? this.platforms.find(p => p.id === this.standingId) : undefined;
     const canThreaten = !inRest && this.breatherTime === 0 && !standing?.crumble && action.invulnerableTime === 0;
     if (this.floor >= 12) this.icicleCooldown = Math.max(0, this.icicleCooldown - dt);
@@ -494,6 +504,7 @@ export class TowerEngine {
       this.events.push({ type: 'bat-warning', x: side * 5.5, y: originY });
       this.introduce('bat', 'FROST BAT', 'Dodge its wings or land on top for a bonus bounce.');
     }
+    if (this.rulesVersion >= 9) this.advanceWraiths(dt, canThreaten, pressure);
     for (const icicle of action.icicles) {
       if (icicle.state === 'warning') {
         icicle.warningTime = Math.max(0, icicle.warningTime - dt);
@@ -520,6 +531,63 @@ export class TowerEngine {
     action.bats = action.bats.filter(b => b.alive && b.phase < 5.5 && b.y > this.cameraY - 12 && b.y < this.cameraY + 14).slice(intense ? -2 : -1);
     action.crystals = action.crystals.filter(c => !c.collected && c.y > this.cameraY - 12 && c.y < this.cameraY + 18).slice(-16);
   }
+  /**
+   * Frost wraiths (rules 9, from WRAITH_FLOOR): drift beside the climber, then a
+   * fixed tell locks and shows the whole dash line before the only harmful phase.
+   */
+  private advanceWraiths(dt: number, canThreaten: boolean, pressure: number) {
+    const action = this.action;
+    if (this.floor < WRAITH_FLOOR && !action.wraiths.length) return;
+    if (!action.wraiths.length) this.wraithCooldown = Math.max(0, this.wraithCooldown - dt);
+    // Skip a spawn that an imminent encounter would clear before its tell.
+    const encounterSoon = this.floor >= this.nextEncounterFloor - 4;
+    if (canThreaten && this.wraithCooldown === 0 && !action.wraiths.length && !action.encounter && !encounterSoon) {
+      const id = this.nextActionId++, side = actorHash(this.seed, id) & 2 ? 1 : -1;
+      const x = side * 5.3, y = this.y + 3.4;
+      action.wraiths.push({ id, x, y, side, state: 'drift', time: 0, dirX: -side, dirY: 0, startX: x, startY: y, alive: true });
+      this.wraithCooldown = 3.5 / pressure;
+      this.events.push({ type: 'wraith', x, y });
+      this.introduce('wraith', 'FROST WRAITH', 'When it glows, it dashes along the line. Get clear or stomp it!');
+    }
+    for (const wraith of action.wraiths) {
+      wraith.time += dt;
+      if (wraith.state === 'drift') {
+        // Hover on the spawn side unless the walls push the point past the climber.
+        let hoverX = this.x + wraith.side * WRAITH_HOVER_X;
+        if (Math.abs(hoverX) > 5.3) hoverX = this.x - wraith.side * WRAITH_HOVER_X;
+        const follow = 1 - Math.exp(-2.6 * dt);
+        wraith.x += (hoverX - wraith.x) * follow;
+        wraith.y += (this.y + WRAITH_HOVER_Y - wraith.y) * follow;
+        if (wraith.time >= WRAITH_DRIFT_TIME - 1e-8) {
+          // Lock the entire dash path now; it never re-aims after the tell begins.
+          const dx = this.x - wraith.x, dy = this.y + .7 - wraith.y, length = Math.hypot(dx, dy);
+          wraith.dirX = length > .2 ? dx / length : -wraith.side; wraith.dirY = length > .2 ? dy / length : 0;
+          wraith.startX = wraith.x; wraith.startY = wraith.y;
+          wraith.state = 'tell'; wraith.time = 0;
+          this.events.push({ type: 'wraith-tell', x: wraith.x, y: wraith.y });
+        }
+      } else if (wraith.state === 'tell') {
+        if (wraith.time >= WRAITH_TELL_TIME - 1e-8) {
+          wraith.state = 'dash'; wraith.time = 0;
+          this.events.push({ type: 'wraith-dash', x: wraith.x, y: wraith.y });
+        }
+      } else if (wraith.state === 'dash') {
+        const travel = Math.min(wraith.time, WRAITH_DASH_TIME) * WRAITH_DASH_SPEED;
+        wraith.x = wraith.startX + wraith.dirX * travel; wraith.y = wraith.startY + wraith.dirY * travel;
+        if (wraith.time >= WRAITH_DASH_TIME - 1e-8) { wraith.state = 'fade'; wraith.time = 0; }
+      } else if (wraith.time >= WRAITH_FADE_TIME - 1e-8) wraith.alive = false;
+    }
+    action.wraiths = action.wraiths.filter(w => w.alive && w.y > this.cameraY - 14 && w.y < this.cameraY + 16).slice(-1);
+  }
+  /** A stomp bounce shared by bats and wraiths. */
+  private stompBounce(y: number, points: number) {
+    this.action.stomps++; this.score += points;
+    this.y = y; this.vy = 17.6 * this.jumpMultiplier;
+    this.grounded = false; this.standingId = -1; this.coyote = this.jumpBuffer = 0;
+    this.doubleJumpUsed = false; this.lastWallJumpSide = 0; this.walkedOff = null;
+    this.comboTime = Math.max(this.comboTime, 2);
+    this.emit('stomp', points); this.emit('jump', this.vx);
+  }
   private hurt(sourceX: number) {
     if (this.action.invulnerableTime > 0) return;
     this.action.hits++; this.action.invulnerableTime = 1.65;
@@ -540,20 +608,33 @@ export class TowerEngine {
       const previousY = icicle.y - icicle.vy / 120;
       if (dx < .6 && icicle.y <= this.y + 1.45 && previousY >= this.y) {
         this.hurt(icicle.x); this.raceHazards?.consume(icicle.id); icicle.y = this.cameraY - 20;
+        continue;
       } else if (!icicle.nearMiss && icicle.y < this.y && previousY >= this.y && dx >= .6 && dx < 2.2) {
         icicle.nearMiss = true; action.dodges++; this.score += 75; this.emit('dodge', 75);
+      }
+      // Version 9 ice breaks on the first solid ledge at or below its locked
+      // target, after the hit and near-miss checks for this step.
+      if (this.rulesVersion >= 9 && !this.raceHazards) {
+        const ledge = this.platforms.find(p => !p.crumble?.broken && p.y <= icicle.targetY + .01 && previousY >= p.y && icicle.y <= p.y && Math.abs(icicle.x - p.x) < p.width / 2);
+        if (ledge) {
+          this.events.push({ type: 'icicle-shatter', x: icicle.x, y: ledge.y });
+          icicle.y = this.cameraY - 20;
+        }
       }
     }
     for (const bat of action.bats) {
       if (!bat.alive || bat.warningTime > 0 || Math.abs(this.x - bat.x) >= .75) continue;
       if (this.vy < 0 && oldY >= bat.y + .18 && this.y <= bat.y + .35) {
-        bat.alive = false; this.raceHazards?.consume(bat.id); action.stomps++; this.score += 350;
-        this.y = bat.y + .35; this.vy = 17.6 * this.jumpMultiplier;
-        this.grounded = false; this.standingId = -1; this.coyote = this.jumpBuffer = 0;
-        this.doubleJumpUsed = false; this.lastWallJumpSide = 0; this.walkedOff = null;
-        this.comboTime = Math.max(this.comboTime, 2);
-        this.emit('stomp', 350); this.emit('jump', this.vx);
+        bat.alive = false; this.raceHazards?.consume(bat.id);
+        this.stompBounce(bat.y + .35, 350);
       } else if (Math.abs(this.y + .7 - bat.y) < .85) this.hurt(bat.x);
+    }
+    for (const wraith of action.wraiths) {
+      // Only the dash hurts; a fading wraith is already spent.
+      if (!wraith.alive || wraith.state === 'fade' || Math.abs(this.x - wraith.x) >= .75) continue;
+      if (this.vy < 0 && oldY >= wraith.y + .2 && this.y <= wraith.y + .45) {
+        wraith.alive = false; this.stompBounce(wraith.y + .45, 400);
+      } else if (wraith.state === 'dash' && Math.abs(this.y + .7 - wraith.y) < .85) this.hurt(wraith.x);
     }
     for (const crystal of action.crystals) {
       if (crystal.collected || Math.abs(this.x - crystal.x) >= .8 || Math.abs(this.y + .7 - crystal.y) >= .9) continue;
@@ -582,7 +663,7 @@ export class TowerEngine {
       challenge('crystals', 'Crystal collector', 'Collect 10 crystals in one run.', this.gems, 10),
       challenge('walls', 'Wall jumper', 'Perform 5 wall jumps in one run. Hit a wall at speed or tap jump beside it while airborne.', this.wallJumps, 5),
     ];
-    return { status: this.status, mode: this.mode, rulesVersion: this.rulesVersion, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, pace: this.pace, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY, wallJumps: this.wallJumps, challenges, doubleJumpTime: this.doubleJumpTime, doubleJumpReady: this.doubleJumpTime > 0 && !this.doubleJumpUsed, failureEvidence: this.failureEvidence, action: { ...this.action, icicles: this.action.icicles.map(i => ({ ...i })), bats: this.action.bats.map(b => ({ ...b })), crystals: this.action.crystals.map(c => ({ ...c })), encounter: this.action.encounter ? { ...this.action.encounter } : null, notice: this.action.notice ? { ...this.action.notice } : null } };
+    return { status: this.status, mode: this.mode, rulesVersion: this.rulesVersion, score: this.score, floor: this.floor, height: Math.floor(this.maxY * 3), combo: this.combo, comboTime: this.comboTime, bestCombo: this.bestCombo, gems: this.gems, time: this.time, pace: this.pace, speed: Math.abs(this.vx), stormDistance: this.y - this.stormY, wallJumps: this.wallJumps, challenges, doubleJumpTime: this.doubleJumpTime, doubleJumpReady: this.doubleJumpTime > 0 && !this.doubleJumpUsed, failureEvidence: this.failureEvidence, action: { ...this.action, icicles: this.action.icicles.map(i => ({ ...i })), bats: this.action.bats.map(b => ({ ...b })), wraiths: this.action.wraiths.map(w => ({ ...w })), crystals: this.action.crystals.map(c => ({ ...c })), encounter: this.action.encounter ? { ...this.action.encounter } : null, notice: this.action.notice ? { ...this.action.notice } : null } };
   }
 }
 export type Snapshot = ReturnType<TowerEngine['snapshot']>;

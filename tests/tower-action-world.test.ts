@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Box3, InstancedMesh, Mesh, Vector3, type BufferGeometry, type Material } from 'three';
-import { freshTowerAction, ICICLE_WARNING_TIME } from '../lib/tower-action.ts';
+import { Box3, Group, InstancedMesh, Mesh, Vector3, type BufferGeometry, type Material } from 'three';
+import { CRUMBLE_DELAY, freshTowerAction, ICICLE_WARNING_TIME, WRAITH_DASH_LENGTH, WRAITH_TELL_TIME, type FrostWraith } from '../lib/tower-action.ts';
 import { TowerActionWorld } from '../lib/tower-action-world.ts';
 import { createRaceEngine } from '../lib/race-protocol.ts';
 
@@ -129,4 +129,76 @@ void test('action rendering reuses its geometry and disposes shared ledge resour
   world.dispose(); world.dispose();
   assert.ok([...geometryDisposals.values()].every(count => count === 1));
   assert.ok([...materialDisposals.values()].every(count => count === 1));
+});
+
+const wraithScene = (state: FrostWraith['state'], time = 0) => {
+  const scene = sceneState(); scene.rulesVersion = 9; scene.action.icicles = []; scene.action.bats = [];
+  scene.action.wraiths.push({ id: 7, x: 3, y: 13, side: 1, state, time, dirX: -.8, dirY: -.6, startX: 3, startY: 13, alive: true });
+  return scene;
+};
+
+void test('the wraith tell draws its whole locked dash line, filling toward the dash, even in reduced motion', () => {
+  const world = new TowerActionWorld();
+  const wraith = world.group.getObjectByName('Frost wraith')!, line = world.group.getObjectByName('Wraith dash line')!;
+  world.update(wraithScene('drift'), false);
+  assert.ok(wraith.visible); assert.equal(line.visible, false, 'drifting never shows the attack line');
+  const lit = () => line.children.filter(child => child instanceof Mesh && (child.material as Material).opacity === 1).length;
+  for (const reducedMotion of [false, true]) {
+    world.update(wraithScene('tell', WRAITH_TELL_TIME * .25), reducedMotion);
+    assert.ok(line.visible);
+    assert.deepEqual(line.position.toArray(), [3, 13, 0]);
+    assert.ok(Math.abs(line.rotation.z - Math.atan2(-.6, -.8)) < 1e-9, 'the line points along the locked direction');
+    const early = lit();
+    world.update(wraithScene('tell', WRAITH_TELL_TIME * .95), reducedMotion);
+    assert.ok(lit() > early, 'the line fills as the dash approaches');
+    line.updateMatrixWorld(true);
+    const bounds = new Box3().setFromObject(line, true), tip = new Vector3(3 - .8 * WRAITH_DASH_LENGTH, 13 - .6 * WRAITH_DASH_LENGTH, .6);
+    assert.ok(bounds.expandByScalar(.3).containsPoint(tip), 'the drawn path reaches the end of the dash');
+  }
+  world.update(wraithScene('fade'), false);
+  assert.equal(line.visible, false);
+  const race = createRaceEngine(17); world.update(race, false);
+  assert.equal(wraith.visible, false);
+  world.dispose();
+});
+
+void test('stomped bats pop after leaving the simulation, and reduced motion removes them at once', () => {
+  for (const reducedMotion of [false, true]) {
+    const world = new TowerActionWorld(), state = sceneState(); state.rulesVersion = 9; state.action.icicles = [];
+    const bat = state.action.bats[0]; bat.x = 1; bat.warningTime = 0;
+    world.update(state, reducedMotion);
+    const visual = world.group.getObjectByName('Frost bat')!;
+    world.effect({ type: 'stomp', x: 1, y: 12.35, value: 350 }, state.time);
+    state.action.bats = []; state.time += .1; world.update(state, reducedMotion);
+    assert.equal(visual.visible, !reducedMotion, 'the pop outlives the simulated bat only with motion');
+    assert.equal(world.group.getObjectByName('Hazard burst particles')!.visible, !reducedMotion);
+    state.time += .5; world.update(state, reducedMotion);
+    assert.equal(visual.visible, false);
+    world.dispose();
+  }
+});
+
+void test('ice shatters, near misses sparkle, and cracked ledges spread then drop debris', () => {
+  const world = new TowerActionWorld(), state = sceneState(); state.action.icicles = []; state.action.bats = [];
+  world.update(state, false);
+  world.effect({ type: 'icicle-shatter', x: 0, y: 10 }, state.time);
+  world.effect({ type: 'dodge', x: 0, y: 10, value: 75 }, state.time);
+  state.time += .05; world.update(state, false);
+  const particles = world.group.getObjectByName('Hazard burst particles') as InstancedMesh;
+  assert.ok(particles.visible && particles.count >= 20);
+  state.time += 2; world.update(state, false);
+  assert.equal(particles.visible, false, 'bursts expire');
+
+  const ledge = new Group(); ledge.position.set(2, 20, 0); world.group.add(ledge);
+  const visual = world.makeCrumble(3); ledge.add(visual.group);
+  world.updateCrumble(visual, { remaining: null, broken: false }, 3, state.time, false);
+  assert.ok(visual.spread.every(stage => !stage.visible), 'unarmed cracks do not spread');
+  world.updateCrumble(visual, { remaining: CRUMBLE_DELAY * .1, broken: false }, 3, state.time, true);
+  assert.ok(visual.spread.every(stage => stage.visible), 'nearly broken ice shows every fissure, steady in reduced motion');
+  world.updateCrumble(visual, { remaining: 0, broken: true }, 3, state.time, false);
+  state.time += .05; world.update(state, false);
+  const debris = world.group.getObjectByName('Collapsed ledge debris') as InstancedMesh;
+  assert.ok(debris.visible && debris.count > 0);
+  ledge.removeFromParent();
+  world.dispose();
 });
