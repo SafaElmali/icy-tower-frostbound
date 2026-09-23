@@ -37,7 +37,7 @@ pause_reason resume_reason completion_kind exported_runs source_mode goal_count 
 run_index previous_status current_status retry previous_round expected_phase actual_phase elapsed_s
 result_source connection_state previous_connection_state transport_state recovery_ms
 host_finish_kind guest_finish_kind time_limit previous_time_limit attempt_kind role_count is_top_50
-initial_mode elapsed_time_ms load_stage item_slot milestone_floor settings_changed
+initial_mode elapsed_time_ms load_stage item_slot milestone_floor settings_changed season
 `.split(/\s+/),
 );
 

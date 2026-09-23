@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { LeaderboardEntry } from '@/lib/leaderboard';
+import { SEASON_LABELS, isLeaderboardSeason, seasonForVersion, type LeaderboardSeason } from '@/lib/leaderboard-season';
 import { MODE_LABELS, replayMode, type RankedMode, type RunReplay } from '@/lib/tower-engine';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -18,7 +19,7 @@ const ENDPOINT = '/.netlify/functions/leaderboard';
 
 export function LeaderboardDialog({ open, onOpenChange, run, initialMode, outfit, runId }: { open: boolean; onOpenChange: (open: boolean) => void; run: RunReplay | null; initialMode: RankedMode; outfit: Outfit; runId?: string }) {
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="leaderboard-card">
-    <div className="leaderboard-heading"><Trophy size={28} strokeWidth={1.4} /><div><DialogTitle>Hall of climbers</DialogTitle><DialogDescription>Top 50 by score. Classic and Party rank separately.</DialogDescription></div></div>
+    <div className="leaderboard-heading"><Trophy size={28} strokeWidth={1.4} /><div><DialogTitle>Hall of climbers</DialogTitle><DialogDescription>Top 50 by score. Classic and Party rank separately. Season 2 began with two-floor combo jumps; earlier runs stay on Legacy.</DialogDescription></div></div>
     <Tabs defaultValue={run ? replayMode(run) : initialMode} className="ranking-tabs">
       <TabsList aria-label="Ranking mode"><TabsTrigger value="arcade">Classic</TabsTrigger><TabsTrigger value="party">Party</TabsTrigger></TabsList>
       {(['arcade', 'party'] as const).map(mode => <TabsContent key={mode} value={mode}>
@@ -35,6 +36,7 @@ function Rankings({ mode, run, outfit, runId }: { mode: RankedMode; run: RunRepl
     viewed.current = true;
     trackEvent('leaderboard_viewed', { surface: 'solo', mode, submission_eligible: !!run, source: run ? 'results' : 'menu', run_id: runId });
   }, [mode, run, runId]);
+  const [season, setSeason] = useState<LeaderboardSeason>(() => run ? seasonForVersion(run.version) : 'current');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -50,28 +52,32 @@ function Rankings({ mode, run, outfit, runId }: { mode: RankedMode; run: RunRepl
     let errorCode = 'network';
     const timeout = setTimeout(() => { errorCode = 'timeout'; controller.abort(); }, 12000);
     try {
-      const response = await fetch(`${ENDPOINT}?mode=${mode}`, { signal: controller.signal, cache: 'no-store' });
+      const response = await fetch(`${ENDPOINT}?mode=${mode}&season=${season}`, { signal: controller.signal, cache: 'no-store' });
       if (!response.ok) { errorCode = 'http'; throw new Error('The leaderboard is unavailable. Please try again.'); }
       errorCode = 'invalid_response';
       const data = await response.json() as { entries: LeaderboardEntry[]; error?: string; id: string; rank: number | null };
       if (!Array.isArray(data.entries)) { errorCode = 'invalid_response'; throw new Error('The leaderboard is unavailable. Please try again.'); }
       if (request.current === controller) {
         setEntries(data.entries);
-        trackEvent('leaderboard_loaded', { surface: 'solo', mode, request_id: requestId, latency_ms: Math.round(performance.now() - startedAt), result_count: data.entries.length });
+        trackEvent('leaderboard_loaded', { surface: 'solo', mode, season, request_id: requestId, latency_ms: Math.round(performance.now() - startedAt), result_count: data.entries.length });
       }
     } catch {
       if (request.current === controller) {
         setLoadError('Could not load the leaderboard. Check your connection and try again.');
-        trackEvent('leaderboard_load_failed', { surface: 'solo', mode, request_id: requestId, latency_ms: Math.round(performance.now() - startedAt), error_code: errorCode });
+        trackEvent('leaderboard_load_failed', { surface: 'solo', mode, season, request_id: requestId, latency_ms: Math.round(performance.now() - startedAt), error_code: errorCode });
       }
     } finally { clearTimeout(timeout); if (request.current === controller) setLoading(false); }
-  }, [mode]);
+  }, [mode, season]);
   useEffect(() => {
     let active = true;
     void Promise.resolve().then(() => { if (active) void load(); });
     return () => { active = false; const previous = request.current; request.current = null; previous?.abort(); };
   }, [run, load]);
 
+  function chooseSeason(next: LeaderboardSeason) {
+    if (next === season) return;
+    setEntries([]); setLoading(true); setLoadError(''); setSeason(next);
+  }
   function refresh() { trackEvent('leaderboard_refreshed', { surface: 'solo', mode, reason: loadError ? 'retry' : 'refresh' }); setLoading(true); setLoadError(''); void load(); }
 
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
@@ -86,10 +92,12 @@ function Rankings({ mode, run, outfit, runId }: { mode: RankedMode; run: RunRepl
       const response = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, replay: run, outfit, submissionAttemptId, analyticsDistinctId: getAnalyticsDistinctId() }), signal: AbortSignal.timeout(20000) });
       status = response.status;
       errorCode = !response.ok ? (response.status < 500 ? 'rejected' : 'unavailable') : 'invalid_response';
-      const data = await response.json() as { entries: LeaderboardEntry[]; error?: string; id: string; rank: number | null };
+      const data = await response.json() as { entries: LeaderboardEntry[]; error?: string; id: string; rank: number | null; season?: unknown };
       if (!response.ok) { errorCode = response.status < 500 ? 'rejected' : 'unavailable'; throw new Error(data.error || 'Could not submit your score. Please try again.'); }
       if (!Array.isArray(data.entries) || typeof data.id !== 'string' || !(data.rank === null || (Number.isInteger(data.rank) && data.rank > 0))) { errorCode = 'invalid_response'; throw new Error('The leaderboard returned an invalid response. Please try again.'); }
       trackEvent('score_submission_succeeded', { ...properties, rank: data.rank, top_50: data.rank !== null, latency_ms: Math.round(performance.now() - startedAt) });
+      // Show the board the server actually ranked this run on.
+      if (isLeaderboardSeason(data.season) && data.season !== season) setSeason(data.season);
       setEntries(data.entries); setLoadError(''); setSubmitted({ id: data.id, rank: data.rank });
       try { localStorage.setItem('frostbound-player-name', name.trim()); } catch { /* Optional remembered name. */ }
     } catch (error) {
@@ -106,8 +114,8 @@ function Rankings({ mode, run, outfit, runId }: { mode: RankedMode; run: RunRepl
       {submitError && <p className="leaderboard-error" role="alert">{submitError}</p>}
     </form>}
     {submitted && <output className="leaderboard-success">{submitted.rank ? `You placed #${submitted.rank}! Your run is on the board.` : 'Run checked! You haven’t reached the top 50 yet. Keep climbing.'}</output>}
-    <div className="leaderboard-toolbar"><span>ALL-TIME · {MODE_LABELS[mode].toUpperCase()}</span><Button variant="ghost" size="sm" onClick={refresh} disabled={loading || sending} aria-label="Refresh leaderboard"><RefreshCw size={15} className={loading ? 'spin' : ''} /> Refresh</Button></div>
-    {loading && !entries.length ? <output className="leaderboard-empty">Loading the climbers…</output> : loadError ? <div className="leaderboard-empty" role="alert"><p>{loadError}</p><Button variant="outline" onClick={refresh}>Try again</Button></div> : !entries.length ? <div className="leaderboard-empty"><Trophy size={32} /><strong>The tower is waiting.</strong><p>Finish a {MODE_LABELS[mode].toLowerCase()} run and submit the first score.</p></div> : <div className="leaderboard-scroll"><Table aria-label={`All-time ${MODE_LABELS[mode]} leaderboard`}><TableHeader><TableRow><TableHead className="rank-column">#</TableHead><TableHead>Climber</TableHead><TableHead className="numeric">Score</TableHead><TableHead className="numeric">Floor</TableHead><TableHead className="numeric combo-column">Combo</TableHead></TableRow></TableHeader><TableBody>{entries.map((entry, i) => <TableRow key={entry.id} className={submitted?.id === entry.id ? 'your-score' : ''}><TableCell className={`rank-column ${i < 3 ? 'podium' : ''}`}>{i + 1}</TableCell><TableCell className="climber-name">{entry.name}<OutfitBadges outfit={entry.outfit} />{submitted?.id === entry.id && <small>YOU</small>}</TableCell><TableCell className="numeric score-column">{entry.score.toLocaleString()}</TableCell><TableCell className="numeric">{entry.floor}</TableCell><TableCell className="numeric combo-column">{entry.combo}×</TableCell></TableRow>)}</TableBody></Table></div>}
+    <div className="leaderboard-toolbar"><fieldset className="leaderboard-season"><legend className="sr-only">Ranking season</legend>{(['current', 'legacy'] as const).map(option => <button key={option} type="button" aria-pressed={season === option} onClick={() => chooseSeason(option)} disabled={sending}>{SEASON_LABELS[option]}</button>)}</fieldset><Button variant="ghost" size="sm" onClick={refresh} disabled={loading || sending} aria-label="Refresh leaderboard"><RefreshCw size={15} className={loading ? 'spin' : ''} /> Refresh</Button></div>
+    {loading && !entries.length ? <output className="leaderboard-empty">Loading the climbers…</output> : loadError ? <div className="leaderboard-empty" role="alert"><p>{loadError}</p><Button variant="outline" onClick={refresh}>Try again</Button></div> : !entries.length ? <div className="leaderboard-empty"><Trophy size={32} /><strong>The tower is waiting.</strong><p>{season === 'current' ? `Finish a ${MODE_LABELS[mode].toLowerCase()} run and submit the first ${SEASON_LABELS.current} score.` : `No ${MODE_LABELS[mode].toLowerCase()} runs were ranked before ${SEASON_LABELS.current}.`}</p></div> : <div className="leaderboard-scroll"><Table aria-label={`${SEASON_LABELS[season]} ${MODE_LABELS[mode]} leaderboard`}><TableHeader><TableRow><TableHead className="rank-column">#</TableHead><TableHead>Climber</TableHead><TableHead className="numeric">Score</TableHead><TableHead className="numeric">Floor</TableHead><TableHead className="numeric combo-column">Combo</TableHead></TableRow></TableHeader><TableBody>{entries.map((entry, i) => <TableRow key={entry.id} className={submitted?.id === entry.id ? 'your-score' : ''}><TableCell className={`rank-column ${i < 3 ? 'podium' : ''}`}>{i + 1}</TableCell><TableCell className="climber-name">{entry.name}<OutfitBadges outfit={entry.outfit} />{submitted?.id === entry.id && <small>YOU</small>}</TableCell><TableCell className="numeric score-column">{entry.score.toLocaleString()}</TableCell><TableCell className="numeric">{entry.floor}</TableCell><TableCell className="numeric combo-column">{entry.combo}×</TableCell></TableRow>)}</TableBody></Table></div>}
     <p className="leaderboard-footnote">Practice runs don’t count. Ties favor the higher floor, then the faster run.</p>
   </>;
 }

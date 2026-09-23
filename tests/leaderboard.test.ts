@@ -57,23 +57,31 @@ void test('real blob storage persists a run across service instances and the HTT
   try {
     setEnvironmentContext({ siteID: 'leaderboard-test', token: 'local-test', apiURL: `http://localhost:${port}`, edgeURL: `http://localhost:${port}`, uncachedEdgeURL: `http://localhost:${port}` });
     const store = getStore({ name: 'frostbound-leaderboard', consistency: 'strong' });
-    const board = new Leaderboard(store); assert.deepEqual(await board.list(), []);
+    const board = new Leaderboard(store); assert.deepEqual(await board.list('arcade', 'legacy'), []);
     const entry = verifySubmission({ name: 'Harold', replay: completedRun().getReplay() });
     assert.equal((await board.submit(entry)).rank, 1);
     assert.equal((await board.submit({ ...entry, name: 'Changed' })).entries.length, 1);
     const fresh = new Leaderboard(getStore({ name: 'frostbound-leaderboard', consistency: 'strong' }));
-    assert.equal((await fresh.list())[0].name, 'Harold');
-    const response = await handler(new Request('http://localhost/.netlify/functions/leaderboard'));
+    assert.equal((await fresh.list('arcade', 'legacy'))[0].name, 'Harold');
+    const response = await handler(new Request('http://localhost/.netlify/functions/leaderboard?season=legacy'));
     assert.equal(response.status, 200); assert.equal((await response.json() as { entries: LeaderboardEntry[] }).entries.length, 1);
     const request = (body: unknown) => new Request('http://localhost/.netlify/functions/leaderboard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     assert.equal((await handler(request({ name: 'Harold', replay: completedRun().getReplay() }))).status, 200);
     const party = completedRun(17, true, 12, 3, 'party');
     const partyResponse = await handler(new Request('http://localhost/.netlify/functions/leaderboard?mode=arcade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Party climber', mode: 'arcade', replay: party.getReplay() }) }));
     assert.equal(partyResponse.status, 200);
-    const partyEntries = (await (await handler(new Request('http://localhost/.netlify/functions/leaderboard?mode=party'))).json() as { entries: LeaderboardEntry[] }).entries;
+    const partyEntries = (await (await handler(new Request('http://localhost/.netlify/functions/leaderboard?mode=party&season=legacy'))).json() as { entries: LeaderboardEntry[] }).entries;
     assert.equal(partyEntries.length, 1); assert.equal(partyEntries[0].name, 'Party climber'); assert.equal(partyEntries[0].score, party.score);
-    assert.equal((await fresh.list())[0].name, 'Harold'); assert.equal((await fresh.list()).length, 1);
-    assert.equal((await fresh.list('party'))[0].id, partyEntries[0].id);
+    assert.equal((await fresh.list('arcade', 'legacy'))[0].name, 'Harold'); assert.equal((await fresh.list('arcade', 'legacy')).length, 1);
+    assert.equal((await fresh.list('party', 'legacy'))[0].id, partyEntries[0].id);
+    // Version 9 runs open Season 2 without touching the legacy rankings.
+    const seasonRun = await handler(request({ name: 'Season climber', replay: completedRun(17, false, 12, 9).getReplay() }));
+    assert.equal(seasonRun.status, 200); assert.equal((await seasonRun.json() as { season: string }).season, 'current');
+    const current = (await (await handler(new Request('http://localhost/.netlify/functions/leaderboard'))).json() as { entries: LeaderboardEntry[]; season: string });
+    assert.equal(current.season, 'current'); assert.deepEqual(current.entries.map(row => row.name), ['Season climber']);
+    assert.equal('season' in current.entries[0], false, 'rows do not store the season');
+    assert.equal((await fresh.list('arcade', 'legacy')).length, 1);
+    assert.equal((await handler(new Request('http://localhost/.netlify/functions/leaderboard?season=s1'))).status, 400);
     assert.equal((await handler(new Request('http://localhost/.netlify/functions/leaderboard?mode=practice'))).status, 400);
     assert.equal((await handler(request({ name: 'Fake', score: 999999 }))).status, 400);
     assert.equal((await handler(new Request('http://localhost/.netlify/functions/leaderboard', { method: 'DELETE' }))).status, 405);
@@ -160,4 +168,9 @@ void test('score analytics accepts only bounded anonymous identifiers and keeps 
     assert.match(context.attemptId, /^[a-f0-9-]{36}$/);
     assert.equal(context.distinctId, undefined);
   }
+});
+
+void test('the verified rules version selects the season board', () => {
+  assert.equal(verifySubmission({ name: 'Legacy', replay: completedRun(17, false, 12, 8).getReplay() }).season, 'legacy');
+  assert.equal(verifySubmission({ name: 'Current', replay: completedRun(17, false, 12, CURRENT_RULES_VERSION).getReplay() }).season, 'current');
 });

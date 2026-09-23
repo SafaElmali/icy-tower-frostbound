@@ -465,3 +465,11 @@
     grid-template-rows: minmax(200px, 48dvh) minmax(0, 1fr);
   }
 }
+
+/* Leaderboard season switch: a compact two-option segmented control. */
+.leaderboard-season { display: inline-flex; min-width: 0; margin: 0; padding: 2px; border: 1px solid #8caeba40; border-radius: 5px; background: #091b26b0; }
+.leaderboard-season button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 3px; background: transparent; color: #9db9c2; font: inherit; font-size: 13px; letter-spacing: .02em; cursor: pointer; }
+.leaderboard-season button[aria-pressed='true'] { background: #deebdc; color: #173039; font-weight: 600; }
+.leaderboard-season button:not([aria-pressed='true']):hover { color: #e5f0ed; }
+.leaderboard-season button:focus-visible { outline: 2px solid #c5e9de; outline-offset: 1px; }
+.leaderboard-season button:disabled { cursor: default; opacity: .6; }

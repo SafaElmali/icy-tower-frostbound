@@ -1,4 +1,5 @@
 import { normalizeOutfit, type Outfit } from './outfits.ts';
+import { seasonForVersion, type LeaderboardSeason } from './leaderboard-season.ts';
 import { createHash } from 'node:crypto';
 import { MAX_REPLAY_FRAMES, MAX_REPLAY_SEGMENTS, TowerEngine, isRulesVersion, replayMode, type RankedMode, type RunReplay } from './tower-engine.ts';
 
@@ -11,11 +12,13 @@ export type LeaderboardStore = {
   getWithMetadata(key: string, options: { type: 'json' }): Promise<{ data: LeaderboardEntry[]; etag?: string } | null>;
   setJSON(key: string, data: unknown, options: { onlyIfMatch: string } | { onlyIfNew: true }): Promise<{ modified: boolean }>;
 };
-const boardKey = (mode: RankedMode) => mode === 'party' ? 'party-v1' : 'arcade-v1';
+// Legacy keys keep their original names so earlier rankings remain intact.
+const boardKey = (mode: RankedMode, season: LeaderboardSeason) => season === 'current' ? `${mode}-s2` : mode === 'party' ? 'party-v1' : 'arcade-v1';
+export type VerifiedEntry = LeaderboardEntry & { mode: RankedMode; season: LeaderboardSeason };
 export const compareScores = (a: LeaderboardEntry, b: LeaderboardEntry) => b.score - a.score || b.floor - a.floor || a.duration - b.duration || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 
 /** Replays inputs on the server; score, floor, and combo are never accepted from the client. */
-export function verifySubmission(input: unknown): LeaderboardEntry & { mode: RankedMode } {
+export function verifySubmission(input: unknown): VerifiedEntry {
   if (!input || typeof input !== 'object') throw new LeaderboardError('The score submission is incomplete.');
   const { name: rawName, replay, outfit } = input as { name?: unknown; replay?: RunReplay; outfit?: unknown };
   const name = typeof rawName === 'string' ? rawName.normalize('NFKC').trim().replace(/\s+/g, ' ') : '';
@@ -45,16 +48,17 @@ export function verifySubmission(input: unknown): LeaderboardEntry & { mode: Ran
   // Keep legacy hashes stable so previously submitted runs remain deduplicated.
   const identity = { version: replay.version, seed: replay.seed, moves: replay.moves, ...(replay.version >= 3 ? { mode } : {}) };
   const id = createHash('sha256').update(JSON.stringify(identity)).digest('hex');
-  return { id, name, mode, outfit: normalizeOutfit(outfit), score: engine.score, floor: engine.floor, combo: engine.bestCombo, duration: Math.round(engine.time * 1000), createdAt: new Date().toISOString() };
+  return { id, name, mode, season: seasonForVersion(replay.version), outfit: normalizeOutfit(outfit), score: engine.score, floor: engine.floor, combo: engine.bestCombo, duration: Math.round(engine.time * 1000), createdAt: new Date().toISOString() };
 }
 
 /** Bounded shared leaderboard with conditional writes, so simultaneous finishes cannot lose scores. */
 export class Leaderboard {
   private store: LeaderboardStore;
   constructor(store: LeaderboardStore) { this.store = store; }
-  async list(mode: RankedMode = 'arcade') { return (await this.store.getWithMetadata(boardKey(mode), { type: 'json' }))?.data ?? []; }
-  async submit(entry: LeaderboardEntry) {
-    const key = boardKey(entry.mode ?? 'arcade');
+  async list(mode: RankedMode = 'arcade', season: LeaderboardSeason = 'current') { return (await this.store.getWithMetadata(boardKey(mode, season), { type: 'json' }))?.data ?? []; }
+  /** The verified rules version selects the board; the season itself is not stored in rows. */
+  async submit({ season = 'legacy', ...entry }: LeaderboardEntry & { season?: LeaderboardSeason }) {
+    const key = boardKey(entry.mode ?? 'arcade', season);
     for (let attempt = 0; attempt < 8; attempt++) {
       const current = await this.store.getWithMetadata(key, { type: 'json' });
       const entries = current?.data ?? [];

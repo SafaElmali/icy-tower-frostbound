@@ -3,6 +3,7 @@ import { captureServerEvent } from '../../lib/analytics-server.ts';
 import { getStore } from '@netlify/blobs';
 import type { Config } from '@netlify/functions';
 import { Leaderboard, LeaderboardError, verifySubmission } from '../../lib/leaderboard.ts';
+import { isLeaderboardSeason } from '../../lib/leaderboard-season.ts';
 
 const MAX_BODY_BYTES = 192 * 1024;
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
@@ -21,9 +22,11 @@ export default async function handler(request: Request) {
     if (request.method !== 'GET' && request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'GET, POST' } });
     const board = new Leaderboard(getStore({ name: 'frostbound-leaderboard', consistency: 'strong' }));
     if (request.method === 'GET') {
-      const mode = new URL(request.url).searchParams.get('mode') ?? 'arcade';
+      const params = new URL(request.url).searchParams;
+      const mode = params.get('mode') ?? 'arcade', season = params.get('season') ?? 'current';
       if (mode !== 'arcade' && mode !== 'party') return json({ error: 'Choose classic or party rankings.' }, 400);
-      return json({ entries: await board.list(mode) });
+      if (!isLeaderboardSeason(season)) return json({ error: 'Choose the current or legacy season.' }, 400);
+      return json({ entries: await board.list(mode, season), season });
     }
     const origin = request.headers.get('origin');
     if (origin && origin !== new URL(request.url).origin) return json({ error: 'Submit your score from the game page.' }, 403);
@@ -46,11 +49,11 @@ export default async function handler(request: Request) {
     // Only capture after the authoritative board operation succeeds. An accepted
     // score outside the top 50 is verified but does not create a stored board row.
     if (distinctId) await captureServerEvent('score_verified', distinctId, {
-      surface: 'solo', submission_attempt_id: attemptId, mode: entry.mode,
+      surface: 'solo', submission_attempt_id: attemptId, mode: entry.mode, season: entry.season,
       score: entry.score, floor: entry.floor, best_combo: entry.combo,
       active_duration_s: entry.duration / 1000, rank: result.rank, top_50: result.rank !== null,
     }, `score-verified:${entry.id}`);
-    return json(result);
+    return json({ ...result, season: entry.season });
   } catch (error) {
     if (error instanceof LeaderboardError) return json({ error: error.message }, error.status);
     console.error('Leaderboard request failed', error);
