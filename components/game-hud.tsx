@@ -67,18 +67,34 @@ export function GameHud({
         <span className={styles.floor}>
           Floor <strong>{game.floor}</strong>
         </span>
-        <span
-          className={styles.score}
-          aria-label={`${game.score.toLocaleString()} points`}
-        >
-          {game.score.toLocaleString()} <small>pts</small>
-        </span>
-        {game.combo >= 3 && (
-          <span className={styles.combo}>
-            {game.combo}× <small>combo</small>
+        <div className={styles.side}>
+          <span
+            className={styles.score}
+            aria-label={`${game.score.toLocaleString()} points`}
+          >
+            {game.score.toLocaleString()} <small>pts</small>
           </span>
-        )}
-        <div className={styles.momentumGroup}>
+          {/* The slot keeps its size so a combo never reflows the readout. */}
+          <span className={styles.comboSlot}>
+            {game.combo >= 3 && (
+              // Keyed by value so each increase replays the pop.
+              <span
+                key={game.combo}
+                className={styles.combo}
+                data-tier={
+                  game.combo >= 20 ? 'blaze' : game.combo >= 10 ? 'hot' : 'warm'
+                }
+              >
+                <span className={styles.comboValue}>{game.combo}×</span>{' '}
+                <small>combo</small>
+              </span>
+            )}
+          </span>
+        </div>
+        <div
+          className={styles.momentumGroup}
+          data-charged={game.speed >= 7.4 ? '' : undefined}
+        >
           <span aria-hidden="true">Momentum</span>
           <progress
             className={styles.momentum}
@@ -121,18 +137,18 @@ export function GameHud({
                     : firstJump.direction === 'right'
                       ? '→'
                       : '↔'}{' '}
-                  <small>HOLD</small>
+                  <small>Hold</small>
                 </kbd>
                 <span className={styles.sequenceArrow}>›</span>
                 <kbd className={styles.jumpKey}>
                   {touch ? 'JUMP' : 'Space'}{' '}
                   <small>
-                    {firstJump.phase === 'release' ? 'RELEASE' : 'TAP'}
+                    {firstJump.phase === 'release' ? 'Release' : 'Tap'}
                   </small>
                 </kbd>
                 <span className={styles.sequenceArrow}>›</span>
                 <span className={styles.landingKey}>
-                  ⌄ <small>LAND</small>
+                  ⌄ <small>Land</small>
                 </span>
               </div>
             )}
