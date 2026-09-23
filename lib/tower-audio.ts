@@ -20,6 +20,10 @@ const CUE_COOLDOWNS: Readonly<Record<string, number>> = {
   collapse: 0.16,
   'icicle-warning': 0.18,
   'bat-warning': 0.18,
+  'icicle-shatter': 0.09,
+  wraith: 0.3,
+  'wraith-tell': 0.3,
+  'wraith-dash': 0.2,
 };
 
 /** Recorded snow, ice and movement foley with musical cues and offline synthesis. */
@@ -197,6 +201,7 @@ export class TowerAudio {
           'combo',
           'encounter',
           'frenzy',
+          'wraith-tell',
         ].includes(kind)
       )
         this.music?.duck(kind === 'frenzy' ? 6 : 0.65);
@@ -275,6 +280,22 @@ export class TowerAudio {
       } else if (kind === 'bat-warning') {
         note(1046.5, 659.25, 0.13, 0.04);
         note(1046.5, 783.99, 0.11, 0.03, 0.16);
+      } else if (kind === 'icicle-shatter') {
+        // Glassy tinkles over a short crack: the shard broke on the ledge.
+        note(1760, 820, 0.09, 0.035, 0, 'triangle');
+        note(2637, 2093, 0.2, 0.03, 0.02);
+        note(3136, 2349, 0.24, 0.022, 0.05);
+      } else if (kind === 'wraith') {
+        // A hollow breath as the wraith drifts in.
+        note(196, 293.66, 0.55, 0.035);
+        note(293.66, 220, 0.65, 0.022, 0.1);
+      } else if (kind === 'wraith-tell') {
+        // A rising, detuned wail that lasts as long as the visible tell.
+        note(415.3, 880, 0.85, 0.045, 0, 'triangle');
+        note(440, 932.33, 0.85, 0.028, 0.02);
+      } else if (kind === 'wraith-dash') {
+        note(1318.51, 196, 0.26, 0.06, 0, 'triangle');
+        note(659.25, 110, 0.3, 0.035, 0.02);
       } else if (kind === 'crumble') {
         note(900, 310, 0.06, 0.045, 0, 'triangle');
         note(670, 220, 0.065, 0.035, 0.055, 'triangle');

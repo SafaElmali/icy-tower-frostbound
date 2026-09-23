@@ -10,6 +10,9 @@ function stand(e: TowerEngine, floor: number) {
 function climb(e: TowerEngine, seconds: number) {
   let target = e.platforms.find(p => p.id === e.standingId + 1)!, wasJump = false;
   for (let i = 0; i < seconds * 120 && e.status === 'playing'; i++) {
+    // This climber never dodges. Keep the floor-100 frost wraith (covered by its
+    // own tests) out of the way so the frost pace is what ends the run.
+    e.action.wraiths = [];
     if (e.grounded) target = e.platforms.find(p => p.id === e.standingId + 1)!;
     const steering = (target.x - e.x) * 3.8 - e.vx * 1.1;
     const jump: boolean = e.grounded && !wasJump;
