@@ -59,6 +59,7 @@ Open [localhost:5188](http://localhost:5188). Race rooms work locally; the leade
 | [SEO and GEO](docs/seo-geo.md) | Search metadata, structured data, crawl files, and AI-readable game guide |
 | [Playtesting](docs/playtesting.md) | Human playtest protocol and local measurement exports |
 | [Product analytics](docs/posthog-setup.md) | PostHog configuration, events, dashboards, and measurement limits |
+| [Lessons for the next game](docs/next-games.md) | Soft launch results, what held players back, and a pre-submission checklist |
 
 Production builds send anonymous gameplay and feature events to the Frostbound PostHog project. Names, input recordings, and raw invitation links are excluded; the detailed playtest report remains local. Development capture is off by default. See the analytics guide for configuration and disabling capture.
 
