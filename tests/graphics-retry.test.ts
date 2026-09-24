@@ -8,11 +8,11 @@ import {
 
 void test('performance retry preserves iframe, daily and room parameters and is idempotent', () => {
   const current =
-    'https://example.com/?platform=crazygames&daily=abc&room=xyz&graphics=high#game';
+    'https://example.com/?platform=portal&daily=abc&room=xyz&graphics=high#game';
   const retry = graphicsRetryUrl(current);
   const url = new URL(retry);
   assert.equal(url.origin, new URL(current).origin);
-  assert.equal(url.searchParams.get('platform'), 'crazygames');
+  assert.equal(url.searchParams.get('platform'), 'portal');
   assert.equal(url.searchParams.get('daily'), 'abc');
   assert.equal(url.searchParams.get('room'), 'xyz');
   assert.equal(url.hash, '#game');

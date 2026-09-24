@@ -1,12 +1,12 @@
 # Multiplayer cover artwork
 
-Generated with the built-in image generation tool on 19 September 2026. The tool did not expose a selectable model version. The existing CrazyGames courier cover was the identity reference; the approved landscape image then guided the portrait and square compositions. Exports were sized for the portal without changing their compositions.
+Generated with the built-in image generation tool on 19 September 2026. The tool did not expose a selectable model version. The existing courier cover was the identity reference; the approved landscape image then guided the portrait and square compositions.
 
 - Landscape: `images/frostbound-multiplayer-landscape.png` — 1920 × 1080.
 - Portrait: `images/frostbound-multiplayer-portrait.png` — 800 × 1200.
 - Square: `images/frostbound-multiplayer-square.png` — 800 × 800.
 
-The owner approved use of these generated covers on CrazyGames and in the repository README. This does not replace either game's character model.
+The owner approved use of these generated covers in the repository README. They do not replace the game's character model.
 
 ## Landscape prompt
 
